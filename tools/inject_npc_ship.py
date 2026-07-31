@@ -625,7 +625,12 @@ def renumber_ship(ship: ET.Element, new_sid: str, new_ent_ids: list[str]) -> dic
             for attr, value in el.attrib.items():
                 if value != old_sid or attr in SID_BACKREF_ATTRS:
                     continue
-                if "sid" in attr.lower() or "ship" in attr.lower():
+                # `endswith("sid")` pega sid/homeSid/hsid/hdsid; `startswith`
+                # pega shipId e parentes. Procurar "ship" solto casava
+                # `friendship`, que e valor de amizade e apareceu com o valor
+                # certo por coincidencia num teste real.
+                low = attr.lower()
+                if low.endswith("sid") or low.startswith("ship"):
                     report["dangling"].append(f"<{el.tag} {attr}={value}>")
                 else:
                     others += 1
