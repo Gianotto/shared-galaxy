@@ -253,6 +253,17 @@ explorada. Ver `findings.md` item 10 e a seção 2.5 do projeto. De quebra o cas
 sai da instalação do próprio jogador, o que mantém a regra da seção 2.13, e o
 retrato cabe em 166 KB em vez de 460.
 
+**Deixar o jogador nomear a própria nave, pelo cliente ou pela web.** O nome é o
+que o vizinho lê na vitrine, então é a única apresentação de si que a sala
+oferece — e hoje é um sorteio que o jogo fez na criação. Qualquer interface que
+a fase 2 ganhar, isto entra nela.
+
+Duas restrições que ela precisa respeitar, as duas do item 20 do `findings.md`. O
+nome não pode virar identidade: a vitrine tem que continuar carregando a conta
+junto, senão renomear vira falsificação assim que houver estranhos na sala. E
+quem escreve o nome no retrato é o servidor — ler o `sname` atual do save do
+jogador devolveria a mesma rota, dentro do jogo, onde custa mais.
+
 **Fase 3 — consignação e conciliação.** Depende do resultado da etapa A. Banca de
 feira, não porão: só o consignado entra no retrato, o `ca` limita o quanto a nave
 compra, e a conciliação desconta do consignado e credita o vendedor.

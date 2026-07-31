@@ -256,6 +256,18 @@ explored. See `findings.md` item 10 and section 2.5 of the design. As a bonus th
 hull comes from the player's own installation, which keeps the rule in section
 2.13, and the portrait fits in 166 KB instead of 460.
 
+**Let the player name their own ship, from the client or the web.** The name is
+what a neighbour reads on the storefront, so it is the one piece of self-
+presentation the room offers — and today it is a random draw the game made at
+creation. Whatever interface phase 2 grows, this belongs in it.
+
+Two constraints it has to respect, both from `findings.md` item 20. The name
+cannot become identity: the storefront must keep carrying the account as well,
+or renaming turns into impersonation the moment the room has strangers. And the
+server has to be the one that writes it into the portrait — reading the player's
+current `sname` from their save would hand the same route back, inside the game
+where it costs more.
+
 **Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
 Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`
 limits how much the ship buys, and reconciliation debits the consignment and
