@@ -180,6 +180,21 @@ Quem somar só a prateleira acusa de perda o que está a três metros dela.
 Vale também para a devolução: uma sessão pode terminar com mercadoria comprada,
 entregue e nunca guardada.
 
+**Medido de forma limpa no E6.** A vitrine vendeu 5 Produtos químicos. No save
+do comprador: **+1 em `inStorage` e +4 em caixas no `<items>`**. Os cinco estão
+lá, em dois lugares. Contar só a prateleira erra por 80% nessa transação.
+
+## 8b. A conciliação é por delta líquido, e o E4 sai por tabela
+
+A sessão do E6 teve várias transações — o painel permite até quatro por
+negociação — e o save guardou **só o estado final**. Nenhum log, nenhuma ordem,
+nenhum recibo, nenhum vestígio de quantas foram ou em que ordem.
+
+É exatamente o que a fase 3 supõe e o que o E4 do roteiro ia perguntar. O
+servidor monta o `<shipBank>` e os armazéns do retrato, então conhece o estado
+inicial ao número; a diferença na devolução é a transação, sem precisar
+reconstruir passo a passo.
+
 ## 9. `<markers>` não é necessário para comerciar
 
 A seção 1.7 lista `<markers>` (pontos de atracagem) como um dos três nós que

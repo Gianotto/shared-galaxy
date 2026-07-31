@@ -239,6 +239,27 @@ MISSIONS e SERVICE, com capitão próprio vindo do casco.
 **E o item 12 saiu:** Químicas **10 de 10**, Placas **26 de 30**. É teto por
 recurso, não deslocamento. Ver `findings.md`, item 12.
 
+**A névoa atravessou o ciclo completo** — carregar, jogar, negociar e salvar — com
+`fog=true`, `unex=1`, `forceRoof=1` e as 518 células em `fg=0` intactas. Não era
+só o load: o jogo regravou a vitrine preservando tudo.
+
+**A banca da vitrine concilia igual à de uma nave nativa:**
+
+| | antes | depois | delta |
+|---|---|---|---|
+| `playerBank` | 1.157 | 397 | **−760** |
+| `shipBank` da vitrine | 500 | 1.260 | **+760** |
+
+**E a mercadoria fechou o item 8 na prática.** A vitrine perdeu 5 Produtos
+químicos. O comprador ganhou **1 no armazém e 4 em caixas no chão**. Somam os 5,
+mas quem contasse só `inStorage` veria +1 e concluiria que 4 sumiram — e acusaria
+de perda o que estava a três metros da prateleira.
+
+**De quebra, o E4.** A sessão teve várias transações — o painel conta até quatro —
+e o save guardou só o estado final. Nada de log, nada de ordem, nada de recibo:
+**delta líquido**, como a fase 3 supõe. O E4 do roteiro fica respondido por
+tabela.
+
 ---
 
 ## O que cada resultado implica
