@@ -23,8 +23,8 @@ Uso:
     # 1. medir o piso de ruido: carregue e salve sem fazer nada
     python3 tools/save_diff.py antes/ depois/ --learn-noise noise.json
 
-    # 2. medir uma transacao, com o ruido ja descontado
-    python3 tools/save_diff.py antes/ depois/ --noise noise.json
+    # 2. medir uma transacao, com o ruido ja descontado (perfis somam)
+    python3 tools/save_diff.py antes/ depois/ --noise noise.json --noise outro.json
 
     # so o que interessa a economia
     python3 tools/save_diff.py antes/ depois/ --noise noise.json --focus economy
@@ -495,8 +495,9 @@ def main() -> int:
         description="compara dois savegames e mostra o que mudou entre eles")
     ap.add_argument("before", help="save de antes (pasta ou o arquivo `game`)")
     ap.add_argument("after", help="save de depois")
-    ap.add_argument("--noise", metavar="ARQUIVO",
-                    help="perfil de ruido a descontar, gerado com --learn-noise")
+    ap.add_argument("--noise", metavar="ARQUIVO", action="append",
+                    help="perfil de ruido a descontar, gerado com "
+                         "--learn-noise; pode repetir para somar perfis")
     ap.add_argument("--learn-noise", metavar="ARQUIVO",
                     help="grava as mudancas encontradas como perfil de ruido; "
                          "use com dois saves que deveriam ser iguais")
@@ -537,8 +538,12 @@ def main() -> int:
 
     noise = None
     if args.noise:
+        # Perfis somam. Uma medida so nunca ve tudo: o ciclo puro do E1a tem
+        # formas que o ciclo com tempo do E1b nao tem, e vice-versa.
+        noise = set()
         try:
-            noise = load_noise(args.noise)
+            for path in args.noise:
+                noise |= load_noise(path)
         except (OSError, json.JSONDecodeError, SaveError) as exc:
             print(f"erro: {exc}", file=sys.stderr)
             return 2

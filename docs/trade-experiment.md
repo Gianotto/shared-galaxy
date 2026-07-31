@@ -131,8 +131,12 @@ e MISSIONS sem nada construído (seção 1.9).
    python3 tools/save_diff.py \
        "$(python3 tools/save_snapshot.py --path E2-antes)" \
        "$(python3 tools/save_snapshot.py --path E2-depois)" \
-       --noise experiments/noise.json --focus economy --verbose
+       --noise experiments/noise-puro.json --noise experiments/noise.json \
+       --focus economy --verbose
    ```
+
+   E **de novo sem `--noise`**, para conferir que o filtro não comeu parte da
+   transação. As duas saídas juntas é que respondem.
 
 **O que responder:**
 
@@ -242,11 +246,39 @@ entre elas `feat/prod/inv/s @inStorage` (o buffer de uma máquina produzindo) e
 silenciar parte de uma transação de verdade.** No E2, rode o diff **duas vezes,
 com e sem `--noise`**, e compare.
 
-### E1b — piso realista
+### E1b — piso realista (medido em 2026-07-31, mesmo save)
 
-- mudanças brutas:
-- assinaturas novas que o E1a não tinha:
-- quanto "o tempo passar" custa (a diferença entre os dois):
+Dois ciclos com cerca de um minuto de jogo correndo, sem ordem nenhuma.
+
+- **23.863 mudanças brutas**, que viram **323 formas** — o dobro do ciclo puro
+- **228 formas** só aparecem quando o jogo roda; 8 só aparecem no ciclo puro
+- o que o tempo traz: inventário de tripulante (arma, armadura), nutrição
+  (`props/Food/stored` com carbs, fat, protein, toxins, vitamins), buffers de
+  máquina em produção (`feat/prod/cinv`), itens em trânsito (`items/i @dstId`,
+  `@grndTime`), e alvos de movimento (`targetX`, `targetY`)
+
+**Use os dois perfis somados**, porque nenhum vê tudo:
+
+```bash
+--noise experiments/noise-puro.json --noise experiments/noise.json
+```
+
+### O filtro é seguro para a pergunta do E2
+
+Conferido contra os dois perfis: os quatro sinais de que a resposta depende
+**passam limpos**, nenhum deles é ruído.
+
+| Sinal | Estado |
+|---|---|
+| `playerBank @ca` | passa |
+| `shipBank @ca` | passa |
+| pilha de armazém `@inStorage` | passa |
+| pilha de armazém `@elementaryId` | passa |
+
+**O risco que resta é um só:** `feat/inv|added` é ruído, ou seja, um `<inv>`
+inteiro nascendo num armazém fica silenciado. Então **compre um recurso que a
+nave já tenha em estoque** — assim a mudança é quantidade numa pilha existente,
+que passa, em vez de um nó novo, que não passa.
 
 ### E2 — comércio com NPC nativo
 
