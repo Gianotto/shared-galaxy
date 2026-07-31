@@ -211,6 +211,19 @@ def unpack(data: bytes, dest: str) -> str:
     os.makedirs(dest, exist_ok=True)
     shutil.move(save_dir, final)
     shutil.rmtree(temp, ignore_errors=True)
+
+    # O Steam Cloud sincroniza `savegames/<Nome>/cloudZipFile.zip`, e so isso —
+    # medido no remotecache.vdf do jogo. O `save/` e local; o zip e a copia da
+    # nuvem, e o jogo o refaz ao gravar.
+    #
+    # Um zip velho ao lado de um save recem-retirado e a combinacao perigosa: se
+    # o Steam resolver restaurar, ele sobrescreve a sessao que o servidor
+    # emprestou com uma partida antiga, e o jogador perde o progresso sem
+    # entender por que. Entao o zip anterior sai daqui.
+    for lixo in ("cloudZipFile.zip", "cloud.xml"):
+        caminho = os.path.join(dest, lixo)
+        if os.path.exists(caminho):
+            os.unlink(caminho)
     return final
 
 

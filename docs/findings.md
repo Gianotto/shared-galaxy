@@ -336,7 +336,35 @@ fecha.
 não expõe 100. O servidor deve calcular e mostrar o que de fato fica à venda, em
 vez de prometer o número cheio.
 
-## 13. Miudezas
+## 13. O Steam Cloud sincroniza o zip, não a pasta do save
+
+Medido no `remotecache.vdf` do jogo (app 979110): o Steam rastreia **uma
+entrada por partida**, e ela é sempre `savegames/<Nome>/cloudZipFile.zip`. A
+pasta `save/`, onde moram o `game` e as naves, **não** é sincronizada.
+
+Ou seja: o `save/` é o estado local, e o zip é a cópia da nuvem, refeita pelo
+jogo ao gravar.
+
+**Por que isso importa para o cliente.** Um `cloudZipFile.zip` velho ao lado de
+um save recém-retirado é a combinação perigosa: se o Steam resolver restaurar —
+outra máquina, um conflito de sincronia —, ele sobrescreve a sessão que o
+servidor emprestou com uma partida antiga, e o jogador perde o progresso sem
+entender por quê. O cliente passa a apagar o zip anterior ao escrever uma
+retirada.
+
+**Efeito colateral que o servidor detecta.** Se acontecer mesmo assim, o save
+devolvido volta com dia de jogo **menor** do que o emprestado. A galáxia bate, o
+jogador não fez nada de errado, e a conferência da seção 2.7 tem aí um sinal com
+causa conhecida — vale distinguir esse caso de trapaça antes de sinalizar
+alguém.
+
+**O que o jogo precisa para listar um save.** A classe `GameData$SaveGame` tem
+`scanForSaves`, `gameFile`, `infoFile` e `metaFile`: ele varre a pasta
+procurando arquivos, não lê um índice. `cloud.xml` e `cloudZipFile.zip`
+aparecem só no caminho de sincronia. Um save escrito sem eles deve aparecer
+normalmente — a confirmar na primeira retirada.
+
+## 14. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
