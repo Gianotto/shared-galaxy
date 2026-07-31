@@ -29,12 +29,31 @@ Onde ficam os saves:
 |---|---|
 | Windows | `%APPDATA%\..\LocalLow\Bugbyte\Space Haven\savegames\` |
 | Linux (nativo) | `~/.config/unity3d/Bugbyte/Space Haven/savegames/` |
+| Linux (Steam via snap) | `~/snap/steam/common/.local/share/Steam/steamapps/common/SpaceHaven/savegames/` |
 | Linux (Proton) | `.../steamapps/compatdata/979110/pfx/drive_c/users/steamuser/AppData/LocalLow/Bugbyte/Space Haven/savegames/` |
 
 As ferramentas aceitam a pasta do save, a pasta que a contém, ou o arquivo
 `game` direto.
 
 ---
+
+## Atalho: os saves de teste já existem
+
+Os saves das pesquisas anteriores servem direto, e economizam a montagem de dois
+experimentos.
+
+| Save | Serve para | Por quê |
+|---|---|---|
+| `Beyond Space` | **E2** | 1.543 créditos no `playerBank` e cinco naves de NPC com `<shipBank>` próprio (`ca` de 785 a 6.901). Dá para comprar. |
+| `ship17 sem visao` | **E3** | já é o cenário montado: `CS DASHERS SCRAPPER` (sid=55) é NPC Civil completo, com `<asi>`, `<markers>` e `<shipBank ca="12309">`, e o `hostmap` está exatamente no desenho da seção 2.5 — `accessTrade="true"` com `accessVision="false"` e `accessShip="false"`. |
+
+**Atenção no `ship17`: o `playerBank` está com `ca="0"`.** Sem crédito não dá
+para comprar, então o experimento ali começa **vendendo**. Não é problema — a
+venda responde a mesma pergunta e ainda testa uma coisa a mais, que é se o jogo
+respeita o `ca` da nave como teto do que ela consegue pagar. Se quiser comprar
+também, dê crédito ao jogador antes pelo editor de savegame.
+
+Trabalhe em cópia dos dois, não neles.
 
 ## E1 — O piso de ruído
 
