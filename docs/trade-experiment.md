@@ -271,6 +271,56 @@ delta**, as phase 3 assumes. E4 in the script is answered for free.
 
 ---
 
+## E7 — Grafting the room's galaxy into a player's save
+
+Not in the original protocol. It comes from a design question: today a player
+has to create a game with the room's exact seed **and** every scenario option
+right, or the fingerprint refuses their save. With thirty people arriving from a
+Discord invite, that is dozens of refusals over a checkbox nobody can see
+afterwards.
+
+The idea was to keep a canonical galaxy on the server and transplant each new
+player's ship into it. Building it turned the direction around: the player's
+state is not one node — ship, crew, bank, research and faction standing sit
+scattered across the save — while the galaxy **is** one node. So the tool grafts
+`<starmap>` into the player's save instead of moving the player into a galaxy.
+
+```bash
+python3 tools/graft_galaxy.py --galaxy ROOM_SAVE --into PLAYER_SAVE --out RESULT
+```
+
+**Built and verified structurally** on the hardest case available: a 124-day
+colony grafted into a galaxy from a different seed.
+
+| | galaxy digest | ship | age | at |
+|---|---|---|---|---|
+| the room's galaxy | `c06bd078ea891448` | HSS YANNI | 1.29 | system 31, celeid 1689 |
+| the player | `91b922a90ccc3680` | MAELSTROM HARBOR | 124.47 | system 1, celeid 0 |
+| **grafted** | **`c06bd078ea891448`** | **MAELSTROM HARBOR** | **124.47** | **system 31, celeid 1689** |
+
+Exactly one player fleet, 64 systems, `@sys`/`@pa` agreeing, and the player's
+`playerBank` of 1,379,043 credits untouched. Both inputs byte-identical
+afterwards.
+
+**What is not yet known: whether the game loads it.** Everything above is
+structure. Load `E7 enxerto` and look for:
+
+- does it appear in the save list, and open?
+- is the player where the map says — system 31, the starting asteroid?
+- is the crew, the research and the bank still theirs?
+- what does the starting sector look like? Its `<space>` was generated from the
+  player's *original* body and the game does not regenerate sectors on load
+  (section 1.6), so it keeps the asteroid field it was born with while the new
+  galaxy declares different `<stuff>` for that body. One sector's worth of
+  disagreement, expected — the question is whether it is cosmetic or breaks
+  mining.
+
+**If it loads,** the onboarding story changes completely: create a game with any
+seed and any options, and the server hands back a save already in the room's
+galaxy. The fingerprint stops being a gate and becomes a check.
+
+---
+
 ## What each result implies
 
 | E2/E3 result | Implication |
