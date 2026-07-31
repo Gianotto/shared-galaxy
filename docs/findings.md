@@ -419,6 +419,34 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 21. The starting ship's structure is reproduced; its name and crew are not
+
+Section 1.4 lists three things the seed does **not** reproduce: the crew, the
+player's ship name, and the ship interiors — "338 of 630 elements match on the
+starting ship". Two of the three hold. The interior does not.
+
+Three games created from seed `1654267488` with the same options:
+
+| | ship | cells | crew |
+|---|---|---|---|
+| A | HSS YANNI | 952 | Gamma, Kira, Deej, Conner |
+| B | HSS YANNI | 952 | Dervis, Abdul, Lauretta, Conrad |
+| C | **HSS CAPELLA** | 952 | Haylee, Jaqueline, Dark, Elknar |
+
+**The built structure is identical: 952 of 952 cells in every pair**, compared by
+position, module and rotation. The name is random — two draws landed on the same
+one, which is what made it look deterministic until a third game was made. The
+crew is random.
+
+The likely reconciliation with the original 338/630: that count included
+elements that are not structure — crew standing somewhere, items lying about —
+while the hull and its modules were always the same.
+
+**For the room recipe.** The starting ship choice stays in it: different choices
+plainly give different ships, and the room wants everyone on the same footing.
+The name does not, and cannot — it is drawn at creation and the player can
+change it afterwards anyway (item 20).
+
 ## 20. The ship name is free text the player can change, so it cannot be identity
 
 Section 1.10 concludes that since a save holds no player identity — the player's
