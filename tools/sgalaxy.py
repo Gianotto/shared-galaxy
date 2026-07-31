@@ -50,12 +50,12 @@ DEFAULT_URL = "http://127.0.0.1:8714"
 
 # Como o jogo aparece na tabela de processos. Duas formas:
 #
-# `spacehaven` e o launcher nativo, e o nome do EXECUTAVEL — casado com `-x`,
-# que compara so o nome do programa. `spacehaven.jar` e a JVM que ele levanta, e
+# `spacehaven` e o launcher nativo, e o name do EXECUTAVEL — casado com `-x`,
+# que compara so o name do programa. `spacehaven.jar` e a JVM que ele levanta, e
 # so aparece na linha de comando, entao esse precisa de `-f`.
 #
 # A primeira versao usava `-f` com "SpaceHaven" solto, e casava demais: qualquer
-# processo do Steam que mencionasse o caminho da instalacao — e ate o proprio
+# processo do Steam que mencionasse o path da instalacao — e ate o own
 # shell que rodou o comando — virava "o jogo esta running". O erro e caro nos
 # dois sentidos: falso positivo trava o jogador de brincadeira, falso negativo
 # destroi a partida dele.
@@ -146,7 +146,7 @@ def json_request(method: str, path: str, payload: dict | None = None,
 # ---------------------------------------------------------------------------
 
 def game_is_running() -> str | None:
-    """O nome do processo do jogo, se ele estiver running.
+    """O name do processo do jogo, se ele estiver running.
 
     A regra mais importante do cliente (secao 2.9): nunca escrever num save com
     o jogo running. Sem `pgrep`, devolve None e o chamador avisa que nao
@@ -155,7 +155,7 @@ def game_is_running() -> str | None:
     if shutil.which("pgrep") is None:
         return None
 
-    proprio = {str(os.getpid()), str(os.getppid())}
+    own = {str(os.getpid()), str(os.getppid())}
 
     def encontrou(args: list) -> bool:
         try:
@@ -165,15 +165,15 @@ def game_is_running() -> str | None:
             return False
         if out.returncode != 0:
             return False
-        pids = {p for p in out.stdout.split() if p and p not in proprio}
+        pids = {p for p in out.stdout.split() if p and p not in own}
         return bool(pids)
 
-    for nome in GAME_EXECUTABLES:
-        if encontrou(["-x", nome]):
-            return nome
-    for padrao in GAME_COMMANDLINES:
-        if encontrou(["-f", padrao]):
-            return padrao
+    for name in GAME_EXECUTABLES:
+        if encontrou(["-x", name]):
+            return name
+    for pattern in GAME_COMMANDLINES:
+        if encontrou(["-f", pattern]):
+            return pattern
     return None
 
 
@@ -182,7 +182,7 @@ def find_game() -> str | None:
 
     O launcher e um binario nativo que le `config.json` e levanta a JVM — nao
     precisa do Steam para rodar. Achar sozinho e o que permite o fluxo unico:
-    sem isso, o jogador teria que dizer o caminho toda vez.
+    sem isso, o jogador teria que dizer o path toda vez.
     """
     if os.environ.get("SPACEHAVEN_BIN"):
         return os.environ["SPACEHAVEN_BIN"]
@@ -202,9 +202,9 @@ def find_game() -> str | None:
 def age_of(folder: str) -> float:
     """O idade de uma folder de save, ou -1 se nao der para ler."""
     import xml.etree.ElementTree as ET
-    caminho = os.path.join(folder, "info")
+    path = os.path.join(folder, "info")
     try:
-        with open(caminho, "rb") as fh:
+        with open(path, "rb") as fh:
             valor = ET.fromstring(fh.read()).get("date")
         return int(valor) / 86400 if valor else -1.0
     except (OSError, ET.ParseError, ValueError, TypeError):
@@ -221,15 +221,15 @@ def most_advanced(room_folder: str) -> tuple:
     """
     room_folder = os.path.abspath(os.path.expanduser(room_folder))
     candidatos = []
-    for nome in sorted(os.listdir(room_folder)):
-        caminho = os.path.join(room_folder, nome)
-        if os.path.isfile(os.path.join(caminho, "game")):
-            candidatos.append((age_of(caminho), nome, caminho))
+    for name in sorted(os.listdir(room_folder)):
+        path = os.path.join(room_folder, name)
+        if os.path.isfile(os.path.join(path, "game")):
+            candidatos.append((age_of(path), name, path))
     if not candidatos:
         raise ClientError(f"no savegame found inside {room_folder}")
     candidatos.sort(reverse=True)
-    dia, nome, caminho = candidatos[0]
-    return caminho, nome, dia
+    age, name, path = candidatos[0]
+    return path, name, age
 
 
 def resolve_save(path: str) -> str:
@@ -275,21 +275,21 @@ def unpack(data: bytes, dest: str) -> str:
 
     save_dir = temp if os.path.isfile(os.path.join(temp, "game")) else None
     if save_dir is None:
-        for raiz, _d, arquivos in os.walk(temp):
-            if "game" in arquivos:
-                save_dir = raiz
+        for root, _d, files in os.walk(temp):
+            if "game" in files:
+                save_dir = root
                 break
     if save_dir is None:
         shutil.rmtree(temp, ignore_errors=True)
         raise ClientError("the server sent something that is not a savegame")
 
-    final = os.path.join(dest, "save")
-    antigo = dest + ".anterior"
-    shutil.rmtree(antigo, ignore_errors=True)
+    final_dir = os.path.join(dest, "save")
+    previous = dest + ".anterior"
+    shutil.rmtree(previous, ignore_errors=True)
     if os.path.exists(dest):
-        os.replace(dest, antigo)
+        os.replace(dest, previous)
     os.makedirs(dest, exist_ok=True)
-    shutil.move(save_dir, final)
+    shutil.move(save_dir, final_dir)
     shutil.rmtree(temp, ignore_errors=True)
 
     # O Steam Cloud sincroniza `savegames/<Nome>/cloudZipFile.zip`, e so isso —
@@ -300,11 +300,11 @@ def unpack(data: bytes, dest: str) -> str:
     # o Steam resolver restaurar, ele sobrescreve a sessao que o servidor
     # emprestou com uma partida antiga, e o jogador perde o progresso sem
     # entender por que. Entao o zip anterior sai daqui.
-    for lixo in ("cloudZipFile.zip", "cloud.xml"):
-        caminho = os.path.join(dest, lixo)
-        if os.path.exists(caminho):
-            os.unlink(caminho)
-    return final
+    for junk in ("cloudZipFile.zip", "cloud.xml"):
+        path = os.path.join(dest, junk)
+        if os.path.exists(path):
+            os.unlink(path)
+    return final_dir
 
 
 # ---------------------------------------------------------------------------
@@ -350,14 +350,14 @@ def cmd_create_room(args) -> int:
     print(f"  seed:  {data['seed']}")
     print(f"  deadline: {data['leaseHours']}h")
     print()
-    print(f"  Publique a recipe para quem for entrar:")
-    print(f"    python3 tools/sgalaxy.py como-entrar {data['id']}")
+    print("  Publish the recipe for whoever joins:")
+    print(f"    python3 tools/sgalaxy.py how-to-join {data['id']}")
     if not _recipe(args):
         print()
-        print("  A recipe está vazia. Depois de criar a partida no jogo,")
+        print("  The recipe is empty. After creating the game, record the")
         print("  and the options you picked:")
         print(f"    python3 tools/sgalaxy.py configurar-room {data['id']} \\")
-        print(f"        --nave \"Nome da nave inicial\" --dificuldade Normal")
+        print('        --ship "Starting ship name" --difficulty Normal')
     return 0
 
 
@@ -380,15 +380,21 @@ def cmd_configure_room(args) -> int:
     payload = {}
     recipe = _recipe(args)
     if recipe:
-        atual = json_request("GET", f"/api/v1/rooms/{args.room}")
-        payload["options"] = {**(atual.get("options") or {}), **recipe}
+        if args.replace:
+            payload["options"] = recipe
+        else:
+            # Mesclar e o padrao porque quase sempre se quer acrescentar uma
+            # opcao, nao reescrever a receita. `--replace` existe para o outro
+            # caso — inclusive apagar uma chave que nao deveria estar la.
+            current = json_request("GET", f"/api/v1/rooms/{args.room}")
+            payload["options"] = {**(current.get("options") or {}), **recipe}
     if args.name:
         payload["name"] = args.name
     if args.lease_hours:
         payload["leaseHours"] = args.lease_hours
     if not payload:
         raise ClientError("nada para mudar. Use --nave, --dificuldade, "
-                          "--opcao chave=valor, --nome ou --deadline")
+                          "--opcao chave=valor, --name ou --deadline")
     json_request("PATCH", f"/api/v1/rooms/{args.room}", payload)
     print(f"room {args.room} updated")
     return cmd_how_to_join(args)
@@ -408,21 +414,21 @@ def cmd_how_to_join(args) -> int:
     print(f"       seed: {room['seed']}")
     recipe = room.get("options") or {}
     if recipe.get("ship"):
-        print(f"       nave inicial: {recipe['nave']}")
+        print(f"       starting ship: {recipe['ship']}")
     if recipe.get("difficulty"):
-        print(f"       dificuldade: {recipe['dificuldade']}")
-    outras = {k: v for k, v in recipe.items()
+        print(f"       difficulty: {recipe['difficulty']}")
+    others = {k: v for k, v in recipe.items()
               if k not in ("ship", "difficulty")}
-    for chave, valor in sorted(outras.items()):
-        print(f"       {chave}: {valor}")
+    for key, value in sorted(others.items()):
+        print(f"       {key}: {value}")
     if not recipe:
         print("       (the room owner has not published the scenario options yet)")
     print()
     print("  2. Save the game and close it.")
     print()
     print("  3. Upload the save:")
-    print(f"       python3 tools/sgalaxy.py entrar {room['id']} \\")
-    print(f"           --save CAMINHO/DA/PARTIDA")
+    print(f"       python3 tools/sgalaxy.py join {room['id']} \\")
+    print("           --save PATH/TO/YOUR/GAME")
     print()
     if room.get("galaxyDigest"):
         print(f"  This room's galaxy is {room['galaxyDigest']}. If your save does")
@@ -447,7 +453,7 @@ def cmd_join(args) -> int:
     print(f"  galáxia:    {galaxia['digest']} "
           f"({galaxia['systems']} sistemas, {galaxia['bodies']} corpos)")
     print(f"  age:     {data['ageDays']} days")
-    print(f"  sua nave:    {data['presence']['shipName']}")
+    print(f"  your ship:  {data['presence']['shipName']}")
     print()
     print("  The server owns this save now. Use `play` to start a session.")
     return 0
@@ -465,8 +471,8 @@ def cmd_checkout(args) -> int:
 
     _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
     destino = args.into or os.path.join(os.getcwd(), f"Sala-{args.room}")
-    final = unpack(data, destino)
-    print(f"save checked out to {final}")
+    final_dir = unpack(data, destino)
+    print(f"save checked out to {final_dir}")
     print(f"  due:  {_deadline(headers.get('x-lease-expires'))}")
     print(f"  {_size(len(data))}")
     print()
@@ -496,25 +502,25 @@ def _size(n: int) -> str:
     return f"{n / 1000:.0f} KB" if n < 1_000_000 else f"{n / 1_000_000:.1f} MB"
 
 
-def _best_state(caminho: str) -> tuple:
+def _best_state(path: str) -> tuple:
     """A folder a devolver: o estado mais avancado, nao o mais obvio.
 
     Apontar para `save/` parece certo e e a armadilha: quem sai do jogo sem
     salvar na mao deixa o avanco no autosave, e `save/` fica no estado de
     quando a sessao comecou. Devolver isso manda o servidor para tras e apaga
-    horas de jogo — visto acontecendo, com `save/` no dia 1,29 e `autosave3` no
+    horas de jogo — visto acontecendo, com `save/` no age 1,29 e `autosave3` no
     2,79.
 
-    Se o caminho apontar direto para uma folder de save, respeita: quem foi
+    Se o path apontar direto para uma folder de save, respeita: quem foi
     especifico sabe o que quer.
     """
-    caminho = os.path.abspath(os.path.expanduser(caminho))
-    if os.path.isfile(os.path.join(caminho, "game")):
-        return caminho, None, -1.0
+    path = os.path.abspath(os.path.expanduser(path))
+    if os.path.isfile(os.path.join(path, "game")):
+        return path, None, -1.0
     try:
-        return most_advanced(caminho)
+        return most_advanced(path)
     except ClientError:
-        return resolve_save(caminho), None, -1.0
+        return resolve_save(path), None, -1.0
 
 
 def cmd_return_save(args) -> int:
@@ -523,9 +529,9 @@ def cmd_return_save(args) -> int:
         raise ClientError(
             f"Space Haven is open ({running}). Close it before returning: "
             f"the save may not be fully written yet")
-    folder, which, dia = _best_state(args.save)
+    folder, which, age = _best_state(args.save)
     if which:
-        print(f"devolvendo {which} (dia {dia:.2f}) de {args.save} …")
+        print(f"devolvendo {which} (age {age:.2f}) de {args.save} …")
     else:
         print(f"returning {folder} …")
     _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
@@ -563,9 +569,9 @@ def cmd_play(args) -> int:
     # -- 1. retirar
     print(f"[1/4] checking out the save from room {args.room} …")
     _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
-    final = unpack(data, destino)
+    final_dir = unpack(data, destino)
     deadline = headers.get("x-lease-expires")
-    print(f"      {final}  ({_size(len(data))})")
+    print(f"      {final_dir}  ({_size(len(data))})")
     print(f"      due: {_deadline(deadline)}")
 
     # -- 2. jogar
@@ -582,8 +588,8 @@ def cmd_play(args) -> int:
 
     # -- 3. escolher o estado mais avancado
     print("[3/4] finding the most advanced state …")
-    folder, which, dia = most_advanced(destino)
-    print(f"      {which} (dia {dia:.2f})")
+    folder, which, age = most_advanced(destino)
+    print(f"      {which} (age {age:.2f})")
 
     # -- 4. devolver
     print("[4/4] returning …")
@@ -631,15 +637,15 @@ def cmd_status(args) -> int:
         print(f"  local folder: none ({folder})")
         return 0
     try:
-        _p, which, dia = most_advanced(folder)
+        _p, which, age = most_advanced(folder)
     except ClientError:
         print(f"  local folder: {folder} (no savegame inside)")
         return 0
     print(f"  local folder: {folder}")
     print(f"                most advanced: {which}, age {age:.2f} days")
     if not mine["playing"]:
-        servidor = mine["ageDays"] or 0
-        if dia > servidor + 0.01:
+        on_server = mine["ageDays"] or 0
+        if age > on_server + 0.01:
             print()
             print("  WARNING: the local folder is AHEAD of the server and no lease")
             print("  is open. That means you played without checking out. A new")
@@ -691,7 +697,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("register", help="create an account on this server")
-    p.add_argument("nome")
+    p.add_argument("name")
     p.add_argument("--invite", help="if the server requires one")
     p.set_defaults(func=cmd_register)
 
@@ -720,6 +726,8 @@ def main() -> int:
     p.add_argument("--name")
     p.add_argument("--lease-hours", type=int)
     p.add_argument("--password", help="if the room has one")
+    p.add_argument("--replace", action="store_true",
+                   help="replace the whole recipe instead of merging into it")
     p.set_defaults(func=cmd_configure_room)
 
     p = sub.add_parser("how-to-join",
