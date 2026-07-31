@@ -118,7 +118,11 @@ def request(method: str, path: str, body: bytes | None = None,
     req = urllib.request.Request(url, data=body, method=method, headers=head)
     try:
         with urllib.request.urlopen(req, timeout=300) as resp:
-            return resp.status, resp.read(), dict(resp.headers)
+            # Cabecalho HTTP nao tem caixa, e o uvicorn responde em minusculo.
+            # Um `dict()` cru deixava `headers.get("X-Lease-Expires")` devolver
+            # None, e o jogador nao via ate quando o save era dele.
+            cabecalhos = {k.lower(): v for k, v in resp.headers.items()}
+            return resp.status, resp.read(), cabecalhos
     except urllib.error.HTTPError as exc:
         raw = exc.read()
         try:
@@ -409,13 +413,33 @@ def cmd_retirar(args) -> int:
     destino = args.para or os.path.join(os.getcwd(), f"Sala-{args.sala}")
     final = unpack(data, destino)
     print(f"save retirado para {final}")
-    print(f"  prazo até: {headers.get('X-Lease-Expires', '?')}")
-    print(f"  {len(data) / 1_000_000:.1f} MB")
+    print(f"  prazo até: {_prazo(headers.get('x-lease-expires'))}")
+    print(f"  {_tamanho(len(data))}")
     print()
     print("  Jogue, e depois devolva com:")
     print(f"    python3 tools/sgalaxy.py devolver {args.sala} --save {destino}")
     print("  Passado o prazo, a sessão volta ao estado de quando foi retirada.")
     return 0
+
+
+def _prazo(iso: str | None) -> str:
+    """O prazo em hora local, mais quanto falta — que e o que a pessoa quer."""
+    if not iso:
+        return "?"
+    import datetime as dt
+    try:
+        vence = dt.datetime.fromisoformat(iso)
+    except ValueError:
+        return iso
+    falta = vence - dt.datetime.now(dt.timezone.utc)
+    horas = falta.total_seconds() / 3600
+    local = vence.astimezone().strftime("%d/%m %H:%M")
+    return f"{local} (faltam {horas:.1f}h)"
+
+
+def _tamanho(n: int) -> str:
+    """KB ate 1 MB. Um save novo tem 40 KB comprimido, e '0.0 MB' nao informa."""
+    return f"{n / 1000:.0f} KB" if n < 1_000_000 else f"{n / 1_000_000:.1f} MB"
 
 
 def cmd_devolver(args) -> int:

@@ -26,7 +26,16 @@ client = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(client)
 
 
-class GameDetectionTestCase(unittest.TestCase):
+class GameDetectionNegativeTestCase(unittest.TestCase):
+    """O que NÃO pode ser confundido com o jogo."""
+
+    def setUp(self):
+        # Os testes de "não deve detectar" pressupõem que o jogo não está
+        # aberto. Se estiver — e estará, na máquina de quem desenvolve isto —
+        # a detecção correta faria o teste falhar. Um teste que depende do
+        # desktop de quem roda não é um teste; é uma armadilha.
+        if client.game_is_running():
+            self.skipTest("o Space Haven está aberto nesta máquina")
 
     def test_does_not_match_a_process_that_merely_mentions_the_path(self):
         """O defeito real: o Steam (e o próprio shell) mencionam o caminho da
@@ -45,8 +54,16 @@ class GameDetectionTestCase(unittest.TestCase):
         """O processo que faz a pergunta não pode ser a resposta."""
         self.assertIsNone(client.game_is_running())
 
+
+class GameDetectionPositiveTestCase(unittest.TestCase):
+    """O que PRECISA ser detectado. Roda mesmo com o jogo real aberto."""
+
     def test_matches_the_real_executable_name(self):
-        """E precisa mesmo pegar o jogo: falso negativo destrói partida."""
+        """E precisa mesmo pegar o jogo: falso negativo destrói partida.
+
+        Este roda mesmo com o jogo de verdade aberto: um processo chamado
+        `spacehaven` tem que ser detectado, venha de onde vier.
+        """
         import shutil
         import tempfile
         tmp = tempfile.mkdtemp()
