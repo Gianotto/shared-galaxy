@@ -419,6 +419,62 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 23. Exploration is recorded in two places, and both are shareable
+
+Counted across real saves, at the same format version 21:
+
+| save | age | systems | bodies | `visited` | `isVisible` | empty sectors |
+|---|---|---|---|---|---|---|
+| SeedTest | 1.3 | 64 | 123 | 0 | 64 | 99 |
+| Fronteira | 1.3 | 64 | 123 | 0 | 64 | 99 |
+| E7 enxerto | 1.3 | 64 | 123 | 0 | 64 | 99 |
+| New haven-1 | 178.6 | 77 | 233 | 15 | 98 | 132 |
+
+A fresh galaxy carries roughly its stars and nothing else: 123 bodies for 64
+systems, and exactly 64 marked visible — one per system. A galaxy played for 178
+days carries 233 bodies in 77 systems, 98 visible and 15 actually `visited`.
+
+So "how much of the galaxy exists" is two different things:
+
+- **flags** — `visited` and `isVisible` on a body's `<info>` child
+- **presence** — whether the body or empty sector is in the `<starmap>` at all,
+  which item 19 already established is decided lazily, on arrival
+
+Sharing discovery between players is therefore a **union of both**: copy in the
+subtrees other members have materialised, and OR the flags. It is the same
+operation as the graft in item 17, merged instead of wholesale.
+
+This only works because the fingerprint counts stars (item 19). The digest that
+counted bodies would have made every explorer a stranger to their own room —
+and would have made shared exploration impossible by construction, since the
+whole point is that members' starmaps diverge.
+
+## 22. The player's fleet lives in one of two places, and the tag changes
+
+`bodies/l/fleets/f` when parked at a celestial body. `emptySectors/l/fleet/l`
+when sitting in open space — different container, and a different tag, because
+the game names list children after the field holding them.
+
+| save | path | tag |
+|---|---|---|
+| Happy Place | `starmap/systems/l/bodies/l/fleets/f` | `f` |
+| SeedTest | `starmap/systems/l/bodies/l/fleets/f` | `f` |
+| New haven-1 | `starmap/systems/l/emptySectors/l/fleet/l` | `l` |
+
+All three at format version 21, so this is not a version difference — it is
+where the player happened to be when they saved. Both are ordinary game states.
+
+The graft looked only for `fleets/f`, and so refused every player who saved
+mid-travel with "no fleet in the player save". It now searches by the
+`isPlayer="true"` attribute wherever it appears, and renames the element to `f`
+on the way in, because under `<fleets>` the siblings are `<f>` and the game
+reads the tag.
+
+Also measured, and contrary to what the synthetic fixture assumed: **every body
+carries absolute `x`/`y`**, the starting asteroid included. The orbital `ox`/`oy`
+are extra, not a replacement. The fixture gave asteroids only `ox`/`oy`, which
+hid the fact that the graft's coordinate fix-up had nothing to read.
+
 ## 21. The starting ship's structure is reproduced; its name and crew are not
 
 Section 1.4 lists three things the seed does **not** reproduce: the crew, the
@@ -642,7 +698,7 @@ claimed something false.
 and playing a day and a half of it, and it is not the checkout — the save the
 server handed back still had none.
 
-## 15. Odds and ends
+## Odds and ends
 
 - **`balanced.bin`** exists in the save folder and is not documented. The
   documents mention `stats.bin` and `timeline.xml`; `timeline.xml` did not appear

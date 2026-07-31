@@ -87,10 +87,10 @@ def new_room_id() -> str:
 def can_create_room(rooms_created: int, blocked: bool) -> tuple[bool, str]:
     """Cota de sala aberta. Criar token e gratis; criar sala nao e ilimitado."""
     if blocked:
-        return False, "esta conta está bloqueada"
+        return False, "this account is blocked"
     if rooms_created >= MAX_ROOMS_PER_PLAYER:
-        return False, (f"limite de {MAX_ROOMS_PER_PLAYER} salas por conta. "
-                       f"Apague uma sala antes de criar outra")
+        return False, (f"limit of {MAX_ROOMS_PER_PLAYER} rooms per account. "
+                       f"Delete a room before creating another")
     return True, ""
 
 
@@ -108,9 +108,9 @@ def check_join(save: dict, room: dict) -> tuple[bool, str]:
     if room.get("save_version") and save.get("saveVersion"):
         if str(room["save_version"]) != str(save["saveVersion"]):
             return False, (
-                f"este save é da versão de formato {save['saveVersion']} e a "
-                f"sala está na {room['save_version']}. Provavelmente o jogo foi "
-                f"atualizado; a sala precisa ser recriada")
+                f"this save is format version {save['saveVersion']} and the "
+                f"room is on {room['save_version']}. The game was probably "
+                f"updated; the room needs to be recreated")
 
     # A primeira entrada define a galáxia da sala: não há com o que comparar.
     if not room.get("galaxy_digest"):
@@ -118,9 +118,9 @@ def check_join(save: dict, room: dict) -> tuple[bool, str]:
 
     if save.get("digest") != room["galaxy_digest"]:
         return False, (
-            "a galáxia deste save não é a da sala. Quase sempre é opção de "
-            "criação diferente: confira a seed e cada uma das opções de cenário "
-            "publicadas pela sala, e crie a partida de novo")
+            "this save's galaxy is not the room's. Almost always a different "
+            "creation option: check the seed and every scenario option the "
+            "room publishes, and create the game again")
     return True, ""
 
 
@@ -147,11 +147,11 @@ def can_checkout(open_lease: dict | None, now: dt.datetime) -> tuple[bool, str]:
         return True, ""
     if lease_is_expired(open_lease, now):
         return True, ""
-    faltam = open_lease["expires_at"] - now
-    horas = faltam.total_seconds() / 3600
+    remaining = open_lease["expires_at"] - now
+    hours = remaining.total_seconds() / 3600
     return False, (
-        f"você já está com este save retirado. Devolva antes de retirar de "
-        f"novo, ou espere o prazo vencer em {horas:.1f}h")
+        f"you already have this save checked out. Return it before checking "
+        f"out again, or wait {hours:.1f}h for the lease to expire")
 
 
 def can_checkin(lease: dict | None, now: dt.datetime) -> tuple[bool, str]:
@@ -162,15 +162,15 @@ def can_checkin(lease: dict | None, now: dt.datetime) -> tuple[bool, str]:
     que foi boa" — mas a mensagem diz exatamente o que aconteceu.
     """
     if lease is None:
-        return False, ("não há empréstimo aberto para este save. Retire antes "
-                       "de devolver")
+        return False, ("no open lease for this save. Check it out before "
+                       "returning it")
     if lease["state"] == "returned":
-        return False, "este empréstimo já foi devolvido"
+        return False, "this lease has already been returned"
     if lease_is_expired(lease, now):
-        atraso = (now - lease["expires_at"]).total_seconds() / 3600
+        late = (now - lease["expires_at"]).total_seconds() / 3600
         return False, (
-            f"o prazo venceu há {atraso:.1f}h e o save voltou ao estado de "
-            f"quando foi retirado. Esta sessão não pode ser devolvida")
+            f"the lease expired {late:.1f}h ago and the save reverted to the "
+            f"state it was checked out in. This session cannot be returned")
     return True, ""
 
 

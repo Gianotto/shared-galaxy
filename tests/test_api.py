@@ -150,7 +150,7 @@ class ApiTestCase(unittest.TestCase):
         r = self.client.post("/api/v1/rooms", json={"seed": "1"},
                              headers=self._auth(player))
         self.assertEqual(r.status_code, 403)
-        self.assertIn("limite", r.json()["detail"])
+        self.assertIn("limit", r.json()["detail"])
 
     # -- entrada -----------------------------------------------------------
 
@@ -160,7 +160,7 @@ class ApiTestCase(unittest.TestCase):
         r = self._join(player, room["id"])
         self.assertEqual(r.status_code, 200, r.text)
         body = r.json()
-        self.assertIn("canônico", body["message"])
+        self.assertIn("canonical", body["message"])
         self.assertTrue(body["galaxy"]["digest"])
 
         detail = self.client.get(f"/api/v1/rooms/{room['id']}",
@@ -179,17 +179,37 @@ class ApiTestCase(unittest.TestCase):
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
 
-    def test_different_galaxy_is_refused_with_the_likely_cause(self):
+    def test_a_different_galaxy_is_grafted_instead_of_refused(self):
+        """O atrito que fazia alguém desistir: acertar cada opção de cenário.
+
+        O servidor passa a consertar em vez de recusar — enxerta a galáxia da
+        sala no save de quem chegou, preservando nave, tripulação e banco.
+        """
         dono, forasteiro = self._player(), self._player()
         room = self._room(dono)
         self._join(dono, room["id"])
-        # Outra galáxia de verdade: o tamanho do mapa entra na impressão
-        # digital. Mudar `pa` não serviria — ele é referência, não parâmetro de
-        # geração, e fica de fora do digest de propósito.
+
         outro = _save_zip(galaxy_w=777000)
         r = self._join(forasteiro, room["id"], data=outro)
+        self.assertEqual(r.status_code, 200, r.text)
+        body = r.json()
+        self.assertTrue(body["grafted"], "aceitou sem enxertar")
+        detalhe = self.client.get(f"/api/v1/rooms/{room['id']}",
+                                  headers=self._auth(dono)).json()
+        self.assertEqual(body["galaxy"]["digest"], detalhe["galaxyDigest"],
+                         "o save guardado não ficou na galáxia da sala")
+
+    def test_without_a_donor_a_different_galaxy_is_still_refused(self):
+        """Sem de onde enxertar, a recusa antiga continua — com o motivo."""
+        dono, forasteiro = self._player(), self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        with db.pool().connection() as conn:
+            conn.execute("UPDATE room SET galaxy_sha256 = NULL WHERE id = %s",
+                         (room["id"],))
+        r = self._join(forasteiro, room["id"], data=_save_zip(galaxy_w=777000))
         self.assertEqual(r.status_code, 409)
-        self.assertIn("opção de criação", r.json()["detail"])
+        self.assertIn("creation option", r.json()["detail"])
 
     def test_join_twice_is_refused(self):
         player = self._player()
@@ -263,7 +283,7 @@ class ApiTestCase(unittest.TestCase):
         r = self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
                              headers=self._auth(player))
         self.assertEqual(r.status_code, 409)
-        self.assertIn("já está com este save retirado", r.json()["detail"])
+        self.assertIn("already have this save checked out", r.json()["detail"])
 
     def test_checkin_without_checkout_is_refused(self):
         player = self._player()
@@ -272,7 +292,7 @@ class ApiTestCase(unittest.TestCase):
         r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
                              content=_save_zip(), headers=self._auth(player))
         self.assertEqual(r.status_code, 409)
-        self.assertIn("Retire antes", r.json()["detail"])
+        self.assertIn("Check it out before", r.json()["detail"])
 
     def test_checkin_of_another_galaxy_is_refused(self):
         player = self._player()

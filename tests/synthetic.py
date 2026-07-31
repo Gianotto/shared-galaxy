@@ -9,7 +9,8 @@ por posicao. As afirmacoes sobre o jogo continuam dependendo de save real.
 A estrutura imita a do save de verdade nos pontos que as ferramentas tocam,
 medidos em docs/savegame-format.md: `masterData/@idCounter`, `<starmap>` com
 sistemas e corpos — inclusive a estrela de cada sistema, que e o que da
-coordenada ao mapa da sala (docs/findings.md), `<ships>` com `sid`, `<shipBank>` com estoque, `<playerBank>`
+coordenada ao mapa da sala, e o `isst="1"` no <info> do corpo inicial, que e
+onde um jogador nasce e por onde o enxerto o coloca (docs/findings.md), `<ships>` com `sid`, `<shipBank>` com estoque, `<playerBank>`
 com creditos, e o estilo de serializacao do jogo (uma linha, sem cabecalho XML).
 """
 
@@ -26,12 +27,14 @@ GAME_TEMPLATE = """<game seed="0" mode="0">\
 <l systemId="6" sn="416c706861" smn="414c">\
 <bodies>\
 <l celeid="575" type="Star" seed="99" x="82619" y="213259" centerId="0"/>\
-<l celeid="101" type="Planet" seed="7731" ox="1200" oy="1200" centerId="100"/>\
-<l celeid="102" type="Asteroid" seed="4412" ox="300" oy="300" centerId="101"\
+<l celeid="101" type="Planet" seed="7731" x="83819" y="214459"\
+ ox="1200" oy="1200" centerId="100"/>\
+<l celeid="102" type="Asteroid" seed="4412" x="84119" y="214759"\
+ ox="300" oy="300" centerId="101"\
  isst="1">\
 <stuff><mining><toMine element="2053"/></mining></stuff>\
 {fleets}\
-<info visited="{visited}" isVisible="{visited}"/>\
+<info visited="{visited}" isVisible="{visited}" isst="1"/>\
 </l>\
 </bodies>\
 <emptySectors/>\

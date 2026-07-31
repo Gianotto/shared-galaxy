@@ -63,10 +63,10 @@ class RoomTestCase(unittest.TestCase):
         self.assertTrue(ok)
         ok, motivo = rules.can_create_room(rules.MAX_ROOMS_PER_PLAYER, blocked=False)
         self.assertFalse(ok)
-        self.assertIn("limite", motivo)
+        self.assertIn("limit", motivo)
         ok, motivo = rules.can_create_room(0, blocked=True)
         self.assertFalse(ok)
-        self.assertIn("bloqueada", motivo)
+        self.assertIn("blocked", motivo)
 
 
 class JoinTestCase(unittest.TestCase):
@@ -86,7 +86,7 @@ class JoinTestCase(unittest.TestCase):
             {"digest": "outra", "saveVersion": "21"},
             {"galaxy_digest": "abc123", "save_version": "21"})
         self.assertFalse(ok)
-        self.assertIn("opção de criação", motivo)
+        self.assertIn("creation option", motivo)
 
     def test_wrong_save_format_is_refused_before_the_galaxy(self):
         """Jogo atualizado é outro problema, e merece outra mensagem."""
@@ -94,7 +94,7 @@ class JoinTestCase(unittest.TestCase):
             {"digest": "abc123", "saveVersion": "22"},
             {"galaxy_digest": "abc123", "save_version": "21"})
         self.assertFalse(ok)
-        self.assertIn("atualizado", motivo)
+        self.assertIn("updated", motivo)
 
 
 class LeaseTestCase(unittest.TestCase):
@@ -125,7 +125,7 @@ class LeaseTestCase(unittest.TestCase):
     def test_checkin_needs_an_open_lease(self):
         ok, motivo = rules.can_checkin(None, AGORA)
         self.assertFalse(ok)
-        self.assertIn("Retire antes", motivo)
+        self.assertIn("Check it out before", motivo)
 
     def test_checkin_within_the_window(self):
         ok, _ = rules.can_checkin(self._lease(2), AGORA)
@@ -135,12 +135,12 @@ class LeaseTestCase(unittest.TestCase):
         ok, motivo = rules.can_checkin(self._lease(-2.5), AGORA)
         self.assertFalse(ok)
         self.assertIn("2.5h", motivo)
-        self.assertIn("voltou ao estado", motivo)
+        self.assertIn("reverted to the", motivo)
 
     def test_checkin_twice_is_refused(self):
         ok, motivo = rules.can_checkin(self._lease(2, state="returned"), AGORA)
         self.assertFalse(ok)
-        self.assertIn("já foi devolvido", motivo)
+        self.assertIn("already been returned", motivo)
 
 
 class RetentionTestCase(unittest.TestCase):

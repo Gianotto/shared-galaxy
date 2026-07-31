@@ -34,6 +34,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from server.api import db
 from server.domain import rules
 from server.galaxy import fingerprint, presence
+from sgalaxy import graft as grafting
+from sgalaxy.savefile import SaveFile
 from server.storage import blobs
 from server.web import i18n, pages
 from server.storage.blobs import BlobStore, StorageError
@@ -415,15 +417,35 @@ async def join_room(room_id: str, request: Request,
             with blobs.with_unpacked(data) as folder:
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
-                day = here["ageDays"]
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(400, f"não consegui ler este save: {exc}") from exc
+            raise HTTPException(400, f"could not read this save: {exc}") from exc
 
         ok, motivo = rules.check_join(described, room)
         if not ok:
-            raise HTTPException(409, motivo)
+            # A galáxia não bate. Antes isso era o fim: a pessoa tinha que
+            # recriar a partida acertando cada opção de cenário, sem conseguir
+            # conferir nenhuma depois. Agora o servidor conserta — enxerta a
+            # galáxia da sala no save dela e adota o resultado.
+            #
+            # Só o que é da galáxia é substituído; nave, tripulação, banco e
+            # pesquisa continuam do jogador (findings 17 e 18).
+            if not room["galaxy_sha256"] or "save format" in motivo:
+                raise HTTPException(409, motivo)
+            try:
+                data, described, here = _graft_into(room, data)
+            except Exception as exc:      # noqa: BLE001
+                raise HTTPException(
+                    409, f"{motivo} — and grafting the room's galaxy in "
+                         f"failed: {exc}") from exc
+            grafted = True
+        else:
+            grafted = False
+
+        # Depois do enxerto, `here` foi relido do save que vai ser guardado. A
+        # idade tem que sair dele também, e não do que chegou.
+        day = here["ageDays"]
 
         meta = store().put(data)
         version = db.add_version(conn, {
@@ -435,7 +457,7 @@ async def join_room(room_id: str, request: Request,
             with blobs.with_unpacked(data) as folder:
                 db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
         db.adopt_galaxy(conn, room_id, described["digest"],
-                        described["saveVersion"])
+                        described["saveVersion"], meta["sha256"])
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
@@ -445,13 +467,43 @@ async def join_room(room_id: str, request: Request,
 
     return {"roomId": room_id, "versionId": version["id"],
             "galaxy": described, "ageDays": day, "presence": here,
-            "message": "save adotado como canônico. A partir de agora o "
-                       "servidor é dono dele."}
+            "grafted": grafted,
+            "message": ("the room's galaxy was grafted into your save, and the "
+                        "result is now canonical — check out to get it back. "
+                        "Your ship, crew, bank and research are untouched."
+                        if grafted else
+                        "save adopted as canonical. The server owns it from "
+                        "now on.")}
 
 
 # ---------------------------------------------------------------------------
 # Ciclo de sessao
 # ---------------------------------------------------------------------------
+
+def _graft_into(room: dict, data: bytes) -> tuple:
+    """Puts the room's galaxy into an arriving player's save.
+
+    Unpacks both — the room's donor and the newcomer's — grafts, and repacks.
+    Two saves open on disk at once, briefly; both are cleaned up.
+
+    Returns the new zip, its galaxy description and the player's presence read
+    from it, so the caller stores what it actually kept.
+    """
+    donor_blob = store().get(room["galaxy_sha256"])
+    with blobs.with_unpacked(donor_blob) as donor_dir:
+        with blobs.with_unpacked(data) as player_dir:
+            donor, player = SaveFile(donor_dir), SaveFile(player_dir)
+            grafting.graft(donor, player)
+            player.save(backup=False)
+            described = fingerprint.describe(player_dir)
+            here = presence.read(player_dir)
+            repacked = blobs.pack_save(player_dir)
+    if described["digest"] != room["galaxy_digest"]:
+        raise RuntimeError(
+            f"the graft produced galaxy {described['digest']}, not the room's "
+            f"{room['galaxy_digest']}")
+    return repacked, described, here
+
 
 @app.post("/api/v1/rooms/{room_id}/checkout")
 def checkout(room_id: str, player: dict = Depends(current_player)):
@@ -518,7 +570,7 @@ async def checkin(room_id: str, request: Request,
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(400, f"não consegui ler este save: {exc}") from exc
+            raise HTTPException(400, f"could not read this save: {exc}") from exc
 
         # A galaxia nao pode ter mudado no meio de uma sessao. Se mudou, o save
         # nao e o que foi emprestado — outra partida, outro universo.

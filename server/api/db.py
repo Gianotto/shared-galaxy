@@ -105,12 +105,17 @@ def list_rooms(conn: psycopg.Connection, limit: int = 50) -> list:
 
 
 def adopt_galaxy(conn: psycopg.Connection, room_id: str, digest: str,
-                 save_version: str | None) -> None:
-    """A primeira entrada define a galaxia da sala."""
+                 save_version: str | None, sha256: str | None = None) -> None:
+    """A primeira entrada define a galaxia da sala.
+
+    Guarda tambem o sha256 do save que a definiu: o digest responde "e a mesma
+    galaxia?", e para enxertar e preciso responder "me de essa galaxia".
+    """
     conn.execute(
-        """UPDATE room SET galaxy_digest = %s, save_version = %s
+        """UPDATE room SET galaxy_digest = %s, save_version = %s,
+                           galaxy_sha256 = %s
             WHERE id = %s AND galaxy_digest IS NULL""",
-        (digest, save_version, room_id))
+        (digest, save_version, sha256, room_id))
 
 
 # ---------------------------------------------------------------------------
