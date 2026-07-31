@@ -75,6 +75,14 @@ STRINGS: dict = {
     "th_age": {"pt": "idade", "en": "age"},
     "days": {"pt": "dias", "en": "days"},
     "playing": {"pt": "jogando", "en": "playing"},
+    "map_legend": {
+        "pt": "Sistemas claros já foram visitados por alguém da sala — o jogo "
+              "só batiza um sistema quando um jogador chega perto. Os escuros "
+              "ninguém alcançou ainda.",
+        "en": "Bright systems have been reached by someone in the room — the "
+              "game only names a system once a player gets close. The dim ones "
+              "nobody has reached yet.",
+    },
 
     # -- how to join
     "how_to_join": {"pt": "Como entrar", "en": "How to join"},
