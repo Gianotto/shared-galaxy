@@ -379,7 +379,7 @@ def room_state(room_id: str, player: dict = Depends(current_player)):
     return {"roomId": room_id, "players": [
         {"playerId": r["player_id"], "name": r["display_name"],
          "shipName": r["ship_name"], "system": r["at_system"],
-         "celeid": r["at_celeid"], "ageDays": float(r["age_days"]) if r["age_days"] else None,
+         "x": r["at_x"], "y": r["at_y"], "body": r["at_body"], "ageDays": float(r["age_days"]) if r["age_days"] else None,
          "playing": r["playing"],
          "lastSeen": r["last_seen_at"].isoformat() if r["last_seen_at"] else None}
         for r in roster]}
@@ -461,9 +461,9 @@ async def join_room(room_id: str, request: Request,
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
-                        here["celeid"])
+                        here["x"], here["y"], here["body"])
         db.record_visit(conn, room_id, player["id"], here["system"],
-                        here["celeid"])
+                        here["x"], here["y"])
 
     return {"roomId": room_id, "versionId": version["id"],
             "galaxy": described, "ageDays": day, "presence": here,
@@ -593,9 +593,9 @@ async def checkin(room_id: str, request: Request,
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
-                        here["celeid"])
+                        here["x"], here["y"], here["body"])
         db.record_visit(conn, room_id, player["id"], here["system"],
-                        here["celeid"])
+                        here["x"], here["y"])
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,

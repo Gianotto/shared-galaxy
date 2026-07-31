@@ -680,10 +680,10 @@ def cmd_state(args) -> int:
     if not data["players"]:
         print("empty room")
         return 0
-    print(f"{'player':<18}{'ship':<24}{'system':<10}{'body':<8}{'age':<8}where")
+    print(f"{'player':<18}{'ship':<24}{'system':<10}{'body':<18}{'age':<8}where")
     for p in data["players"]:
         print(f"{(p['name'] or '?'):<18}{(p['shipName'] or '—'):<24}"
-              f"{(p['system'] or '—'):<10}{(p['celeid'] or '—'):<8}"
+              f"{(p['system'] or '—'):<10}{(p['body'] or '—'):<18}"
               f"{str(p['ageDays'] or '—'):<8}"
               f"{'playing' if p['playing'] else 'away'}")
     return 0

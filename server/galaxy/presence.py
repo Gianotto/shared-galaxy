@@ -4,10 +4,15 @@ Onde o jogador esta e como ele se chama, lido do save.
 E o que o mapa da sala mostra e o que a fase 2 vai usar para decidir quem e
 vizinho de quem. Tres coisas saem daqui:
 
-**A posicao, na lingua da sala.** O corpo celeste vem como `celeid`, nunca como
-o `id` local. Sao dois ids diferentes e so o `celeid` deriva da seed e significa
-a mesma coisa no save de todo mundo — trocar os dois poe o vizinho no setor
-errado, em silencio (`docs/findings.md`, item 1).
+**A posicao, na lingua da sala.** Um lugar e `(systemId, x, y)`. Nao e `celeid`,
+que e id de catalogo e nomeia o TIPO de lugar — 123 corpos num save carregam 11
+valores desses. Nem o `id` local, que sai de um contador global conforme cada um
+explora, e portanto casa lugares diferentes entre dois jogadores. As coordenadas
+saem da seed e nao se movem (`docs/findings.md`, item 24).
+
+As coordenadas saem do CORPO em que a frota esta, nao da frota: a frota carrega
+coordenadas defasadas do lugar de onde saiu. Em espaco aberto nao ha corpo, e ai
+valem as da propria frota. O tipo do corpo vai junto, so para exibir.
 
 **O nome da nave.** Nao existe identidade de jogador dentro do save: a faccao do
 jogador e 461 em toda partida do mundo. Quem distingue um jogador do outro na
@@ -26,6 +31,7 @@ from __future__ import annotations
 import os
 import xml.etree.ElementTree as ET
 
+from sgalaxy.graft import player_fleets
 from sgalaxy.savefile import SaveError, SaveFile
 
 # A faccao do jogador, igual em todo save do mundo (secao 1.10).
@@ -34,8 +40,8 @@ PLAYER_FACTION = "461"
 
 def read(folder: str) -> dict:
     """O que o servidor guarda sobre a presenca de um jogador."""
-    out = {"shipName": None, "system": None, "celeid": None,
-           "ageDays": None, "ships": 0, "crew": 0}
+    out = {"shipName": None, "system": None, "x": None, "y": None,
+           "body": None, "ageDays": None, "ships": 0, "crew": 0}
     try:
         sf = SaveFile(folder)
     except SaveError:
@@ -61,30 +67,44 @@ def _age_days(folder: str) -> float | None:
 
 
 def _position(sf: SaveFile) -> dict:
-    """O corpo celeste onde a frota do jogador esta, por `celeid`.
+    """Onde a frota do jogador esta, por `(systemId, x, y)`.
 
-    A autoridade e a propria frota `<f isPlayer="true">`, que e o dado mais
-    direto. O `starmap/@pa` entra so como conferencia: ele aponta para o `@id`
-    local do corpo, e usa-lo como se fosse `celeid` foi o erro que o item 1 do
-    findings registra.
+    A autoridade e a propria frota `<f isPlayer="true">`. Ela aparece em dois
+    lugares — pendurada num corpo celeste, ou num setor vazio quando a pessoa
+    salvou em transito — e carrega as coordenadas nos dois casos (findings
+    item 22). Procurar so no primeiro deixava sem posicao justamente quem
+    estava viajando.
+
+    O `starmap/@pa` entra so como ultimo recurso: ele aponta para o `@id` LOCAL
+    do corpo, e confundi-lo com `celeid` foi o erro do item 1.
     """
     starmap = sf.main.find("starmap")
     if starmap is None:
         return {}
 
-    for system in starmap.findall("systems/l"):
-        for body in system.iter():
-            if body.get("celeid") is None:
-                continue
-            fleets = body.find("fleets")
-            if fleets is None:
-                continue
-            for fleet in fleets.findall("f"):
-                if fleet.get("isPlayer") == "true":
-                    return {"system": system.get("systemId"),
-                            "celeid": body.get("celeid")}
+    pais = {filho: pai for pai in starmap.iter() for filho in pai}
 
-    # Sem frota no mapa: cai para o `@pa`, resolvendo o id local para `celeid`.
+    def _sistema_de(elemento):
+        while elemento is not None and elemento.get("systemId") is None:
+            elemento = pais.get(elemento)
+        return elemento
+
+    for fleet, _container, holder in player_fleets(starmap):
+        system = _sistema_de(fleet)
+        if system is None:
+            continue
+        corpo = holder if (holder is not None
+                           and holder.get("celeid") is not None) else None
+        # O corpo manda. Medido: a frota carrega coordenadas defasadas — em
+        # "E7c" ela esta num Planet de x=75924 anunciando x=75724, que era o
+        # asteroide de onde saiu. Duas pessoas no mesmo planeta tem o mesmo
+        # (x, y) do planeta e nunca o mesmo da frota.
+        origem = corpo if corpo is not None else fleet
+        return {"system": system.get("systemId"),
+                "x": origem.get("x"), "y": origem.get("y"),
+                "body": corpo.get("type") if corpo is not None else None}
+
+    # Sem frota no mapa: cai para o `@pa`, que e o `@id` local do corpo.
     pa = starmap.get("pa")
     if pa is None:
         return {}
@@ -92,7 +112,8 @@ def _position(sf: SaveFile) -> dict:
         for body in system.iter():
             if body.get("id") == pa and body.get("celeid") is not None:
                 return {"system": system.get("systemId"),
-                        "celeid": body.get("celeid")}
+                        "x": body.get("x"), "y": body.get("y"),
+                        "body": body.get("type")}
     return {}
 
 

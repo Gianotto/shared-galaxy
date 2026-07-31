@@ -600,11 +600,11 @@ class WebPagesTestCase(unittest.TestCase):
                          content=_save_zip(), headers=self._auth(player))
         with db.pool().connection() as conn:
             visitas = conn.execute(
-                "SELECT system_id, celeid FROM room_visit WHERE room_id = %s",
+                "SELECT system_id, x, y FROM room_visit WHERE room_id = %s",
                 (room["id"],)).fetchall()
         self.assertEqual(len(visitas), 1, "registrou visita a mais de um sistema")
         self.assertEqual(visitas[0]["system_id"], "6")
-        self.assertEqual(visitas[0]["celeid"], "102")
+        self.assertEqual((visitas[0]["x"], visitas[0]["y"]), ("84119", "214759"))
 
         # O molde tem um sistema só, e o jogador está nele — vira marcador de
         # jogador, não ponto visitado. O destaque em si é testado à parte, em

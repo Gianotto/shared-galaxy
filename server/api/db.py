@@ -143,23 +143,25 @@ def upsert_membership(conn: psycopg.Connection, room_id: str, player_id: int,
 
 
 def set_position(conn: psycopg.Connection, room_id: str, player_id: int,
-                 system: str | None, celeid: str | None) -> None:
+                 system: str | None, x: str | None, y: str | None,
+                 body: str | None = None) -> None:
     """Onde a frota esta, na lingua da sala.
 
-    `celeid` e nao o `id` local: so ele significa a mesma coisa no save de todo
-    mundo (docs/findings.md, item 1).
+    `(system, x, y)` e nao `celeid`: aquele nomeia o TIPO de lugar e nao
+    distingue dois campos de asteroide no mesmo sistema (findings item 24).
+    `body` e so o rotulo que a pagina mostra.
     """
     conn.execute(
-        """UPDATE membership SET at_system = %s, at_celeid = %s,
-                                 last_seen_at = now()
+        """UPDATE membership SET at_system = %s, at_x = %s, at_y = %s,
+                                 at_body = %s, last_seen_at = now()
             WHERE room_id = %s AND player_id = %s""",
-        (system, celeid, room_id, player_id))
+        (system, x, y, body, room_id, player_id))
 
 
 def room_roster(conn: psycopg.Connection, room_id: str) -> list:
     return conn.execute(
         """SELECT m.player_id, p.display_name, m.ship_name, m.at_system,
-                  m.at_celeid, m.joined_at, m.last_seen_at,
+                  m.at_x, m.at_y, m.at_body, m.joined_at, m.last_seen_at,
                   v.age_days, v.created_at AS canonical_at,
                   (l.id IS NOT NULL) AS playing
              FROM membership m
@@ -309,7 +311,7 @@ def galaxy_map(conn: psycopg.Connection, room_id: str) -> dict:
 
 
 def record_visit(conn: psycopg.Connection, room_id: str, player_id: int,
-                 system: str | None, celeid: str | None) -> None:
+                 system: str | None, x: str | None, y: str | None) -> None:
     """Marca que a sala esteve aqui.
 
     Acumula, nunca apaga: o mapa mostra onde a sala ja chegou, e quem chegou
@@ -319,11 +321,11 @@ def record_visit(conn: psycopg.Connection, room_id: str, player_id: int,
     if not system:
         return
     conn.execute(
-        """INSERT INTO room_visit (room_id, system_id, celeid, first_by)
-           VALUES (%s, %s, %s, %s)
-           ON CONFLICT (room_id, system_id, celeid) DO UPDATE
+        """INSERT INTO room_visit (room_id, system_id, x, y, first_by)
+           VALUES (%s, %s, %s, %s, %s)
+           ON CONFLICT (room_id, system_id, x, y) DO UPDATE
                SET visits = room_visit.visits + 1""",
-        (room_id, system, celeid or "", player_id))
+        (room_id, system, x or "", y or "", player_id))
 
 
 def room_visits(conn: psycopg.Connection, room_id: str) -> dict:

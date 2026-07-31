@@ -3,7 +3,7 @@ Testes da leitura de presença.
 
 O que o mapa da sala mostra e o que a fase 2 vai usar para decidir quem é
 vizinho de quem. O erro caro aqui é confundir os dois ids de corpo celeste: o
-`id` é local ao save e o `celeid` deriva da seed, e só o segundo significa a
+um lugar é `(systemId, x, y)`, e trocar isso por um id de catálogo significa a
 mesma coisa para todos os jogadores da sala. Trocar os dois põe o vizinho no
 setor errado, sem erro nenhum aparecer.
 
@@ -42,14 +42,51 @@ class PresenceTestCase(unittest.TestCase):
         self.assertEqual(here["system"], "6")
         self.assertEqual(here["crew"], 2)
 
-    def test_position_is_the_celeid_not_the_local_id(self):
-        """O erro que o item 1 do findings registra, virado teste.
+    def test_position_is_the_body_coordinates(self):
+        """Um lugar é `(systemId, x, y)` — findings item 24.
 
-        No molde, a frota do jogador está no corpo `celeid=102`. Se a leitura
-        devolvesse o `id` local, o servidor mandaria o vizinho para outro setor.
+        Não é `celeid`, que nomeia o tipo de lugar, nem o `id` local, que dois
+        jogadores alocam para lugares diferentes conforme exploram.
         """
         folder = self._save(synthetic.build_game())
-        self.assertEqual(presence.read(folder)["celeid"], "102")
+        aqui = presence.read(folder)
+        self.assertEqual((aqui["x"], aqui["y"]), ("84119", "214759"))
+        self.assertEqual(aqui["body"], "Asteroid")
+
+    def test_the_fleets_own_coordinates_are_not_trusted(self):
+        """A frota anuncia de onde saiu, não onde está.
+
+        Medido em "E7c": a frota estava num planeta de x=75924 declarando
+        x=75724, que era o asteroide anterior. Acreditar nela põe duas pessoas
+        no mesmo planeta em lugares diferentes — e a mescla de descoberta da
+        fase 2 casa corpos justamente por essa chave.
+        """
+        xml = synthetic.build_game().replace(
+            '<f id="0" isPlayer="true" factionId="461">',
+            '<f id="0" isPlayer="true" factionId="461" x="11111" y="22222">')
+        aqui = presence.read(self._save(xml))
+        self.assertEqual((aqui["x"], aqui["y"]), ("84119", "214759"),
+                         "seguiu as coordenadas da frota em vez das do corpo")
+
+    def test_a_fleet_in_open_space_still_has_a_position(self):
+        """Sem corpo não há de quem herdar, e aí a frota é a fonte.
+
+        Salvar em trânsito é jogo normal (findings item 22), e antes disso
+        ficava sem posição no mapa da sala.
+        """
+        # Fora de qualquer corpo: sai do asteroide e vai para um setor vazio,
+        # que é onde o jogo põe quem salvou em trânsito.
+        xml = synthetic.build_game().replace(
+            synthetic.FLEETS_TEMPLATE.format(npc_fleet=""), ""
+        ).replace(
+            "<emptySectors/>",
+            '<emptySectors><l sectorId="7">'
+            '<fleet><l id="0" isPlayer="true" factionId="461"'
+            ' x="33333" y="44444"><createdShips/></l></fleet>'
+            '</l></emptySectors>')
+        aqui = presence.read(self._save(xml))
+        self.assertEqual((aqui["x"], aqui["y"]), ("33333", "44444"))
+        self.assertIsNone(aqui["body"], "espaço aberto não é um corpo")
 
     def test_age_days_comes_from_info(self):
         folder = self._save(synthetic.build_game(),
@@ -79,7 +116,7 @@ class PresenceTestCase(unittest.TestCase):
         os.makedirs(empty)
         here = presence.read(empty)
         self.assertIsNone(here["shipName"])
-        self.assertIsNone(here["celeid"])
+        self.assertIsNone(here["x"])
 
 
 if __name__ == "__main__":

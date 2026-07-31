@@ -265,7 +265,7 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
       <td>{_esc(p['display_name'])}</td>
       <td>{_esc(p['ship_name'] or '—')}</td>
       <td>{_esc(p['at_system'] or '—')}</td>
-      <td>{_esc(p['at_celeid'] or '—')}</td>
+      <td>{_esc(p['at_body'] or '—')}</td>
       <td>{_esc(f"{float(p['age_days']):.1f} {t('days', lang)}") if p['age_days'] else '—'}</td>
       <td>{f'<span class="tag on">{t("playing", lang)}</span>' if p['playing'] else ''}</td>
     </tr>""" for p in roster)
