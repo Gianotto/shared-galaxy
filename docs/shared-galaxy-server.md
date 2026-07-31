@@ -559,9 +559,13 @@ Marcadas para quem for implementar não tomar como fato:
 
 - **injeção mútua.** Testamos injetar uma nave num save. Não testamos dois
   jogadores se vendo ao mesmo tempo, cada um no seu save
-- **comércio conciliável.** Vimos o TRADE aparecer e funcionar. Não medimos como
-  a transação fica registrada no save, nem se dá para reconstruí-la na
-  devolução. **É o próximo experimento a fazer**, e ele decide a fase 3
+- ~~**comércio conciliável.**~~ **RESPONDIDO** em 2026-07-31, ver
+  `trade-experiment.md`. O `<shipBank>` da vendedora registra a venda, e os
+  créditos batem exatamente nos dois lados. Não há log de transação: só estado
+  final, o que basta, porque o servidor monta o banco e sabe de onde partiu.
+  **Conciliação por delta líquido, e a fase 3 vale como está escrita.** Uma
+  ressalva nova: a carga viaja de ônibus e pode estar em voo na hora do save, e
+  quem somar só `inStorage` vê mercadoria sumir (`findings.md`, item 8)
 - **estabilidade com muitos vizinhos.** Testamos uma nave injetada. Dez podem
   pesar, ou confundir a IA
 - **atualização do jogo.** Se a Bugbyte mudar o formato, tudo aqui precisa ser

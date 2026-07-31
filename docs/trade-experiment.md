@@ -280,13 +280,41 @@ inteiro nascendo num armazém fica silenciado. Então **compre um recurso que a
 nave já tenha em estoque** — assim a mudança é quantidade numa pilha existente,
 que passa, em vez de um nó novo, que não passa.
 
-### E2 — comércio com NPC nativo
+### E2 — comércio com NPC nativo (medido em 2026-07-31, save `Beyond Space`)
 
-- o que foi comprado, quanto, por quanto:
-- `playerBank` mudou?
-- `<inv>` da nave do jogador mudou?
-- `<shipBank>` do vendedor mudou?
-- algum registro de transação em qualquer lugar do save?
+Comprado: **1 Hyperium (elem 172) por 386 créditos**, da `MFB STRONGHOLD`
+(sid=4336, Mercante).
+
+**A resposta é sim, e é limpa. O `<shipBank>` registra a venda.**
+
+| | antes | depois | delta |
+|---|---|---|---|
+| `playerBank @ca` | 1543 | 1157 | **−386** |
+| `shipBank @ca` da sid=4336 | 6901 | 7287 | **+386** |
+
+Os dois lados batem ao crédito. A mercadoria também: a vendedora foi de 3 para 2
+de Hyperium, e o jogador ganhou 1.
+
+**Não existe registro de transação em lugar nenhum.** Nenhum log, recibo ou
+histórico — só o estado final dos dois lados. Como o servidor é quem monta o
+`<shipBank>` do retrato, ele sabe o estado inicial exato, e a diferença é a
+transação. **Conciliação por delta líquido, e a fase 3 sai como está no
+documento de projeto.**
+
+**Mas a mercadoria estava voando.** No momento do save o Hyperium **não tinha
+chegado**: a pilha de destino do jogador estava com `onTheWayIn="1"` e
+`inStorage` inalterado, e havia um `<i eid="172">` no `<items>` da nave, com
+`mo="BeingMoved"` e `dstId`. O estoque da vendedora já tinha sido debitado.
+
+Isso é regra de conciliação, não curiosidade: **quem somar só `inStorage` vê a
+carga sumir.** O servidor tem que contar três lugares — `inStorage`,
+`onTheWayIn`, e os itens em voo — ou vai acusar o jogador de perder mercadoria
+que o próprio jogo ainda está entregando.
+
+O filtro de ruído se comportou: 19.651 mudanças brutas viraram 46 com os dois
+perfis, e 113 sem eles. Os quatro sinais que importavam sobreviveram, como
+previsto. O ruído restante era salvagem de destroço acontecendo em paralelo
+(restos de casco indo para os ônibus) e máquinas consumindo Energium e minério.
 
 ### E3 — comércio com nave injetada
 

@@ -143,7 +143,32 @@ inútil, porque os caminhos aprendidos não existem na rodada seguinte. As 11.43
 diferenças reduzem a **103 formas** quando os ids saem do caminho, e aí o perfil
 transfere. É como o `save_diff.py` faz.
 
-## 8. Miudezas
+## 8. Uma transação é assíncrona: a carga viaja de ônibus
+
+Medido no E2. O jogador comprou 1 Hyperium por 386 créditos de uma nave
+Mercante. Os créditos se movem na hora e batem exatamente nos dois lados
+(`playerBank` −386, `shipBank` da vendedora +386), e o estoque da vendedora já
+sai debitado (3 → 2).
+
+**A carga, não.** No momento do save ela estava em trânsito:
+
+- a pilha de destino no armazém do comprador tinha `onTheWayIn="1"` e
+  `inStorage` **inalterado**
+- havia um `<i eid="172" mo="BeingMoved" dstId="...">` no `<items>` da nave
+- os ônibus (`<crafts>`) carregavam manifestos `<o a="QUANTO" e="RECURSO"
+  sid="NAVE_DESTINO">`
+
+O jogo não teleporta mercadoria: um ônibus vai buscar. Entre fechar o negócio e
+a carga encostar no armazém passa tempo de jogo, e um save tirado nesse meio —
+que é o caso normal, porque autosave não espera — pega o estado partido.
+
+**Consequência para a conciliação (seção 2.7):** somar `inStorage` é errado. O
+servidor precisa contar os três lugares — `inStorage`, `onTheWayIn` e os itens
+em voo — ou vai ver carga sumir e acusar de perda o que o próprio jogo ainda
+está entregando. Vale também para a devolução: uma sessão pode terminar com
+mercadoria comprada e não entregue.
+
+## 9. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
