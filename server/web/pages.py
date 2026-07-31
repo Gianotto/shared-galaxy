@@ -117,7 +117,7 @@ def room_list(rooms: list, lang: str) -> str:
 TIP_LINE = 13
 TIP_PAD = 7
 TIP_CHAR = 5.6          # average glyph width at 10px in the UI font
-TIP_MAX_SHIPS = 8       # beyond this the box stops being readable
+TIP_MAX_SHIPS = 5       # beyond this the box stops being readable
 
 
 def _system_group(x: float, y: float, title: str, people: list,
@@ -134,10 +134,17 @@ def _system_group(x: float, y: float, title: str, people: list,
     # A box with sixty-four names is as unreadable as an inline list of them.
     # Everyone starts on the same rock (findings 16), so this is the normal
     # opening state of a full room, not an edge case.
-    for p in people[:TIP_MAX_SHIPS]:
+    #
+    # Sorted by age, oldest first: in a crowd the interesting ones are the
+    # colonies that have been out here longest, not whoever the database
+    # happened to return first.
+    by_age = sorted(people, key=lambda p: -(p.get("age_days") or 0))
+    for p in by_age[:TIP_MAX_SHIPS]:
         ship = p["ship_name"] or p["display_name"]
+        age = p.get("age_days")
         mark = " ●" if p["playing"] else ""
-        lines.append(f"{ship}{mark}")
+        suffix = f'  {float(age):.0f}d' if age else ""
+        lines.append(f"{ship}{suffix}{mark}")
     if len(people) > TIP_MAX_SHIPS:
         lines.append(t("and_more", lang).format(n=len(people) - TIP_MAX_SHIPS))
     if not people and not seen:
