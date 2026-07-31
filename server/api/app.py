@@ -104,15 +104,15 @@ def store() -> BlobStore:
 def current_player(authorization: str = Header(default="")) -> dict:
     """O jogador dono do token, ou 401 com explicacao."""
     if not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "informe o token em Authorization: Bearer <token>")
+        raise HTTPException(401, "send the token in Authorization: Bearer <token>")
     token = rules.parse_recovery_code(authorization.split(None, 1)[1])
     with db.pool().connection() as conn:
         player = db.player_by_token(conn, rules.hash_token(token))
         if player is None:
-            raise HTTPException(401, "token desconhecido. Se você perdeu o seu, "
-                                     "não há como recuperá-lo: crie outro")
+            raise HTTPException(401, "unknown token. If you lost yours there is no way "
+                                     "to recover it: create another")
         if player["blocked"]:
-            raise HTTPException(403, "esta conta está bloqueada")
+            raise HTTPException(403, "this account is blocked")
         db.touch_player(conn, player["id"])
         return dict(player)
 
@@ -131,8 +131,7 @@ async def body_bytes(request: Request) -> bytes:
     if len(data) > blobs.MAX_UPLOAD_BYTES:
         raise HTTPException(413, "save maior que o limite")
     if not data:
-        raise HTTPException(400, "o corpo da requisição está vazio; mande o "
-                                 "zip do savegame")
+        raise HTTPException(400, "the request body is empty; send the savegame zip")
     return data
 
 
@@ -151,9 +150,9 @@ def create_player(payload: dict | None = None):
     if INVITE_ONLY and payload.get("invite", "").strip() != INVITE_ONLY:
         raise HTTPException(403, "este servidor exige convite para criar conta")
 
-    name = str(payload.get("name") or "").strip() or "Anônimo"
+    name = str(payload.get("name") or "").strip() or "Anonymous"
     if len(name) > 40:
-        raise HTTPException(400, "o nome tem no máximo 40 caracteres")
+        raise HTTPException(400, "the name is at most 40 characters")
 
     token = rules.new_token()
     with db.pool().connection() as conn:
@@ -252,8 +251,8 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
 
     seed = str(payload.get("seed") or "").strip()
     if not seed:
-        raise HTTPException(400, "informe a seed da galáxia. Ela não fica no "
-                                 "save, então é o servidor que precisa guardá-la")
+        raise HTTPException(400, "give the galaxy seed. It is not stored in the save, "
+                                 "so the server is the one that has to keep it")
     name = str(payload.get("name") or "").strip() or f"Sala de {player['display_name']}"
 
     room = {
@@ -272,7 +271,7 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
         try:
             created = db.create_room(conn, room)
         except psycopg.errors.CheckViolation as exc:
-            raise HTTPException(400, f"parâmetro fora da faixa aceita: {exc}") from exc
+            raise HTTPException(400, f"parameter out of the accepted range: {exc}") from exc
     return _room_public(created, can_see_recipe=True)
 
 
@@ -305,7 +304,7 @@ def _room_public(room: dict, can_see_recipe: bool) -> dict:
 def _require_room(conn, room_id: str) -> dict:
     room = db.get_room(conn, room_id)
     if room is None:
-        raise HTTPException(404, f"não existe sala {room_id}")
+        raise HTTPException(404, f"there is no room {room_id}")
     return room
 
 
@@ -339,7 +338,7 @@ def update_room(room_id: str, payload: dict,
     with db.pool().connection() as conn:
         room = _require_room(conn, room_id)
         if room["owner_id"] != player["id"]:
-            raise HTTPException(403, "só o dono da sala pode mudar isto")
+            raise HTTPException(403, "only the room owner can change this")
 
         campos, valores = [], {}
         if "name" in payload:
@@ -406,10 +405,10 @@ async def join_room(room_id: str, request: Request,
         if room["password_hash"] and rules.hash_token(password) != room["password_hash"]:
             raise HTTPException(403, "senha da sala incorreta")
         if db.get_membership(conn, room_id, player["id"]) is not None:
-            raise HTTPException(409, "você já está nesta sala. Use /checkout "
-                                     "para retirar o seu save")
+            raise HTTPException(409, "you are already in this room. Use /checkout "
+                                     "to check your save out")
         if db.count_players(conn, room_id) >= room["max_players"]:
-            raise HTTPException(409, "a sala está cheia")
+            raise HTTPException(409, "the room is full")
 
         # A conferencia acontece ANTES de gravar blob: lixo nao deve custar
         # disco numa sala aberta.
@@ -512,8 +511,8 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
         room = _require_room(conn, room_id)
         membership = db.get_membership(conn, room_id, player["id"])
         if membership is None:
-            raise HTTPException(403, "você não está nesta sala. Use /join com "
-                                     "um save criado na seed da sala")
+            raise HTTPException(403, "you are not in this room. Use /join with "
+                                     "a save created on the room's seed")
         db.expire_leases(conn)
         existing = db.open_lease(conn, room_id, player["id"])
         ok, motivo = rules.can_checkout(existing, db.now())
@@ -522,8 +521,8 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
 
         version = db.get_version(conn, membership["canonical_id"])
         if version is None:
-            raise HTTPException(500, "esta participação não tem save canônico; "
-                                     "isso é bug do servidor, não seu")
+            raise HTTPException(500, "this membership has no canonical save; that is a "
+                                     "server bug, not yours")
         expires = rules.lease_expiry(db.now(), room["lease_hours"])
         try:
             lease = db.create_lease(conn, room_id, player["id"],
@@ -576,8 +575,8 @@ async def checkin(room_id: str, request: Request,
         # nao e o que foi emprestado — outra partida, outro universo.
         if described["digest"] != room["galaxy_digest"]:
             raise HTTPException(409,
-                                "a galáxia deste save não é a da sala. Este não "
-                                "é o save que foi emprestado")
+                                "this save's galaxy is not the room's. This is not "
+                                "the save that was lent out")
 
         meta = store().put(data)
         version = db.add_version(conn, {
@@ -600,7 +599,7 @@ async def checkin(room_id: str, request: Request,
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
             "presence": here, "pruned": pruned,
-            "message": "save recebido e guardado. Ele é o que os outros veem."}
+            "message": "save received and stored. It is what the others see now."}
 
 
 def _prune(conn, room_id: str, player_id: int, retention_n: int) -> int:
@@ -628,7 +627,7 @@ def health():
             conn.execute("SELECT 1")
         return {"status": "ok", "storage": store().usage()}
     except Exception as exc:
-        raise HTTPException(503, f"banco indisponível: {exc}") from exc
+        raise HTTPException(503, f"database unavailable: {exc}") from exc
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -110,7 +110,7 @@ class ApiTestCase(unittest.TestCase):
         r = self.client.get("/api/v1/me",
                             headers={"Authorization": "Bearer INVENTADO"})
         self.assertEqual(r.status_code, 401)
-        self.assertIn("não há como recuperá-lo", r.json()["detail"])
+        self.assertIn("no way to recover it", r.json()["detail"])
 
     def test_missing_auth_explains_the_header(self):
         self.assertEqual(self.client.get("/api/v1/me").status_code, 401)
@@ -217,7 +217,7 @@ class ApiTestCase(unittest.TestCase):
         self._join(player, room["id"])
         r = self._join(player, room["id"])
         self.assertEqual(r.status_code, 409)
-        self.assertIn("já está nesta sala", r.json()["detail"])
+        self.assertIn("already in this room", r.json()["detail"])
 
     def test_join_respects_the_room_password(self):
         dono, outro = self._player(), self._player()
@@ -250,7 +250,7 @@ class ApiTestCase(unittest.TestCase):
         self._join(dono, room["id"])
         r = self._join(self._player(), room["id"])
         self.assertEqual(r.status_code, 409)
-        self.assertIn("cheia", r.json()["detail"])
+        self.assertIn("the room is full", r.json()["detail"])
 
     # -- ciclo de sessao ---------------------------------------------------
 
@@ -271,7 +271,7 @@ class ApiTestCase(unittest.TestCase):
         back = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
                                 content=out.content, headers=self._auth(player))
         self.assertEqual(back.status_code, 200, back.text)
-        self.assertIn("guardado", back.json()["message"])
+        self.assertIn("stored", back.json()["message"])
 
     def test_second_checkout_is_blocked_while_open(self):
         """É o que impede duplicação por sessão paralela."""
@@ -303,7 +303,7 @@ class ApiTestCase(unittest.TestCase):
         r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
                              content=_save_zip(galaxy_w=777000), headers=self._auth(player))
         self.assertEqual(r.status_code, 409)
-        self.assertIn("não é o save que foi emprestado", r.json()["detail"])
+        self.assertIn("not the save that was lent out", r.json()["detail"])
 
     def test_checkout_requires_membership(self):
         dono, estranho = self._player(), self._player()
