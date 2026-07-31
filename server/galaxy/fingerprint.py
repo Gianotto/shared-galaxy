@@ -1,0 +1,179 @@
+"""
+Impressao digital da galaxia gerada por uma seed.
+
+E o portao de entrada de uma sala: quando um jogador cria a partida com a seed e
+as opcoes publicadas e sobe o save, o servidor confere que a galaxia dele e mesmo
+a da sala antes de adotar aquele save como canonico (secao 2.3 do projeto).
+
+Funciona porque a seed reproduz o mundo gerado e nao reproduz o resto: os
+sistemas, os corpos celestes com semente propria e os setores de terreno saem
+iguais em duas partidas com a mesma seed e as mesmas opcoes, enquanto tripulacao,
+nome de nave e interior das naves saem diferentes. O digest cobre so a parte
+reprodutivel.
+
+CODIGO VENDORADO. Origem: `tools/compare_galaxy.py` do editor de savegame,
+<https://github.com/Gianotto/Space-Haven-SaveGameEditor>, commit registrado em
+`sgalaxy/VENDOR.md`. As constantes e a montagem do esqueleto sao as de la, e
+`tests/test_fingerprint_parity.py` exige que as duas copias produzam o mesmo
+digest sobre o mesmo save. Se divergirem, o teste quebra — e essa e a unica
+defesa contra a deriva, porque ninguem vai lembrar de sincronizar na mao.
+
+O que fica de fora do digest, e por que:
+
+- `x`, `y`, `timeStepA` dos corpos e `angle` dos setores acompanham a orbita e
+  mudam sozinhos com o tempo de jogo
+- setores transitorios (missao, nave no mapa, oferta de novo lar) aparecem e
+  somem durante a partida
+- o nome dos sistemas so e atribuido depois da criacao: um save recem-criado nao
+  tem nenhum e um jogado tem todos, e comparar save novo com save jogado e
+  justamente o caso de uso
+- `starmap/@sys` e `@pa` sao referencias, nao parametros de geracao
+  (`docs/findings.md`, item 1)
+"""
+
+from __future__ import annotations
+
+import binascii
+import hashlib
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+
+from sgalaxy.savefile import SaveError, SaveFile  # noqa: E402
+
+# Atributos de um corpo celeste que o gerador define e o jogo nao mexe depois.
+BODY_KEYS = ("type", "celeid", "seed", "starType", "starClass",
+             "ox", "oy", "centerId", "maxLen", "orbitSpeedMul")
+# O setor nao tem semente propria; o que o identifica e o tipo mais a orbita.
+SECTOR_KEYS = ("type", "strength", "rich")
+ORBIT_KEYS = ("rx", "ry", "speed")
+# Entram na lista de setores mas nao sao terreno: aparecem e somem durante a
+# partida. Conferido em quatro momentos da mesma partida, onde variaram de 3
+# para 4, de 1 para 4 e de 6 para 5 enquanto o terreno ficou parado.
+TRANSIENT_SECTORS = {"StarmapCraft", "SM_AwayMission", "SM_NewHomeSector",
+                     "ExodusSupplyFleet"}
+# Do <starmap>, so o tamanho da galaxia e parametro de geracao.
+MAP_KEYS = ("w", "h")
+
+
+def _text(value: str | None) -> str:
+    """Os nomes de sistema vem em hexadecimal no save."""
+    if not value:
+        return ""
+    try:
+        return binascii.unhexlify(value).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return value
+
+
+def _pick(node, keys) -> dict:
+    return {k: node.get(k) for k in keys if node.get(k) is not None}
+
+
+def _key(rec: dict) -> str:
+    return json.dumps(rec, sort_keys=True, ensure_ascii=False)
+
+
+def fingerprint(path: str) -> dict:
+    """Impressao digital da galaxia de um save."""
+    sf = SaveFile(path)
+    root = sf.main
+    starmap = root.find("starmap")
+    if starmap is None:
+        raise SaveError(f"{path}: este save não tem <starmap>")
+
+    systems, volatile = [], []
+    for system in starmap.findall("systems/l"):
+        # Ordenado, e nao na ordem do arquivo: o que interessa e o conjunto de
+        # corpos, nao a ordem em que o jogo resolveu grava-los.
+        bodies = sorted((_pick(b, BODY_KEYS)
+                         for b in system.findall("bodies/l")), key=_key)
+
+        sectors, dropped = [], []
+        for sector in system.findall("emptySectors/l"):
+            if sector.get("type") in TRANSIENT_SECTORS:
+                dropped.append(sector.get("type"))
+                continue
+            rec = _pick(sector, SECTOR_KEYS)
+            orbit = sector.find("orbit")
+            if orbit is not None:
+                rec.update({f"orbit_{k}": v
+                            for k, v in _pick(orbit, ORBIT_KEYS).items()})
+            sectors.append(rec)
+        sectors.sort(key=_key)
+        volatile += dropped
+
+        clouds = sorted(({"color": c.get("color"), "points": len(c.findall("cd"))}
+                         for c in system.findall("clouds/c")), key=_key)
+        systems.append({
+            "id": system.get("systemId"),
+            "name": _text(system.get("sn")),
+            "short": _text(system.get("smn")),
+            "bodies": bodies,
+            "sectors": sectors,
+            "clouds": clouds,
+        })
+
+    fp = {
+        "save": os.path.abspath(path),
+        "seed": root.get("seed"),
+        "mode": root.get("mode"),
+        "map": _pick(starmap, MAP_KEYS),
+        "systems": systems,
+        "ignored": len(volatile),
+        "named": sum(1 for s in systems if s["name"].strip()),
+    }
+    skeleton = {
+        "map": fp["map"],
+        "systems": [{k: s[k] for k in ("id", "bodies", "sectors", "clouds")}
+                    for s in systems],
+    }
+    fp["digest"] = hashlib.sha256(
+        json.dumps(skeleton, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()[:16]
+    return fp
+
+
+# ---------------------------------------------------------------------------
+# O que o servidor usa
+# ---------------------------------------------------------------------------
+
+def digest_of(path: str) -> str:
+    """So o digest, que e o que a sala guarda e compara."""
+    return fingerprint(path)["digest"]
+
+
+def save_version(path: str) -> str | None:
+    """Versao do FORMATO do save (`info/@version`), nao a versao do jogo.
+
+    Num save de 1.0.4 vale `21`. A sala ancora nisso: se a Bugbyte mudar o
+    formato, um save de versao diferente e recusado em vez de aceito e
+    corrompido mais tarde. Ver `docs/findings.md`, item 13.
+    """
+    import xml.etree.ElementTree as ET
+
+    sf = SaveFile(path)
+    info = os.path.join(sf.dir, "info")
+    if not os.path.isfile(info):
+        return None
+    try:
+        with open(info, "rb") as fh:
+            return ET.fromstring(fh.read()).get("version")
+    except (OSError, ET.ParseError):
+        return None
+
+
+def describe(path: str) -> dict:
+    """O que o `join` precisa saber sobre um save que acabou de chegar."""
+    fp = fingerprint(path)
+    return {
+        "digest": fp["digest"],
+        "saveVersion": save_version(path),
+        "systems": len(fp["systems"]),
+        "bodies": sum(len(s["bodies"]) for s in fp["systems"]),
+        "sectors": sum(len(s["sectors"]) for s in fp["systems"]),
+        "named": fp["named"],
+    }

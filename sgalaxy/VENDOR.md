@@ -27,15 +27,23 @@ inofensiva. A partir do momento em que ele **escreve** — o injetor de nave, e
 depois o construtor de retratos da fase 2 — uma divergência corrompe partida de
 jogador. Por isso o teste cruzado é obrigatório antes da fase 2.
 
-### Teste cruzado (pendente)
+### Teste cruzado
 
-Ainda não escrito, porque depende de saves reais que não existem nesta máquina.
-O que ele precisa fazer:
+`tests/test_fingerprint_parity.py` roda a impressão digital das duas cópias
+sobre os mesmos saves e exige o mesmo digest, mais o mesmo esqueleto de sistemas,
+corpos, setores e nuvens. Rodando contra três saves reais em 2026-07-31: idêntico.
 
-1. carregar o mesmo save com esta cópia e com a do editor
-2. serializar os dois e exigir bytes idênticos entre si **e** com o original
-3. falhar ruidosamente se qualquer um dos três divergir
+Precisa do repositório do editor ao lado (ou `SPACEHAVEN_EDITOR` apontando para
+ele) e de savegames (ou `SPACEHAVEN_SAVES`). Sem os dois, o teste **se declara
+pulado** em vez de passar calado — um teste que não rodou não é um teste que
+passou, e o CI não tem save nenhum.
 
-Enquanto ele não existir, `tools/save_diff.py` e `tools/save_snapshot.py` são
-seguros por serem somente leitura, e o injetor deve ser tratado como
-experimental — usar só em cópia de save, nunca no save canônico de alguém.
+A consequência de uma divergência aqui não é cosmética: o servidor recusaria
+saves legítimos na entrada de uma sala (seção 2.3) sem ninguém entender por quê.
+
+### Ainda pendente: paridade de escrita
+
+O teste acima cobre leitura. Falta o de **escrita byte-idêntica** — carregar o
+mesmo save com as duas cópias, serializar, e exigir bytes iguais entre si e com
+o original. É o que protege o injetor, que é a única ferramenta daqui que
+escreve, e continua obrigatório antes da fase 2 ir para as mãos de jogador.

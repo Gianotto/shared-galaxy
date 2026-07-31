@@ -1,0 +1,51 @@
+# Galáxia Compartilhada — o servidor inteiro.
+#
+# `docker compose up` e está no ar. É o único caminho de deploy que o projeto
+# mantém, de propósito: a seção 2.11 chama auto-hospedagem de "a alavanca que
+# mais muda a conversa" numa comunidade de modding, e uma alavanca que só o
+# autor sabe puxar não serve. O mesmo arquivo levanta a sala pública e a sala
+# privada de um grupo de amigos.
+#
+# Antes de subir:
+#   cp .env.example .env    e edite a senha do banco
+#
+# Os saves ficam num volume, não no banco. Backup é parar o serviço e copiar a
+# pasta — e isso é de propósito também.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sgalaxy}
+      POSTGRES_USER: ${POSTGRES_USER:-sgalaxy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # As migrações rodam sozinhas na primeira subida do banco.
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sgalaxy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sgalaxy}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-sgalaxy}
+      BLOB_ROOT: /data/blobs
+      # Sem isso, qualquer um cria sala no seu servidor. Vazio = aberto.
+      SGALAXY_INVITE_ONLY: ${SGALAXY_INVITE_ONLY:-}
+    volumes:
+      - save-data:/data/blobs
+    ports:
+      - "${SGALAXY_PORT:-8714}:8714"
+
+volumes:
+  db-data:
+  save-data:

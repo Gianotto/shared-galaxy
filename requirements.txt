@@ -1,0 +1,14 @@
+# Dependências do SERVIDOR, e só dele.
+#
+# `tools/` e `sgalaxy/` continuam biblioteca padrão pura, e o CI verifica isso a
+# cada push: quem só quer analisar um save não instala nada. A disciplina do
+# editor vale onde ela importa — na máquina do jogador.
+#
+# Aqui é outro contexto: o servidor roda em container, num lugar que alguém
+# administra de propósito.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+psycopg[binary,pool]==3.2.3
+jinja2==3.1.5
+python-multipart==0.0.20

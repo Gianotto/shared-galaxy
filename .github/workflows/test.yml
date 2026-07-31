@@ -31,17 +31,17 @@ jobs:
             python3 "$tool" --help > /dev/null
           done
 
-      - name: Sem dependências externas
-        # A promessa do projeto é biblioteca padrão pura. Se alguém importar
-        # algo de fora, é aqui que aparece.
+      - name: Ferramentas sem dependências externas
+        # A promessa vale para `tools/` e `sgalaxy/`: quem só quer analisar um
+        # save não instala nada. O servidor em `server/` tem dependências de
+        # propósito e fica fora desta checagem.
         run: |
           python3 - <<'PY'
           import ast, pathlib, sys
           allowed = {"sgalaxy", "tools", "tests"}
           bad = []
-          for path in pathlib.Path(".").rglob("*.py"):
-              if ".github" in path.parts:
-                  continue
+          for folder in ("tools", "sgalaxy"):
+            for path in pathlib.Path(folder).rglob("*.py"):
               tree = ast.parse(path.read_text(encoding="utf-8"))
               for node in ast.walk(tree):
                   if isinstance(node, ast.Import):
