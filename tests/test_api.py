@@ -371,6 +371,13 @@ class PrivacyTestCase(unittest.TestCase):
     def _auth(self, p):
         return {"Authorization": f"Bearer {p['token']}"}
 
+    def _room(self, player, **kw):
+        payload = {"seed": "1654267488", "name": "Sala de teste", **kw}
+        r = self.client.post("/api/v1/rooms", json=payload,
+                             headers=self._auth(player))
+        self.assertEqual(r.status_code, 201, r.text)
+        return r.json()
+
     def test_policy_page_is_served_and_says_the_hard_parts(self):
         r = self.client.get("/privacidade")
         self.assertEqual(r.status_code, 200)
@@ -422,3 +429,58 @@ class PrivacyTestCase(unittest.TestCase):
         out = self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
                                headers=self._auth(vizinho))
         self.assertEqual(out.status_code, 200, out.text)
+
+    def test_recipe_is_visible_to_who_wants_to_join(self):
+        """Sem a seed não há como criar a partida, e sem partida não há save.
+
+        A primeira versão escondia a receita de não-membros e tornava o fluxo
+        de entrada impossível.
+        """
+        dono, forasteiro = self._player(), self._player()
+        room = self._room(dono)
+        r = self.client.get(f"/api/v1/rooms/{room['id']}",
+                            headers=self._auth(forasteiro))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["seed"], "1654267488",
+                         "quem quer entrar não conseguiu ver a seed")
+
+    def test_recipe_of_a_locked_room_needs_the_password(self):
+        dono, forasteiro = self._player(), self._player()
+        room = self._room(dono, password="abrete")
+        r = self.client.get(f"/api/v1/rooms/{room['id']}",
+                            headers=self._auth(forasteiro))
+        self.assertNotIn("seed", r.json())
+        r = self.client.get(f"/api/v1/rooms/{room['id']}",
+                            headers={**self._auth(forasteiro),
+                                     "X-Room-Password": "abrete"})
+        self.assertIn("seed", r.json())
+
+    def test_owner_publishes_the_recipe_afterwards(self):
+        """A receita fica completa depois: só ao criar a partida a pessoa sabe
+        o nome exato da nave e das opções que marcou."""
+        dono = self._player()
+        room = self._room(dono)
+        r = self.client.patch(f"/api/v1/rooms/{room['id']}",
+                              json={"options": {"nave": "Compact",
+                                                "dificuldade": "Normal"}},
+                              headers=self._auth(dono))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["options"]["nave"], "Compact")
+
+    def test_only_the_owner_changes_the_room(self):
+        dono, outro = self._player(), self._player()
+        room = self._room(dono)
+        r = self.client.patch(f"/api/v1/rooms/{room['id']}",
+                              json={"name": "sequestrada"},
+                              headers=self._auth(outro))
+        self.assertEqual(r.status_code, 403)
+
+    def test_seed_cannot_be_changed(self):
+        """Trocar a seed de uma sala com gente dentro invalidaria o save de
+        todos de uma vez."""
+        dono = self._player()
+        room = self._room(dono)
+        self.client.patch(f"/api/v1/rooms/{room['id']}",
+                          json={"seed": "outra"}, headers=self._auth(dono))
+        r = self.client.get(f"/api/v1/rooms/{room['id']}", headers=self._auth(dono))
+        self.assertEqual(r.json()["seed"], "1654267488")

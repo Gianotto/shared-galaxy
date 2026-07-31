@@ -230,15 +230,20 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
             created = db.create_room(conn, room)
         except psycopg.errors.CheckViolation as exc:
             raise HTTPException(400, f"parâmetro fora da faixa aceita: {exc}") from exc
-    return _room_public(created, is_member=True)
+    return _room_public(created, can_see_recipe=True)
 
 
-def _room_public(room: dict, is_member: bool) -> dict:
+def _room_public(room: dict, can_see_recipe: bool) -> dict:
     """A sala como o cliente ve.
 
-    A seed e as opcoes so saem para quem e da sala: sao o que a pessoa digita
-    para criar a partida, e a listagem publica nao deve entregar isso de uma
-    sala com senha.
+    A **receita** — seed e opcoes de criacao — sai para quem e da sala e para
+    quem apresenta a senha dela. Nao da para esconder de quem quer entrar: sem a
+    seed a pessoa nao consegue criar a partida, e sem criar a partida ela nao
+    tem save para subir. A primeira versao escondia de nao-membros e tornava o
+    fluxo impossivel.
+
+    A listagem publica (`GET /rooms`) continua sem a receita: ali e vitrine, e
+    uma sala com senha nao deve entregar a seed a quem so passou os olhos.
     """
     out = {
         "id": room["id"], "name": room["name"],
@@ -248,7 +253,7 @@ def _room_public(room: dict, is_member: bool) -> dict:
         "galaxyDigest": room["galaxy_digest"],
         "saveVersion": room["save_version"],
     }
-    if is_member:
+    if can_see_recipe:
         out["seed"] = room["seed"]
         out["options"] = room["options"]
     return out
@@ -262,11 +267,64 @@ def _require_room(conn, room_id: str) -> dict:
 
 
 @app.get("/api/v1/rooms/{room_id}")
-def room_detail(room_id: str, player: dict = Depends(current_player)):
+def room_detail(room_id: str, request: Request,
+                player: dict = Depends(current_player)):
+    """Os detalhes da sala, com a receita para quem pode reproduzi-la."""
+    senha = request.headers.get("x-room-password", "")
     with db.pool().connection() as conn:
         room = _require_room(conn, room_id)
-        member = db.get_membership(conn, room_id, player["id"]) is not None
-        return _room_public(room, member)
+        membro = db.get_membership(conn, room_id, player["id"]) is not None
+        aberta = room["password_hash"] is None
+        confere = (room["password_hash"] is not None
+                   and rules.hash_token(senha) == room["password_hash"])
+        return _room_public(room, membro or aberta or confere)
+
+
+@app.patch("/api/v1/rooms/{room_id}")
+def update_room(room_id: str, payload: dict,
+                player: dict = Depends(current_player)):
+    """O dono ajusta a receita e as regras da sala.
+
+    Existe porque a receita costuma ficar completa depois: a pessoa cria a
+    sala, abre o jogo, e só então sabe o nome exato da nave inicial e das
+    opções de cenário que marcou. Sem isto, corrigir um dado publicado exigiria
+    apagar a sala — e apagar sala com gente dentro é o que não se faz.
+
+    A seed NÃO é editável. Trocar a seed de uma sala com jogadores dentro
+    invalidaria o save de todos eles de uma vez.
+    """
+    with db.pool().connection() as conn:
+        room = _require_room(conn, room_id)
+        if room["owner_id"] != player["id"]:
+            raise HTTPException(403, "só o dono da sala pode mudar isto")
+
+        campos, valores = [], {}
+        if "name" in payload:
+            campos.append("name = %(name)s")
+            valores["name"] = str(payload["name"])[:80]
+        if "options" in payload:
+            campos.append("options = %(options)s")
+            valores["options"] = json.dumps(payload["options"])
+        for chave, coluna in (("leaseHours", "lease_hours"),
+                              ("maxPlayers", "max_players"),
+                              ("retentionN", "retention_n")):
+            if chave in payload:
+                campos.append(f"{coluna} = %({coluna})s")
+                valores[coluna] = int(payload[chave])
+        if "listed" in payload:
+            campos.append("listed = %(listed)s")
+            valores["listed"] = bool(payload["listed"])
+        if not campos:
+            raise HTTPException(400, "nada para mudar")
+
+        valores["id"] = room_id
+        try:
+            atualizada = conn.execute(
+                f"UPDATE room SET {', '.join(campos)} WHERE id = %(id)s "
+                f"RETURNING *", valores).fetchone()
+        except psycopg.errors.CheckViolation as exc:
+            raise HTTPException(400, f"valor fora da faixa aceita: {exc}") from exc
+    return _room_public(atualizada, can_see_recipe=True)
 
 
 @app.get("/api/v1/rooms/{room_id}/state")

@@ -251,14 +251,93 @@ def cmd_salas(args) -> int:
 def cmd_criar_sala(args) -> int:
     dados = json_request("POST", "/api/v1/rooms", {
         "seed": args.seed, "name": args.nome, "password": args.senha,
-        "leaseHours": args.prazo, "maxPlayers": args.max_jogadores})
+        "leaseHours": args.prazo, "maxPlayers": args.max_jogadores,
+        "options": _receita(args)})
     print(f"sala {dados['id']} criada")
     print(f"  seed:  {dados['seed']}")
     print(f"  prazo: {dados['leaseHours']}h")
     print()
-    print("  Quem for entrar precisa criar a partida com ESTA seed e as mesmas")
-    print("  opções de cenário. Opção diferente dá outra galáxia, e o servidor")
-    print("  recusa o save.")
+    print(f"  Publique a receita para quem for entrar:")
+    print(f"    python3 tools/sgalaxy.py como-entrar {dados['id']}")
+    if not _receita(args):
+        print()
+        print("  A receita está vazia. Depois de criar a partida no jogo,")
+        print("  registre a nave e as opções que você marcou:")
+        print(f"    python3 tools/sgalaxy.py configurar-sala {dados['id']} \\")
+        print(f"        --nave \"Nome da nave inicial\" --dificuldade Normal")
+    return 0
+
+
+def _receita(args) -> dict:
+    """O que alguem precisa reproduzir para o save ser aceito na sala."""
+    receita = {}
+    if getattr(args, "nave", None):
+        receita["nave"] = args.nave
+    if getattr(args, "dificuldade", None):
+        receita["dificuldade"] = args.dificuldade
+    for item in getattr(args, "opcao", None) or []:
+        if "=" not in item:
+            raise ClientError(f"--opcao espera chave=valor, veio {item!r}")
+        chave, valor = item.split("=", 1)
+        receita[chave.strip()] = valor.strip()
+    return receita
+
+
+def cmd_configurar_sala(args) -> int:
+    payload = {}
+    receita = _receita(args)
+    if receita:
+        atual = json_request("GET", f"/api/v1/rooms/{args.sala}")
+        payload["options"] = {**(atual.get("options") or {}), **receita}
+    if args.nome:
+        payload["name"] = args.nome
+    if args.prazo:
+        payload["leaseHours"] = args.prazo
+    if not payload:
+        raise ClientError("nada para mudar. Use --nave, --dificuldade, "
+                          "--opcao chave=valor, --nome ou --prazo")
+    json_request("PATCH", f"/api/v1/rooms/{args.sala}", payload)
+    print(f"sala {args.sala} atualizada")
+    return cmd_como_entrar(args)
+
+
+def cmd_como_entrar(args) -> int:
+    """A receita, do jeito que a pessoa vai seguir na tela de criação."""
+    head = {"X-Room-Password": getattr(args, "senha", None) or ""}
+    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.sala}", None, head)
+    sala = json.loads(raw)
+    if "seed" not in sala:
+        raise ClientError("esta sala tem senha; passe --senha para ver a receita")
+
+    print(f"Para entrar na sala {sala['id']} ({sala['name']}):")
+    print()
+    print("  1. No Space Haven, crie uma partida nova com:")
+    print(f"       seed: {sala['seed']}")
+    receita = sala.get("options") or {}
+    if receita.get("nave"):
+        print(f"       nave inicial: {receita['nave']}")
+    if receita.get("dificuldade"):
+        print(f"       dificuldade: {receita['dificuldade']}")
+    outras = {k: v for k, v in receita.items()
+              if k not in ("nave", "dificuldade")}
+    for chave, valor in sorted(outras.items()):
+        print(f"       {chave}: {valor}")
+    if not receita:
+        print("       (o dono da sala ainda não publicou as opções de cenário)")
+    print()
+    print("  2. Salve a partida e feche o jogo.")
+    print()
+    print("  3. Suba o save:")
+    print(f"       python3 tools/sgalaxy.py entrar {sala['id']} \\")
+    print(f"           --save CAMINHO/DA/PARTIDA")
+    print()
+    if sala.get("galaxyDigest"):
+        print(f"  A galáxia desta sala é {sala['galaxyDigest']}. Se o seu save")
+        print("  não bater, foi opção de criação diferente — a seed sozinha não")
+        print("  basta.")
+    else:
+        print("  Ninguém entrou ainda: o primeiro save que subir define a")
+        print("  galáxia da sala, e os seguintes têm que bater com ele.")
     return 0
 
 
@@ -377,7 +456,29 @@ def main() -> int:
     p.add_argument("--senha")
     p.add_argument("--prazo", type=int, default=12, help="horas de empréstimo")
     p.add_argument("--max-jogadores", type=int, default=8)
+    p.add_argument("--nave", help="nave inicial que todos devem escolher")
+    p.add_argument("--dificuldade")
+    p.add_argument("--opcao", action="append", metavar="CHAVE=VALOR",
+                   help="opção de cenário; pode repetir")
     p.set_defaults(func=cmd_criar_sala)
+
+    p = sub.add_parser("configurar-sala",
+                       help="publica ou corrige a receita da sala")
+    p.add_argument("sala")
+    p.add_argument("--nave", help="nave inicial que todos devem escolher")
+    p.add_argument("--dificuldade")
+    p.add_argument("--opcao", action="append", metavar="CHAVE=VALOR",
+                   help="opção de cenário; pode repetir")
+    p.add_argument("--nome")
+    p.add_argument("--prazo", type=int)
+    p.add_argument("--senha", help="se a sala tiver")
+    p.set_defaults(func=cmd_configurar_sala)
+
+    p = sub.add_parser("como-entrar",
+                       help="a receita para reproduzir a galáxia da sala")
+    p.add_argument("sala")
+    p.add_argument("--senha")
+    p.set_defaults(func=cmd_como_entrar)
 
     p = sub.add_parser("entrar", help="sobe o save inicial e entra numa sala")
     p.add_argument("sala")
