@@ -167,13 +167,21 @@ def npc_trader_ship(sid: int = 5001, faction: int = 462,
     }
 
 
-def write_save(root: str, game_xml: str, ships: dict | None = None) -> str:
+# Uma partida recem-criada nao comeca no dia zero: medido em "Fronteira" e
+# "SeedTest", logo apos a criacao, o jogo poe a colonia por volta do dia 1.3.
+# O molde imita isso porque e o que uma sala espera receber de quem entra.
+FRESH_DATE = 111660
+
+
+def write_save(root: str, game_xml: str, ships: dict | None = None,
+               date: int = FRESH_DATE) -> str:
     """Grava uma pasta de save. Devolve o caminho da pasta."""
     os.makedirs(root, exist_ok=True)
     with open(os.path.join(root, "game"), "w", encoding="utf-8") as fh:
         fh.write(game_xml)
     with open(os.path.join(root, "info"), "w", encoding="utf-8") as fh:
-        fh.write('<info version="21" date="3289920" realTimeDate="1785467969073"/>\n')
+        fh.write(f'<info version="21" date="{date}"'
+                 f' realTimeDate="1785467969073"/>\n')
     if ships:
         ships_dir = os.path.join(root, "ships")
         os.makedirs(ships_dir, exist_ok=True)

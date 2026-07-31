@@ -266,6 +266,10 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
         "lease_hours": int(payload.get("leaseHours") or 12),
         "retention_n": int(payload.get("retentionN") or 20),
         "max_players": int(payload.get("maxPlayers") or 8),
+        # Todo mundo comeca junto. `None` explicito libera veterano a trazer o
+        # que tem; ausente usa o padrao da coluna.
+        "max_join_age_days": (None if payload.get("maxJoinAgeDays", 0) is None
+                              else float(payload.get("maxJoinAgeDays") or 5)),
     }
     with db.pool().connection() as conn:
         try:
@@ -291,6 +295,9 @@ def _room_public(room: dict, can_see_recipe: bool) -> dict:
         "id": room["id"], "name": room["name"],
         "leaseHours": room["lease_hours"], "retentionN": room["retention_n"],
         "maxPlayers": room["max_players"],
+        "maxJoinAgeDays": (float(room["max_join_age_days"])
+                           if room.get("max_join_age_days") is not None
+                           else None),
         "hasPassword": room["password_hash"] is not None,
         "galaxyDigest": room["galaxy_digest"],
         "saveVersion": room["save_version"],
@@ -353,11 +360,16 @@ def update_room(room_id: str, payload: dict,
             if chave in payload:
                 campos.append(f"{coluna} = %({coluna})s")
                 valores[coluna] = int(payload[chave])
+        if "maxJoinAgeDays" in payload:
+            campos.append("max_join_age_days = %(max_join_age_days)s")
+            valores["max_join_age_days"] = (
+                None if payload["maxJoinAgeDays"] is None
+                else float(payload["maxJoinAgeDays"]))
         if "listed" in payload:
             campos.append("listed = %(listed)s")
             valores["listed"] = bool(payload["listed"])
         if not campos:
-            raise HTTPException(400, "nada para mudar")
+            raise HTTPException(400, "nothing to change")
 
         valores["id"] = room_id
         try:
@@ -420,6 +432,12 @@ async def join_room(room_id: str, request: Request,
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
             raise HTTPException(400, f"could not read this save: {exc}") from exc
+
+        # Idade primeiro: enxerto nenhum conserta uma colônia de meio ano, e
+        # tentar enxertar antes de recusar seria trabalho jogado fora.
+        ok, motivo = rules.check_join_age(here["ageDays"], room)
+        if not ok:
+            raise HTTPException(409, motivo)
 
         ok, motivo = rules.check_join(described, room)
         if not ok:
@@ -752,6 +770,7 @@ def new_room_submit(request: Request, name: str = Form(""),
         "password_hash": None,
         "owner_id": player["id"],
         "lease_hours": 12, "retention_n": 20, "max_players": 32,
+        "max_join_age_days": 5,
     }
     with db.pool().connection() as conn:
         created = db.create_room(conn, room)

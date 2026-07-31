@@ -226,56 +226,139 @@ class AutoLoadTestCase(unittest.TestCase):
             self.assertEqual(fh.read().strip(), "Sala-6359GV")
 
 
-class FirstJoinTestCase(unittest.TestCase):
-    """A primeira entrada, dentro do `play`.
+class FirstAccessTestCase(unittest.TestCase):
+    """Sem conta guardada para este servidor.
 
-    O enxerto é o que tornou isto possível: antes, um save qualquer não servia
-    para entrar numa sala, então não havia como o `play` resolver sozinho.
+    A credencial é indexada por URL. Quem troca de porta — um túnel que subiu
+    noutro número — continua com a conta, só que sob outra chave, e uma
+    mensagem "sem conta" sozinha parece perda de dados.
+
+    E a trava tem que vir ANTES de qualquer coisa cara: a primeira versão
+    descobria a falta de conta só na hora de subir o save, depois de a pessoa
+    já ter confirmado o envio.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self._cred = client.CREDENTIALS
+        client.CREDENTIALS = os.path.join(self.tmp.name, "credentials.json")
+        self.addCleanup(lambda: setattr(client, "CREDENTIALS", self._cred))
+
+    def _guarda(self, **por_url) -> None:
+        with open(client.CREDENTIALS, "w", encoding="utf-8") as fh:
+            json.dump(por_url, fh)
+
+    def test_no_account_anywhere_says_how_to_register(self):
+        with self.assertRaises(client.ClientError) as erro:
+            client.require_account()
+        self.assertIn("register", str(erro.exception))
+
+    def test_an_account_on_another_url_is_pointed_at(self):
+        """O caso real: a conta existe, sob outro endereço."""
+        self._guarda(**{"http://127.0.0.1:18714": {"token": "x", "playerId": 1}})
+        with self.assertRaises(client.ClientError) as erro:
+            client.require_account()
+        mensagem = str(erro.exception)
+        self.assertIn("http://127.0.0.1:18714", mensagem,
+                      "não disse onde a conta está; parece perda de dados")
+        self.assertIn("SGALAXY_URL", mensagem)
+
+    def test_an_account_here_passes(self):
+        self._guarda(**{client.base_url(): {"token": "x", "playerId": 1}})
+        client.require_account()   # não levanta
+
+    def test_membership_never_swallows_a_real_failure(self):
+        """Servidor fora do ar não pode virar "você ainda não entrou".
+
+        Essa confusão é o que levava a pessoa até confirmar o envio do save
+        para só então falhar.
+        """
+        self._guarda(**{client.base_url(): {"token": "x", "playerId": 1}})
+        real = client.json_request
+        client.json_request = lambda *a, **k: (_ for _ in ()).throw(
+            client.ClientError("could not reach the server"))
+        self.addCleanup(lambda: setattr(client, "json_request", real))
+        with self.assertRaises(client.ClientError):
+            client.is_member("XXXXXX")
+
+
+class NewShipTestCase(unittest.TestCase):
+    """O primeiro acesso a uma sala cria a nave, não reaproveita uma.
+
+    O enxerto preserva nave, tripulação, banco e pesquisa de propósito. Entrar
+    com uma colônia de meio ano é, portanto, chegar com meio ano de vantagem —
+    e numa sala onde todo mundo começa junto isso não é atalho, é injustiça.
     """
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.jogo = os.path.join(self.tmp.name, "SpaceHaven")
-        os.makedirs(os.path.join(self.jogo, "savegames"))
-        self._exe = client.find_game
-        client.find_game = lambda: os.path.join(self.jogo, "spacehaven")
-        self.addCleanup(lambda: setattr(client, "find_game", self._exe))
+        self.saves = os.path.join(self.jogo, "savegames")
+        os.makedirs(self.saves)
+        self.exe = os.path.join(self.jogo, "spacehaven")
+        real = client.find_game
+        client.find_game = lambda: self.exe
+        self.addCleanup(lambda: setattr(client, "find_game", real))
 
-    def _save(self, nome: str, idade_dias: float) -> None:
-        pasta = os.path.join(self.jogo, "savegames", nome, "save")
+    def _save(self, nome: str, idade_dias: float = 1.29) -> str:
+        pasta = os.path.join(self.saves, nome, "save")
         os.makedirs(pasta)
         with open(os.path.join(pasta, "game"), "w", encoding="utf-8") as fh:
             fh.write("<game/>")
         with open(os.path.join(pasta, "info"), "w", encoding="utf-8") as fh:
             fh.write(f'<info version="21" date="{int(idade_dias * 86400)}"/>')
+        return pasta
 
-    def test_room_folders_are_not_offered(self):
-        """Entrar numa sala com a pasta da própria sala é um laço.
+    def _abre_o_jogo(self, cria: str | list | None) -> list:
+        """Substitui o lançamento do jogo por 'a pessoa criou tal partida'."""
+        chamadas = []
 
-        As `Sala-*` são escritas por este cliente. Oferecer uma delas devolveria
-        a sala para dentro dela mesma, e a pessoa não teria como perceber.
-        """
-        self._save("Minha Partida", 10.0)
-        self._save("Sala-6359GV", 99.0)
-        nomes = [n for _idade, n, _p in client.other_saves()]
-        self.assertEqual(nomes, ["Minha Partida"])
+        def falso(exe, marcador):
+            chamadas.append(marcador)
+            for nome in ([cria] if isinstance(cria, str) else (cria or [])):
+                self._save(nome)
 
-    def test_the_most_advanced_comes_first(self):
-        self._save("nova", 3.0)
-        self._save("velha", 120.0)
-        self._save("meio", 40.0)
-        nomes = [n for _idade, n, _p in client.other_saves()]
-        self.assertEqual(nomes, ["velha", "meio", "nova"])
+        real = client.launch_and_wait
+        client.launch_and_wait = falso
+        self.addCleanup(lambda: setattr(client, "launch_and_wait", real))
+        return chamadas
 
-    def test_no_savegames_is_not_a_crash(self):
-        self.assertEqual(client.other_saves(), [])
+    def test_the_game_is_opened_on_the_new_game_menu(self):
+        chamadas = self._abre_o_jogo("Minha Nave")
+        client.create_ship("XXXXXX", self.exe, sim=True)
+        self.assertEqual(chamadas, [client.AUTOLOAD_NEW_GAME],
+                         "não pediu ao mod para abrir o criador de partida")
 
-    def test_refuses_to_upload_without_confirmation(self):
-        """Subir a partida de alguém é a coisa mais consequente que isto faz."""
-        self._save("Minha Partida", 10.0)
+    def test_the_new_game_is_found_by_difference(self):
+        """Perguntar o nome erraria: quem escolhe é a pessoa, dentro do jogo."""
+        self._save("partida antiga", 90.0)
+        self._abre_o_jogo("A Que Eu Acabei De Criar")
+        pasta = client.create_ship("XXXXXX", self.exe, sim=True)
+        self.assertIsNotNone(pasta)
+        self.assertIn("A Que Eu Acabei De Criar", pasta)
+
+    def test_an_old_save_is_never_picked_up(self):
+        """A partida velha estava lá antes e continua fora disto."""
+        self._save("colônia de meio ano", 178.0)
+        self._abre_o_jogo(None)
+        self.assertIsNone(client.create_ship("XXXXXX", self.exe, sim=True),
+                          "aproveitou um save que já existia")
+
+    def test_creating_nothing_uploads_nothing(self):
+        self._abre_o_jogo(None)
+        self.assertIsNone(client.create_ship("XXXXXX", self.exe, sim=True))
+
+    def test_creating_two_games_asks_which_one(self):
+        """Escolher por nós qual das duas seria escolher errado metade das vezes."""
+        self._abre_o_jogo(["Uma", "Outra"])
+        self.assertIsNone(client.create_ship("XXXXXX", self.exe, sim=True))
+
+    def test_saying_no_does_not_open_the_game(self):
+        chamadas = self._abre_o_jogo("Qualquer")
         real_input = builtins.input
-        builtins.input = lambda _prompt="": "n"
+        builtins.input = lambda _p="": "n"
         self.addCleanup(lambda: setattr(builtins, "input", real_input))
-        self.assertFalse(client.first_join("XXXXXX", None, False, ""),
-                         "subiu o save mesmo com a pessoa dizendo não")
+        self.assertIsNone(client.create_ship("XXXXXX", self.exe, sim=False))
+        self.assertEqual(chamadas, [], "abriu o jogo mesmo com a pessoa dizendo não")

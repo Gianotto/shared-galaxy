@@ -63,6 +63,17 @@ public class AutoLoadAspect {
     public static final String MARKER = "sharedgalaxy.autoload";
 
     /**
+     * Marker contents that mean "open the new game menu" instead of a save.
+     *
+     * <p>Somebody joining a room for the first time has no ship in it yet, and
+     * a room that lets a veteran arrive with a half-year-old colony is not a
+     * shared start. So the first launch of a session goes to the creator, the
+     * client uploads whatever was created, and the second launch opens the
+     * result.
+     */
+    public static final String NEW_GAME = "__new__";
+
+    /**
      * Frames to let the menu finish coming up before taking it over.
      *
      * <p>The first {@code update} can run before the menu has been activated,
@@ -97,8 +108,16 @@ public class AutoLoadAspect {
             return;
         }
         try {
-            open(joinPoint.getTarget(), folder);
-            System.out.println("[shared-galaxy] opening save " + folder);
+            if (NEW_GAME.equals(folder)) {
+                // First time in a room: no ship there yet, and the room wants
+                // everybody to start together. Going straight to the creator is
+                // what makes that fit in one command.
+                newGame(joinPoint.getTarget());
+                System.out.println("[shared-galaxy] opening the new game menu");
+            } else {
+                open(joinPoint.getTarget(), folder);
+                System.out.println("[shared-galaxy] opening save " + folder);
+            }
         } catch (Throwable failure) {
             // The player is at the menu and can load by hand. Taking the game
             // down because our shortcut failed would be a worse trade.
@@ -128,6 +147,18 @@ public class AutoLoadAspect {
                 }
             }
         }
+    }
+
+    /** Opens the new game creator, the same menu the main screen's button does. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void newGame(Object gameMenu) throws Exception {
+        ClassLoader loader = gameMenu.getClass().getClassLoader();
+        Class menuType = Class.forName(
+            "fi.bugbyte.spacehaven.gui.menu.GameMenu$MenuType", true, loader);
+        Method setMenu = gameMenu.getClass()
+            .getDeclaredMethod("setMenu", menuType);
+        setMenu.setAccessible(true);
+        setMenu.invoke(gameMenu, Enum.valueOf(menuType, "NewGame"));
     }
 
     /** Drives the game's own load menu, exactly as a click would. */

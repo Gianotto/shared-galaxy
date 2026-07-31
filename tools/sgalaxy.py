@@ -564,17 +564,64 @@ def cmd_return_save(args) -> int:
     return 0
 
 
+def accounts_elsewhere() -> list:
+    """Servidores para os quais existe conta guardada, tirando o atual.
+
+    A credencial é indexada por URL. Quando alguém troca de porta — um túnel
+    que subiu noutro número, por exemplo — a conta continua lá, só que sob
+    outra chave, e a mensagem "sem conta" sozinha parece perda de dados.
+    """
+    if not os.path.isfile(CREDENTIALS):
+        return []
+    try:
+        with open(CREDENTIALS, "r", encoding="utf-8") as fh:
+            todos = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return [url for url, dados in todos.items()
+            if url != base_url() and dados.get("token")]
+
+
+def require_account() -> None:
+    """Trava antes de qualquer coisa cara acontecer.
+
+    Sem isto, o `play` descobria a falta de conta só na hora de subir o save —
+    depois de a pessoa já ter confirmado o envio.
+    """
+    if load_credentials().get("token"):
+        return
+    linhas = [f"no account stored for {base_url()}."]
+    outros = accounts_elsewhere()
+    if outros:
+        linhas.append("")
+        linhas.append("You do have an account for:")
+        for url in outros:
+            linhas.append(f"    SGALAXY_URL={url}")
+        linhas.append("")
+        linhas.append("Set SGALAXY_URL to the right server, or register a new "
+                      "account here:")
+    else:
+        linhas.append("Run:")
+    linhas.append('    python3 tools/sgalaxy.py register "Your Name"')
+    raise ClientError("\n".join(linhas))
+
+
 def is_member(room: str) -> bool:
     """Já entrei nesta sala?
 
     Pela lista de quem está na sala, e não por tentar e ver o erro: um 403 de
     `checkout` pode ser outra coisa, e tratar todo 403 como "ainda não entrou"
     faria o cliente subir um save por causa de um erro qualquer.
+
+    E a mesma armadilha uma camada acima: a primeira versão disto capturava
+    QUALQUER `ClientError` e devolvia False. Servidor fora do ar, conta em
+    outro URL, sala inexistente — tudo virava "você ainda não entrou", e o
+    cliente conduzia a pessoa até confirmar o envio do save para só então
+    falhar. Aqui só existe uma resposta negativa: a lista veio e eu não estou
+    nela.
     """
-    try:
-        data = json_request("GET", f"/api/v1/rooms/{room}/state")
-    except ClientError:
-        return False
+    require_account()
+    data = json_request("GET", f"/api/v1/rooms/{room}/state")
     eu = load_credentials().get("playerId")
     return any(p["playerId"] == eu for p in data.get("players", []))
 
@@ -603,60 +650,142 @@ def other_saves() -> list:
     return achados
 
 
-def first_join(room: str, escolhido: str | None, sim: bool,
-               senha: str) -> bool:
-    """A primeira entrada de alguém numa sala, dentro do `play`.
+def savegame_root() -> str | None:
+    exe = find_game()
+    if not exe:
+        return None
+    raiz = os.path.join(os.path.dirname(exe), "savegames")
+    return raiz if os.path.isdir(raiz) else None
 
-    Sobe um save que já existe; o servidor enxerta a galáxia da sala nele e
-    devolve o resultado. Nave, tripulação, banco e pesquisa continuam sendo da
-    pessoa — só a galáxia muda.
 
-    Isto pede confirmação de propósito. Subir a partida de alguém para um
-    servidor é a coisa mais consequente que este cliente faz, e fazê-la em
-    silêncio porque o comando é "play" seria uma surpresa cara.
+def save_folders() -> set:
+    """Os nomes de pasta de save que existem agora.
+
+    Serve para descobrir por diferenca qual partida a pessoa acabou de criar. E
+    mais confiavel que perguntar o nome: ela escolhe o nome no proprio jogo, e
+    qualquer palpite nosso erraria acentuacao, espaco ou numero no fim.
     """
-    if escolhido:
-        pasta = resolve_save(escolhido)
-        nome, idade = os.path.basename(escolhido), age_of(pasta)
-    else:
-        candidatos = other_saves()
-        if not candidatos:
-            print(f"you are not in room {room} yet, and I found no savegame to "
-                  f"join with.")
-            print("Create a game in Space Haven, then run this again — or pass")
-            print(f"  python3 tools/sgalaxy.py play {room} --join-with PATH")
-            return False
-        idade, nome, pasta = candidatos[0]
+    raiz = savegame_root()
+    if not raiz:
+        return set()
+    return {n for n in os.listdir(raiz)
+            if os.path.isdir(os.path.join(raiz, n))}
 
-    print(f"you are not in room {room} yet.")
+
+def launch_and_wait(exe: str, marcador: str) -> None:
+    """Abre o jogo com o bilhete armado e espera fechar."""
+    game_dir = os.path.dirname(exe)
+    arm_autoload(game_dir, marcador)
+    try:
+        subprocess.Popen([exe], cwd=game_dir).wait()
+    except KeyboardInterrupt:
+        print("\n      interrupted")
+    except OSError as exc:
+        raise ClientError(f"could not launch the game: {exc}") from exc
+
+
+def create_ship(room: str, exe: str, sim: bool) -> str | None:
+    """Faz a pessoa criar a nave dela, no proprio jogo, e devolve a pasta.
+
+    POR QUE NAO APROVEITAR UM SAVE QUE JA EXISTE
+
+    Aproveitar seria mais curto e foi o que esta funcao fazia antes. So que o
+    enxerto preserva nave, tripulacao, banco e pesquisa de proposito — entao
+    entrar com uma colonia de meio ano e chegar com meio ano de vantagem. Numa
+    sala onde todo mundo comeca junto isso nao e um atalho, e uma injustica.
+
+    Entao a nave nasce aqui: o jogo abre no criador de partida, a pessoa monta
+    a nave dela, salva e fecha. Qual seed ela usar nao importa — o servidor
+    troca a galaxia depois.
+
+    A partida nova e achada por diferenca na pasta de savegames. Perguntar o
+    nome erraria: quem escolhe e ela, dentro do jogo.
+    """
+    raiz = savegame_root()
+    if not raiz:
+        raise ClientError("could not find the game's savegames folder")
+
+    print(f"you are not in room {room} yet — let's create your ship.")
     print()
-    print(f"  joining with: {nome} (age {idade:.2f})")
-    print(f"  {pasta}")
+    print("  The game will open on NEW GAME. Build your starting ship, save,")
+    print("  and close the game. I take it from there.")
     print()
-    print("  The server will graft the room's galaxy into it and keep the")
-    print("  result. Your ship, crew, bank and research are untouched — only")
-    print("  the galaxy changes. Your original folder is not modified.")
-    if len(other_saves()) > 1 and not escolhido:
-        print()
-        print("  Other saves you could use instead:")
-        for idade_, nome_, _p in other_saves()[1:4]:
-            print(f"    --join-with '{nome_}'   (age {idade_:.2f})")
+    print("  Any seed and any scenario option will do: the server replaces the")
+    print("  galaxy with the room's. Your ship, crew and bank stay yours.")
+    print()
+    print("  Everyone in this room starts on a new game, so an old colony is")
+    print("  not accepted here.")
 
     if not sim:
         print()
         try:
-            resposta = input("  join with this save? [y/N] ").strip().lower()
+            resposta = input("  open the game now? [Y/n] ").strip().lower()
         except EOFError:
             resposta = ""
-        if resposta not in ("y", "yes", "s", "sim"):
-            print("  nothing was uploaded.")
+        if resposta in ("n", "no", "nao", "não"):
+            print("  nothing happened.")
+            return None
+
+    antes = save_folders()
+    print()
+    print("[join 1/2] opening the game so you can create your ship …")
+    if not mod_is_installed(os.path.dirname(exe)):
+        print("      (no mod installed: pick NEW GAME in the menu yourself)")
+    launch_and_wait(exe, AUTOLOAD_NEW_GAME)
+
+    novas = sorted(save_folders() - antes)
+    if not novas:
+        print()
+        print("no new game was created, so there is nothing to join with.")
+        print("Run the same command again when you have created one.")
+        return None
+    if len(novas) > 1:
+        print()
+        print(f"you created more than one game ({', '.join(novas)}).")
+        print("Join with the one you want:")
+        for nome in novas:
+            print(f"  python3 tools/sgalaxy.py play {room} --join-with '{nome}'")
+        return None
+
+    pasta = os.path.join(raiz, novas[0], "save")
+    if not os.path.isfile(os.path.join(pasta, "game")):
+        pasta = os.path.join(raiz, novas[0])
+    if not os.path.isfile(os.path.join(pasta, "game")):
+        print(f"\n'{novas[0]}' has no savegame inside — did you save before "
+              f"closing?")
+        return None
+    return pasta
+
+
+def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
+               exe: str) -> bool:
+    """A primeira entrada de alguem numa sala, dentro do `play`.
+
+    Sobe a partida recem-criada; o servidor enxerta a galaxia da sala nela e
+    devolve o resultado. Nave, tripulacao, banco e pesquisa continuam sendo da
+    pessoa — so a galaxia muda.
+    """
+    if escolhido:
+        # Escapatoria consciente: quem sabe o que esta fazendo aponta um save.
+        # A sala ainda tem a ultima palavra pela idade, no servidor.
+        pasta = resolve_save(escolhido)
+    else:
+        pasta = create_ship(room, exe, sim)
+        if pasta is None:
             return False
 
+    idade = age_of(pasta)
     print()
-    print(f"[0/4] joining room {room} …")
-    _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/join", pack(pasta),
-                          {"Content-Type": "application/zip",
-                           "X-Room-Password": senha})
+    print(f"[join 2/2] joining room {room} with "
+          f"{os.path.basename(os.path.dirname(pasta))} (age {idade:.2f}) …")
+    try:
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/join", pack(pasta),
+                              {"Content-Type": "application/zip",
+                               "X-Room-Password": senha})
+    except ClientError as exc:
+        print(f"\nthe room did not accept it: {exc}", file=sys.stderr)
+        print(f"\nYour game is safe in {pasta}; nothing there was changed.")
+        return False
     data = json.loads(raw)
     if data.get("grafted"):
         print("      the room's galaxy was grafted into your save")
@@ -693,7 +822,7 @@ def cmd_play(args) -> int:
     # alguem cabe no mesmo comando que todas as outras.
     if not is_member(args.room):
         if not first_join(args.room, args.join_with, args.yes,
-                          args.password or ""):
+                          args.password or "", exe):
             return 1
 
     # -- 1. retirar
@@ -748,6 +877,10 @@ def cmd_play(args) -> int:
 
 
 AUTOLOAD_MARKER = "sharedgalaxy.autoload"
+
+# Bilhete especial: em vez de um save, pede ao mod que abra o criador de
+# partida. E o primeiro acesso de alguem a uma sala — a nave dela nasce ali.
+AUTOLOAD_NEW_GAME = "__new__"
 
 
 def mod_is_installed(game_dir: str) -> bool:

@@ -37,12 +37,18 @@ if HAS_DB:
     from tests import synthetic
 
 
-def _save_zip(**kwargs) -> bytes:
-    """Um savegame sintético compactado, como o cliente mandaria."""
+def _save_zip(age_days: float | None = None, **kwargs) -> bytes:
+    """Um savegame sintético compactado, como o cliente mandaria.
+
+    Por padrão é uma partida RECÉM-CRIADA, porque é isso que uma sala espera
+    receber de quem entra. Passe `age_days` para simular uma colônia velha.
+    """
+    date = (synthetic.FRESH_DATE if age_days is None
+            else int(age_days * 86400))
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("game", synthetic.build_game(**kwargs))
-        zf.writestr("info", '<info version="21" date="3289920"/>')
+        zf.writestr("info", f'<info version="21" date="{date}"/>')
     return buf.getvalue()
 
 
@@ -178,6 +184,75 @@ class ApiTestCase(unittest.TestCase):
         estado = self.client.get(f"/api/v1/rooms/{room['id']}/state",
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
+
+    # -- todo mundo comeca junto -----------------------------------------
+
+    def test_a_new_game_is_accepted(self):
+        """O caso normal: partida recém-criada, por volta do dia 1.3."""
+        dono = self._player()
+        room = self._room(dono)
+        r = self._join(dono, room["id"])
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertLess(r.json()["ageDays"], 5)
+
+    def test_an_old_colony_is_refused_and_told_why(self):
+        """O enxerto preserva nave, tripulação e banco — de propósito.
+
+        Por isso entrar com uma colônia de meio ano é chegar com meio ano de
+        vantagem, e isso é decisão da sala, não do save.
+        """
+        dono, veterano = self._player(), self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        r = self._join(veterano, room["id"], data=_save_zip(age_days=178.0))
+        self.assertEqual(r.status_code, 409)
+        detalhe = r.json()["detail"]
+        self.assertIn("178", detalhe)
+        self.assertIn("new game", detalhe,
+                      "recusou sem dizer o que a pessoa deve fazer")
+
+    def test_the_age_rule_runs_before_the_graft(self):
+        """Enxerto nenhum conserta idade, e enxertar para depois recusar é
+        trabalho jogado fora — de megabytes, no caminho de uma requisição."""
+        dono, veterano = self._player(), self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        r = self._join(veterano, room["id"],
+                       data=_save_zip(age_days=178.0, galaxy_w=777000))
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("days old", r.json()["detail"],
+                      "recusou pela galáxia; a idade tinha que vir antes")
+
+    def test_a_room_can_waive_the_rule(self):
+        """Uma sala de veteranos pode querer que cada um traga o que tem."""
+        dono, veterano = self._player(), self._player()
+        room = self._room(dono, maxJoinAgeDays=None)
+        self._join(dono, room["id"])
+        r = self._join(veterano, room["id"], data=_save_zip(age_days=178.0))
+        self.assertEqual(r.status_code, 200, r.text)
+
+    def test_the_owner_can_change_the_rule_later(self):
+        dono = self._player()
+        room = self._room(dono)
+        self.assertEqual(room["maxJoinAgeDays"], 5.0)
+        r = self.client.patch(f"/api/v1/rooms/{room['id']}",
+                              json={"maxJoinAgeDays": 30},
+                              headers=self._auth(dono))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["maxJoinAgeDays"], 30.0)
+
+    def test_age_does_not_limit_playing_only_joining(self):
+        """Entrou, joga o quanto quiser: a regra é de entrada, não de estadia."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
+                         headers=self._auth(dono))
+        r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
+                             content=_save_zip(age_days=200.0),
+                             headers=self._auth(dono))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["ageDays"], 200.0)
 
     def test_a_different_galaxy_is_grafted_instead_of_refused(self):
         """O atrito que fazia alguém desistir: acertar cada opção de cenário.

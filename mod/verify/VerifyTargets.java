@@ -30,8 +30,9 @@ public final class VerifyTargets {
         // The woven join point.
         method(gameMenu, "update", float.class);
 
-        // The enum constant the aspect asks for by name.
+        // The enum constants the aspect asks for by name.
         constant(menuType, "Load");
+        constant(menuType, "NewGame");
 
         // Switching the menu is what activates it, and activation is what sets
         // the `onScreen` the load path dereferences.

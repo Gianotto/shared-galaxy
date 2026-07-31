@@ -70,10 +70,11 @@ def touch_player(conn: psycopg.Connection, player_id: int) -> None:
 def create_room(conn: psycopg.Connection, room: dict) -> dict:
     row = conn.execute(
         """INSERT INTO room (id, name, seed, options, password_hash, owner_id,
-                             lease_hours, retention_n, max_players)
+                             lease_hours, retention_n, max_players,
+                             max_join_age_days)
            VALUES (%(id)s, %(name)s, %(seed)s, %(options)s, %(password_hash)s,
                    %(owner_id)s, %(lease_hours)s, %(retention_n)s,
-                   %(max_players)s)
+                   %(max_players)s, %(max_join_age_days)s)
            RETURNING *""", room).fetchone()
     conn.execute(
         "UPDATE player SET rooms_created = rooms_created + 1 WHERE id = %s",

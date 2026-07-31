@@ -15,6 +15,11 @@ It watches for a file named `sharedgalaxy.autoload` in the game's folder,
 holding a save folder name. The client writes it just before launching; the mod
 reads it, deletes it, and opens that save.
 
+The marker can also say `__new__`, and then the mod opens the **new game**
+menu instead. That is the first time somebody joins a room: they have no ship
+there yet, the room wants everyone to start together, so the client opens the
+creator, waits, and uploads whatever was built.
+
 Every other launch behaves exactly like an unmodded game. A mod that hijacked
 every start would be worse than the problem it solves.
 

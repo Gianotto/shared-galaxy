@@ -32,7 +32,7 @@ class PresenceTestCase(unittest.TestCase):
     def _save(self, xml: str, info: str | None = None) -> str:
         folder = synthetic.write_save(os.path.join(self.tmp.name, "s"), xml)
         with open(os.path.join(folder, "info"), "w", encoding="utf-8") as fh:
-            fh.write(info or '<info version="21" date="3289920"/>')
+            fh.write(info or '<info version="21" date="111660"/>')
         return folder
 
     def test_reads_ship_name_and_position(self):

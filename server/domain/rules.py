@@ -98,12 +98,18 @@ def can_create_room(rooms_created: int, blocked: bool) -> tuple[bool, str]:
 # Entrada numa sala
 # --------------------------------------------------------------------------
 
-def check_join(save: dict, room: dict) -> tuple[bool, str]:
+def check_join(save: dict, room: dict, age_days: float | None = None
+               ) -> tuple[bool, str]:
     """O save que chegou serve para esta sala?
 
     `save` vem de `server.galaxy.fingerprint.describe`. A recusa sempre explica
     o motivo, porque quase sempre e opcao de criacao diferente e a pessoa
     consegue corrigir — recusar sem dizer o que houve manda ela embora.
+
+    `age_days` e a idade da colonia que chegou. Desde que o servidor enxerta a
+    galaxia, uma colonia velha entra tao facil quanto uma nova — e chega com a
+    nave, a tripulacao e o banco dela. Quem jogou meio ano nao comeca ao lado de
+    quem acabou de abrir o jogo, entao a sala pode exigir partida nova.
     """
     if room.get("save_version") and save.get("saveVersion"):
         if str(room["save_version"]) != str(save["saveVersion"]):
@@ -122,6 +128,27 @@ def check_join(save: dict, room: dict) -> tuple[bool, str]:
             "creation option: check the seed and every scenario option the "
             "room publishes, and create the game again")
     return True, ""
+
+
+def check_join_age(age_days: float | None, room: dict) -> tuple[bool, str]:
+    """A colonia que chegou e nova o bastante para esta sala?
+
+    Fica separado de `check_join` de proposito: aquele decide se o save CABE na
+    sala e pode ser consertado por enxerto; este decide se a pessoa pode entrar
+    com ele, e enxerto nenhum conserta idade. Juntar os dois faria o servidor
+    tentar enxertar uma colonia de 178 dias antes de recusa-la.
+    """
+    limite = room.get("max_join_age_days")
+    if limite is None or age_days is None:
+        return True, ""
+    if float(age_days) <= float(limite):
+        return True, ""
+    return False, (
+        f"this colony is {float(age_days):.1f} days old and the room accepts "
+        f"up to {float(limite):.1f} at join. Everyone here starts together, so "
+        f"create a new game in Space Haven and join with that one — any seed "
+        f"and any scenario option will do, the server puts you in the room's "
+        f"galaxy")
 
 
 # --------------------------------------------------------------------------

@@ -256,6 +256,28 @@ explored. See `findings.md` item 10 and section 2.5 of the design. As a bonus th
 hull comes from the player's own installation, which keeps the rule in section
 2.13, and the portrait fits in 166 KB instead of 460.
 
+**Everyone starts together, and the room says what that means.** A room
+carries `maxJoinAgeDays` — the oldest colony it accepts at the moment of
+joining, five days by default, `null` for a room that wants veterans to bring
+what they have. It applies only at `join`; once you are in, you play as long as
+you like.
+
+The rule exists because of what the graft does well. It preserves ship, crew,
+bank and research on purpose, so joining with a half-year-old colony means
+arriving with half a year of advantage. The client closes the same gap from the
+other side: a first join opens the game on NEW GAME, the player builds their
+starting ship, and that is what gets uploaded. A fresh game is not day zero —
+measured across saves made minutes apart, the game starts a colony at about day
+1.3.
+
+**Let the room owner remove a player's ship.** A room open to sixty-four people
+from a Discord invite will eventually hold somebody who joined once and never
+came back, or somebody who has to go. Today nothing can remove them, and the map
+keeps drawing a ship that is not playing. It needs care the rest of phase 2 does
+not: it deletes somebody's save, so it wants a confirmation that names the
+player, and it should be recorded in the room's history rather than done
+silently.
+
 **Let the player name their own ship, from the client or the web.** The name is
 what a neighbour reads on the storefront, so it is the one piece of self-
 presentation the room offers — and today it is a random draw the game made at
