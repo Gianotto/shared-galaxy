@@ -277,9 +277,14 @@ def save_galaxy_map(conn: psycopg.Connection, room_id: str, mapa: dict) -> int:
                  (mapa["w"], mapa["h"], room_id))
     with conn.cursor() as cur:
         cur.executemany(
+            # A posicao nunca muda, mas o NOME chega depois: o jogo so batiza
+            # um sistema quando o jogador chega perto, e num save recem-criado
+            # todos vem vazios — e por isso a impressao digital os ignora. Entao
+            # o nome e preenchido quando aparece, e nunca sobrescrito por vazio.
             """INSERT INTO galaxy_system (room_id, system_id, name, x, y, bodies)
                VALUES (%s, %s, %s, %s, %s, %s)
-               ON CONFLICT (room_id, system_id) DO NOTHING""",
+               ON CONFLICT (room_id, system_id) DO UPDATE
+                   SET name = COALESCE(galaxy_system.name, EXCLUDED.name)""",
             [(room_id, s["systemId"], s["name"], s["x"], s["y"], s["bodies"])
              for s in mapa["systems"]])
     return len(mapa["systems"])

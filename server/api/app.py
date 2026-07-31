@@ -530,6 +530,10 @@ async def checkin(room_id: str, request: Request,
             "sha256": meta["sha256"], "bytes": meta["bytes"],
             "kind": "canonical", "game_day": day,
             "galaxy_digest": described["digest"]})
+        # Os nomes de sistema que o jogador descobriu jogando entram no mapa
+        # da sala. A posicao ja estava la desde a primeira entrada.
+        with blobs.with_unpacked(data) as folder:
+            db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
         db.close_lease(conn, lease["id"], version["id"])
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
