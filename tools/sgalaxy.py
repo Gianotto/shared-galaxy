@@ -393,7 +393,7 @@ def cmd_configure_room(args) -> int:
     if args.lease_hours:
         payload["leaseHours"] = args.lease_hours
     if not payload:
-        raise ClientError("nada para mudar. Use --nave, --dificuldade, "
+        raise ClientError("nothing to change. Use --ship, --difficulty, "
                           "--opcao chave=valor, --name ou --deadline")
     json_request("PATCH", f"/api/v1/rooms/{args.room}", payload)
     print(f"room {args.room} updated")
@@ -406,7 +406,7 @@ def cmd_how_to_join(args) -> int:
     _s, raw, _h = request("GET", f"/api/v1/rooms/{args.room}", None, head)
     room = json.loads(raw)
     if "seed" not in room:
-        raise ClientError("esta room tem senha; passe --senha para ver a recipe")
+        raise ClientError("this room has a password; pass --password to see the recipe")
 
     print(f"To join room {room['id']} ({room['name']}):")
     print()
