@@ -76,12 +76,10 @@ STRINGS: dict = {
     "days": {"pt": "dias", "en": "days"},
     "playing": {"pt": "jogando", "en": "playing"},
     "map_legend": {
-        "pt": "Sistemas claros já foram visitados por alguém da sala — o jogo "
-              "só batiza um sistema quando um jogador chega perto. Os escuros "
-              "ninguém alcançou ainda.",
-        "en": "Bright systems have been reached by someone in the room — the "
-              "game only names a system once a player gets close. The dim ones "
-              "nobody has reached yet.",
+        "pt": "Cada ponto é um sistema, na posição da estrela dele. Passe o "
+              "mouse para ver o nome. Os círculos são jogadores da sala.",
+        "en": "Each dot is a system, at its star's position. Hover for the "
+              "name. The circles are players in the room.",
     },
 
     # -- how to join

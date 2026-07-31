@@ -419,6 +419,35 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 15. System names arrive all at once, not by exploration
+
+Worth recording because the natural assumption is wrong, and I built a feature
+on it before checking.
+
+`savegame-format.md` notes that system names are empty in a freshly created save
+and appear later — which is why the galaxy fingerprint ignores them. The obvious
+reading is that the game names a system when a player gets close, so the set of
+named systems would map the room's exploration.
+
+Measured across three states of the same game:
+
+| Save | Named |
+|---|---|
+| age 1.29, just created | **0 of 64** |
+| the same save, checked out | **0 of 64** |
+| age 2.79, after playing | **64 of 64** |
+
+All sixty-four at once. Whatever triggers it happens wholesale, early, and not
+per system — so "named" says nothing about where anyone has been.
+
+The room map briefly drew named systems brighter to show collective
+exploration. It was removed: on a real galaxy every dot lit up, and the legend
+claimed something false.
+
+**Still unknown:** what triggers the naming. Somewhere between creating the game
+and playing a day and a half of it, and it is not the checkout — the save the
+server handed back still had none.
+
 ## 15. Odds and ends
 
 - **`balanced.bin`** exists in the save folder and is not documented. The

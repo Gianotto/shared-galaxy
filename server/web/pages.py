@@ -157,21 +157,19 @@ def starmap_svg(galaxy: dict, roster: list, lang: str) -> str:
                 f'<text x="{x:.1f}" y="{y - 11:.1f}" fill="{colour}" '
                 f'font-size="10" text-anchor="middle">{names}</text>{label}')
         else:
-            # A named system is one somebody in the room has already been near:
-            # the game only names a system when a player gets close. So the map
-            # shows the room's collective exploration — bright dots are places
-            # that have been seen, faint ones nobody has reached yet.
-            fill = "#8fa4d8" if named else "#3d4a72"
-            radius = 2.2 if named else 1.6
+            # All systems look the same on purpose. An earlier version drew
+            # named ones brighter, on the assumption that the game names a
+            # system when a player gets close — so the map would show the
+            # room's exploration. Measured and false: a save at age 1.29 had
+            # 0 of 64 named and the same game at 2.79 had 64 of 64. The names
+            # arrive all at once, not by proximity, so the distinction shows
+            # nothing (findings.md).
             dots.append(
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{radius}" fill="{fill}" '
-                f'opacity="{".8" if named else ".45"}">'
-                f'<title>{title}</title></circle>')
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.8" fill="#5a6ba0" '
+                f'opacity=".6"><title>{title}</title></circle>')
 
-    named_count = sum(1 for s in systems if s["name"])
     legend = (f'<p class="sub" style="margin:.5rem 0 0;font-size:.85rem">'
-              f'{t("map_legend", lang)} ({named_count}/{len(systems)})</p>'
-              if named_count else "")
+              f'{t("map_legend", lang)}</p>')
     return (f'<svg class="map" viewBox="0 0 {MAP_W} {height:.0f}" '
             f'role="img" aria-label="galaxy map">'
             f'{"".join(dots)}{"".join(marks)}</svg>{legend}')
