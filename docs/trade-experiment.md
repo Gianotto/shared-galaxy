@@ -230,6 +230,15 @@ python3 tools/inject_npc_ship.py --into SAVE --out SAIDA \
   - 30 vira 26 **e** 10 vira 6 → é um −4 constante
   - os dois cheios → o problema era do casco anterior, não da mecânica
 
+### Resultado (2026-07-31)
+
+**A vitrine funciona.** `State: Normal (Unexplored)`, teto fechado, silhueta sem
+interior — a névoa do casco atravessou o load, como o E3b previa. Oferece TRADE,
+MISSIONS e SERVICE, com capitão próprio vindo do casco.
+
+**E o item 12 saiu:** Químicas **10 de 10**, Placas **26 de 30**. É teto por
+recurso, não deslocamento. Ver `findings.md`, item 12.
+
 ---
 
 ## O que cada resultado implica

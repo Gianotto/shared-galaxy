@@ -284,49 +284,42 @@ isso.
 A identidade visual continua vindo do `sname` (seção 1.10). O que colide é o
 controle de permissão e a propagação de guerra, não o nome.
 
-## 12. O painel de comércio ofertou menos do que o save guardava
+## 12. O painel de comércio tem teto por recurso, não por estoque
 
-Não resolvido. Fica registrado porque afeta a consignação e porque a explicação
-fácil está **errada** — vale poupar o próximo de segui-la.
+Três rodadas para chegar aqui, e as três primeiras hipóteses morreram no caminho.
 
-O retrato do E3 foi montado com 40 Produtos químicos e 30 Placas de aço, os dois
-no mesmo armazém. O painel de comércio do jogo ofertou 40 e **26**.
+| Consignado | Ofertado | Casco |
+|---|---|---|
+| 40 Produtos químicos | **40** | nave de jogador |
+| 30 Placas de aço | **26** | nave de jogador |
+| 30 Placas de aço, sozinhas num armazém | **26** | outra nave de jogador |
+| 10 Produtos químicos | **10** | casco de NPC |
+| 30 Placas de aço | **26** | casco de NPC |
 
-A primeira hipótese foi capacidade de armazém: 40 + 26 = 66, número redondo
-demais. **A medição desmente.** Armazéns de naves autênticas no mesmo save
-guardam 1.530 unidades em 63 pilhas, 514 em 17, 278 em 22, 269 em 24. Não há
-teto em 66.
+**É teto, não deslocamento.** Quantidade pequena sai inteira; as Placas param em
+26 em três cascos diferentes, com e sem outro recurso junto.
 
-A segunda hipótese foi consumo pela tripulação construindo. Também não: o
-`E3-antes` não tem nenhuma célula com `bc="1"` nem `<blueprints>` pendente, e a
-venda debitou de 30 para 25 — as 4 unidades da diferença nunca saíram.
+**O que já foi descartado:**
 
-O que sobra é que **a quantidade ofertada não é a quantidade guardada**, e o
-mecanismo não foi encontrado.
+- *capacidade de armazém* — armazéns autênticos guardam 1.530, 514, 278 unidades
+- *teto por pilha* — Placas chegam a 47 numa pilha real, Infrabloco a 65
+- *concentração num armazém só* — o mesmo 26 com o recurso sozinho
+- *consumo pela tripulação* — nada de obra pendente, e nada sumiu do arquivo:
+  o save seguiu com 30 e o `playerBank` intacto
 
-**O que foi feito a respeito:** o injetor empilhava toda a consignação no
-primeiro armazém (`racks[0]`), e o relatório dizia "em 2 armazéns" contando os
-disponíveis em vez dos usados. Agora ele distribui um recurso por armazém,
-girando entre eles, e relata em qual cada coisa foi parar. Não é a explicação —
-é remover a suspeita óbvia e parar de mentir no relatório.
+**A explicação que sobra, e ela encaixa com o item 8:** o teto é de **transporte**,
+não de estoque. A carga é entregue de ônibus, em caixas, e o painel oferta o que
+cabe numa viagem. Placas de aço são volumosas e param em 26; Produtos químicos
+são compactos e passam de 40. Nada some — o excesso simplesmente não está à
+venda naquele momento.
 
-**Terceira hipótese, também morta:** teto por pilha. As Placas chegam a 47 numa
-única pilha de armazém em naves autênticas, e o Infrabloco a 65 — não há teto em
-26. E o E3b repetiu o **26 com um recurso só, num armazém só**, o que enterra
-também a concentração.
+**Como confirmar:** consignar 100 Produtos químicos. Se pararem num número
+próprio deles — e não em 26 — o teto é por volume de recurso e a explicação
+fecha.
 
-Mais: no E3b nada foi negociado, e o arquivo continuou com 30, `ca=500` e o
-`playerBank` intacto. **O 26 é número de painel, não de arquivo** — nada some,
-apenas não é ofertado.
-
-**Candidato ainda não excluído:** a mecânica de caixas do item 8. Se o que o
-painel oferta depende de o vendedor conseguir encaixotar e entregar, o número
-ofertado pode ser função de espaço e logística da nave vendedora, não do
-estoque. Isso explicaria por que ofertado e guardado divergem sem nada sumir.
-
-**Como fechar isto:** consignar um recurso só, num armazém só, em quantidade
-redonda, e comparar o ofertado com o guardado. Se der diferença de novo, o
-mecanismo não é concentração.
+**Para a consignação:** o dono precisa saber que consignar 100 de algo volumoso
+não expõe 100. O servidor deve calcular e mostrar o que de fato fica à venda, em
+vez de prometer o número cheio.
 
 ## 13. Miudezas
 
