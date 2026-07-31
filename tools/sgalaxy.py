@@ -370,7 +370,7 @@ def _recipe(args) -> dict:
         recipe["difficulty"] = args.difficulty
     for item in getattr(args, "option", None) or []:
         if "=" not in item:
-            raise ClientError(f"--opcao espera chave=valor, veio {item!r}")
+            raise ClientError(f"--option expects key=value, got {item!r}")
         chave, valor = item.split("=", 1)
         recipe[chave.strip()] = valor.strip()
     return recipe
