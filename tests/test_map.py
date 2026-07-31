@@ -93,3 +93,22 @@ class MapTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CrowdedSystemTestCase(unittest.TestCase):
+    """Todos nascem no mesmo corpo celeste (findings 16).
+
+    Numa sala de 64, o dia um tem 64 nomes num ponto só. O mapa é a vitrine —
+    ilegível ali é caro.
+    """
+
+    def test_a_crowd_is_summarised_not_listed(self):
+        crowd = [_player("1", f"SHIP {i}") for i in range(20)]
+        out = starmap_svg(GALAXY, crowd, "en")
+        self.assertIn("SHIP 0, SHIP 1, SHIP 2 +17", out)
+        self.assertNotIn("SHIP 9", out, "listou a multidão inteira")
+
+    def test_a_small_group_is_listed_in_full(self):
+        out = starmap_svg(GALAXY, [_player("1", "A"), _player("1", "B")], "en")
+        self.assertIn(">A, B</text>", out)
+        self.assertNotIn("+", out.split("</text>")[0])

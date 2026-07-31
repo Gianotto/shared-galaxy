@@ -419,6 +419,40 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 16. Everyone in a room starts on the same rock
+
+Section 1.4 records that the seed reproduces the starting point — x=75724,
+y=235080. The consequence was never spelled out: **every player who creates a
+game from the room's seed begins at the same celestial body.** Measured on a
+fresh game against the room's seed: system 31, `celeid` 1689, every time.
+
+Harmless for phase 0. Each player has their own save, and the shared start is
+only a coincidence of geography.
+
+**Phase 2 cannot be naive about it.** On day one of a 64-player room, all 64 are
+neighbours in one sector, and the injection recipe would put every other
+player's storefront into everyone's save:
+
+- the faction limit binds at once — about nine usable sides, so from the tenth
+  neighbour the `hostmap` cannot tell them apart (item 11)
+- each storefront costs ~166 KB, so 63 of them add ~10 MB to every save
+- "stability with many neighbours" is still untested; ten may already confuse
+  the ship AI
+
+So co-location needs a rule, and it belongs in phase 2 where the injection
+happens. Some candidates, none tested:
+
+- **cap per sector.** Inject the N nearest or most recently active, and say so.
+- **mutual consent.** Only inject players who have each other listed, which
+  turns crowding into a social act instead of a default.
+- **let the start disperse.** The room could ask people to travel before
+  enabling injection — the game already spreads players naturally, and the
+  problem solves itself after the first few days.
+
+The last is cheapest and fits the design: section 1.6 already concluded that
+players must earn territory by flying, because the server cannot generate a
+sector.
+
 ## 15. System names arrive all at once, not by exploration
 
 Worth recording because the natural assumption is wrong, and I built a feature

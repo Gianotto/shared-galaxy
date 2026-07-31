@@ -141,8 +141,14 @@ def starmap_svg(galaxy: dict, roster: list, lang: str,
         named = bool(s["name"])
         title = _esc(s["name"] or f'system {s["systemId"]}')
         if people:
-            names = ", ".join(_esc(p["ship_name"] or p["display_name"])
-                              for p in people)
+            # Everyone starts on the same rock — the seed reproduces the
+            # starting point — so on day one a room of 64 has 64 names on one
+            # dot. Show a few and count the rest (findings item 16).
+            shown = [_esc(p["ship_name"] or p["display_name"])
+                     for p in people[:3]]
+            names = ", ".join(shown)
+            if len(people) > 3:
+                names += f" +{len(people) - 3}"
             playing = any(p["playing"] for p in people)
             colour = "var(--on)" if playing else "var(--me)"
             # The system name goes under the marker, not only in the tooltip.
