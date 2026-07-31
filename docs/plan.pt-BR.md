@@ -6,9 +6,9 @@ Documento de trabalho. Complementa `shared-galaxy-server.md`, que é o projeto, 
 `savegame-format.md`, que é o levantamento. Aqui está a ordem, as decisões
 tomadas e o que cada etapa precisa entregar para a seguinte começar.
 
-Escrito só em português por enquanto: o plano muda toda semana e manter tradução
-de documento que churna é desperdício. A versão em inglês entra quando o
-repositório for público, junto do README.
+O inglês é a versão canônica; esta pode ficar um passo atrás. O plano
+muda com frequência — uma tradução defasada é o documento antigo, não
+uma segunda opinião.
 
 ---
 

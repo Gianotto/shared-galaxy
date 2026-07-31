@@ -1,35 +1,34 @@
-#!/usr/bin/env python3
 """
-Cliente de linha de comando da Galaxia Compartilhada.
+Shared Galaxy command-line client.
 
-Faz o ciclo da secao 2.4 pelo terminal: cria conta, entra numa sala, retira o
-save, e devolve depois de jogar. E o esqueleto do que vira uma aba no editor de
-savegame (etapa C do plano) — a logica de ciclo mora aqui, e a interface grafica
-so vai chamar isto.
+Runs the session cycle of section 2.4 from a terminal: create an account, join a
+room, check the save out, and return it after playing. This is the skeleton of
+what becomes a tab in the savegame editor (stage C of the plan) — the cycle
+logic lives here, and the GUI will only call it.
 
-Biblioteca padrao pura, como todo o resto de `tools/`: quem quiser conferir o
-que sobe para o servidor le este arquivo inteiro em vinte minutos, sem instalar
-nada.
+Standard library only, like the rest of `tools/`: anyone who wants to check what
+gets uploaded reads this file end to end in twenty minutes, installing nothing.
 
-Uso:
+Usage:
 
-    export SGALAXY_URL=https://galaxy.bygianotto.com.br    # ou o tunel local
+    export SGALAXY_URL=https://galaxy.bygianotto.com.br
 
-    python3 tools/sgalaxy.py registrar "Meu Nome"
-    python3 tools/sgalaxy.py salas
-    python3 tools/sgalaxy.py criar-sala --seed 1654267488 --nome "Fronteira"
-    python3 tools/sgalaxy.py entrar SALA --save ~/.../savegames/Minha
-    python3 tools/sgalaxy.py retirar SALA --para ~/.../savegames/Sala-SALA
-    python3 tools/sgalaxy.py devolver SALA --save ~/.../savegames/Sala-SALA
-    python3 tools/sgalaxy.py estado SALA
-    python3 tools/sgalaxy.py apagar-conta
+    python3 tools/sgalaxy.py register "My Name"
+    python3 tools/sgalaxy.py rooms
+    python3 tools/sgalaxy.py create-room --seed 1654267488 --name "Frontier"
+    python3 tools/sgalaxy.py how-to-join ROOM
+    python3 tools/sgalaxy.py join ROOM --save ~/.../savegames/MyGame
+    python3 tools/sgalaxy.py play ROOM          # the whole session, one command
+    python3 tools/sgalaxy.py status ROOM
+    python3 tools/sgalaxy.py delete-account
 
-O token fica em `~/.config/sgalaxy/credenciais.json`, com permissao 600. Ele e a
-unica credencial que existe: perder e perder, e nao ha e-mail de recuperacao.
+The token lives in `~/.config/sgalaxy/credentials.json`, mode 600. It is the
+only credential there is: losing it means losing the account, and there is no
+recovery email.
 
-REGRA QUE NAO SE NEGOCIA: nunca escrever num save com o jogo aberto. O jogo
-reescreve o arquivo ao gravar, e escrever por baixo destrói a partida de alguem.
-`retirar` detecta o processo e recusa.
+THE RULE THAT IS NOT NEGOTIABLE: never write to a save while the game is open.
+The game rewrites the file when it saves, and writing underneath it destroys
+someone's run. `checkout`, `return` and `play` detect the process and refuse.
 """
 
 from __future__ import annotations
@@ -46,7 +45,7 @@ import urllib.request
 import zipfile
 
 CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
-CREDENTIALS = os.path.join(CONFIG_DIR, "credenciais.json")
+CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
 DEFAULT_URL = "http://127.0.0.1:8714"
 
 # Como o jogo aparece na tabela de processos. Duas formas:
@@ -57,7 +56,7 @@ DEFAULT_URL = "http://127.0.0.1:8714"
 #
 # A primeira versao usava `-f` com "SpaceHaven" solto, e casava demais: qualquer
 # processo do Steam que mencionasse o caminho da instalacao — e ate o proprio
-# shell que rodou o comando — virava "o jogo esta aberto". O erro e caro nos
+# shell que rodou o comando — virava "o jogo esta running". O erro e caro nos
 # dois sentidos: falso positivo trava o jogador de brincadeira, falso negativo
 # destroi a partida dele.
 GAME_EXECUTABLES = ("spacehaven",)
@@ -65,7 +64,7 @@ GAME_COMMANDLINES = ("spacehaven.jar",)
 
 
 class ClientError(Exception):
-    """Erro que o usuario precisa ler. Mensagem em portugues."""
+    """An error the user needs to read."""
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +98,8 @@ def token() -> str:
     creds = load_credentials()
     if not creds.get("token"):
         raise ClientError(
-            f"nenhuma conta guardada para {base_url()}. "
-            f"Rode: python3 tools/sgalaxy.py registrar \"Seu Nome\"")
+            f"no account stored for {base_url()}. "
+            f"Run: python3 tools/sgalaxy.py register \"Your Name\"")
     return creds["token"]
 
 
@@ -126,12 +125,12 @@ def request(method: str, path: str, body: bytes | None = None,
     except urllib.error.HTTPError as exc:
         raw = exc.read()
         try:
-            detalhe = json.loads(raw).get("detail", raw.decode("utf-8", "replace"))
+            detail = json.loads(raw).get("detail", raw.decode("utf-8", "replace"))
         except (json.JSONDecodeError, UnicodeDecodeError):
-            detalhe = raw.decode("utf-8", "replace")
-        raise ClientError(f"o servidor recusou ({exc.code}): {detalhe}") from exc
+            detail = raw.decode("utf-8", "replace")
+        raise ClientError(f"the server refused ({exc.code}): {detail}") from exc
     except urllib.error.URLError as exc:
-        raise ClientError(f"não consegui falar com {base_url()}: {exc.reason}") from exc
+        raise ClientError(f"could not reach {base_url()}: {exc.reason}") from exc
 
 
 def json_request(method: str, path: str, payload: dict | None = None,
@@ -147,10 +146,10 @@ def json_request(method: str, path: str, payload: dict | None = None,
 # ---------------------------------------------------------------------------
 
 def game_is_running() -> str | None:
-    """O nome do processo do jogo, se ele estiver aberto.
+    """O nome do processo do jogo, se ele estiver running.
 
     A regra mais importante do cliente (secao 2.9): nunca escrever num save com
-    o jogo aberto. Sem `pgrep`, devolve None e o chamador avisa que nao
+    o jogo running. Sem `pgrep`, devolve None e o chamador avisa que nao
     conseguiu conferir — nunca assume que esta fechado.
     """
     if shutil.which("pgrep") is None:
@@ -201,7 +200,7 @@ def find_game() -> str | None:
 
 
 def age_of(folder: str) -> float:
-    """O idade de uma pasta de save, ou -1 se nao der para ler."""
+    """O idade de uma folder de save, ou -1 se nao der para ler."""
     import xml.etree.ElementTree as ET
     caminho = os.path.join(folder, "info")
     try:
@@ -213,7 +212,7 @@ def age_of(folder: str) -> float:
 
 
 def most_advanced(room_folder: str) -> tuple:
-    """A pasta com mais progresso: o save manual ou o autosave mais adiantado.
+    """A folder com mais progresso: o save manual ou o autosave mais adiantado.
 
     Quem sai do jogo sem salvar na mao deixa o avanco no autosave, e a secao
     2.4 e explicita: o cliente precisa conseguir devolver o ultimo autosave.
@@ -227,14 +226,14 @@ def most_advanced(room_folder: str) -> tuple:
         if os.path.isfile(os.path.join(caminho, "game")):
             candidatos.append((age_of(caminho), nome, caminho))
     if not candidatos:
-        raise ClientError(f"não achei nenhum savegame dentro de {room_folder}")
+        raise ClientError(f"no savegame found inside {room_folder}")
     candidatos.sort(reverse=True)
     dia, nome, caminho = candidatos[0]
     return caminho, nome, dia
 
 
 def resolve_save(path: str) -> str:
-    """Aceita a pasta do save, a pasta que a contem, ou o arquivo `game`."""
+    """Aceita a folder do save, a folder que a contem, ou o arquivo `game`."""
     path = os.path.abspath(os.path.expanduser(path))
     if os.path.isfile(path):
         return os.path.dirname(path)
@@ -244,8 +243,8 @@ def resolve_save(path: str) -> str:
         dentro = os.path.join(path, "save")
         if os.path.isfile(os.path.join(dentro, "game")):
             return dentro
-    raise ClientError(f"não achei um savegame em {path} "
-                      f"(esperava um arquivo `game` ali dentro)")
+    raise ClientError(f"no savegame in {path} "
+                      f"(expected a `game` file in there)")
 
 
 def pack(folder: str) -> bytes:
@@ -262,9 +261,9 @@ def pack(folder: str) -> bytes:
 
 
 def unpack(data: bytes, dest: str) -> str:
-    """Abre o save recebido numa pasta de savegame do jogo.
+    """Abre o save recebido numa folder de savegame do jogo.
 
-    Escreve numa pasta ao lado e so entao troca, para uma queda no meio nao
+    Escreve numa folder ao lado e so entao troca, para uma queda no meio nao
     deixar o jogador com um save pela metade.
     """
     dest = os.path.abspath(os.path.expanduser(dest))
@@ -282,7 +281,7 @@ def unpack(data: bytes, dest: str) -> str:
                 break
     if save_dir is None:
         shutil.rmtree(temp, ignore_errors=True)
-        raise ClientError("o servidor mandou algo que não é um savegame")
+        raise ClientError("the server sent something that is not a savegame")
 
     final = os.path.join(dest, "save")
     antigo = dest + ".anterior"
@@ -312,173 +311,173 @@ def unpack(data: bytes, dest: str) -> str:
 # Comandos
 # ---------------------------------------------------------------------------
 
-def cmd_registrar(args) -> int:
-    dados = json_request("POST", "/api/v1/players",
-                         {"name": args.nome, "invite": args.convite or ""},
+def cmd_register(args) -> int:
+    data = json_request("POST", "/api/v1/players",
+                         {"name": args.name, "invite": args.invite or ""},
                          auth=False)
-    save_credentials({"token": dados["token"], "playerId": dados["playerId"],
-                      "name": dados["name"]})
-    print(f"conta criada em {base_url()}")
-    print(f"  nome:  {dados['name']}")
-    print(f"  token: guardado em {CREDENTIALS}")
+    save_credentials({"token": data["token"], "playerId": data["playerId"],
+                      "name": data["name"]})
+    print(f"account created on {base_url()}")
+    print(f"  name:  {data['name']}")
+    print(f"  token: stored in {CREDENTIALS}")
     print()
-    print("  CÓDIGO DE RECUPERAÇÃO — anote em algum lugar seguro:")
-    print(f"    {dados['recoveryCode']}")
+    print("  RECOVERY CODE — write this down somewhere safe:")
+    print(f"    {data['recoveryCode']}")
     print()
-    print("  É a única forma de voltar a esta conta. O servidor não tem cópia,")
-    print("  não há e-mail de recuperação, e perder é perder.")
+    print("  It is the only way back into this account. The server keeps no copy,")
+    print("  there is no recovery email, and losing it means losing the account.")
     return 0
 
 
-def cmd_salas(args) -> int:
-    dados = json_request("GET", "/api/v1/rooms", auth=False)
-    if not dados["rooms"]:
-        print("nenhuma sala aberta")
+def cmd_rooms(args) -> int:
+    data = json_request("GET", "/api/v1/rooms", auth=False)
+    if not data["rooms"]:
+        print("no open rooms")
         return 0
-    print(f"{'id':<8}{'jogadores':<12}{'senha':<8}nome")
-    for sala in dados["rooms"]:
-        print(f"{sala['id']:<8}{sala['players']}/{sala['maxPlayers']:<10}"
-              f"{'sim' if sala['hasPassword'] else 'não':<8}{sala['name']}")
+    print(f"{'id':<8}{'players':<12}{'lock':<8}name")
+    for room in data["rooms"]:
+        print(f"{room['id']:<8}{room['players']}/{room['maxPlayers']:<10}"
+              f"{'yes' if room['hasPassword'] else 'no':<8}{room['name']}")
     return 0
 
 
-def cmd_criar_sala(args) -> int:
-    dados = json_request("POST", "/api/v1/rooms", {
-        "seed": args.seed, "name": args.nome, "password": args.senha,
-        "leaseHours": args.prazo, "maxPlayers": args.max_jogadores,
-        "options": _receita(args)})
-    print(f"sala {dados['id']} criada")
-    print(f"  seed:  {dados['seed']}")
-    print(f"  prazo: {dados['leaseHours']}h")
+def cmd_create_room(args) -> int:
+    data = json_request("POST", "/api/v1/rooms", {
+        "seed": args.seed, "name": args.name, "password": args.password,
+        "leaseHours": args.lease_hours, "maxPlayers": args.max_players,
+        "options": _recipe(args)})
+    print(f"room {data['id']} criada")
+    print(f"  seed:  {data['seed']}")
+    print(f"  deadline: {data['leaseHours']}h")
     print()
-    print(f"  Publique a receita para quem for entrar:")
-    print(f"    python3 tools/sgalaxy.py como-entrar {dados['id']}")
-    if not _receita(args):
+    print(f"  Publique a recipe para quem for entrar:")
+    print(f"    python3 tools/sgalaxy.py como-entrar {data['id']}")
+    if not _recipe(args):
         print()
-        print("  A receita está vazia. Depois de criar a partida no jogo,")
-        print("  registre a nave e as opções que você marcou:")
-        print(f"    python3 tools/sgalaxy.py configurar-sala {dados['id']} \\")
+        print("  A recipe está vazia. Depois de criar a partida no jogo,")
+        print("  and the options you picked:")
+        print(f"    python3 tools/sgalaxy.py configurar-room {data['id']} \\")
         print(f"        --nave \"Nome da nave inicial\" --dificuldade Normal")
     return 0
 
 
-def _receita(args) -> dict:
-    """O que alguem precisa reproduzir para o save ser aceito na sala."""
-    receita = {}
-    if getattr(args, "nave", None):
-        receita["nave"] = args.nave
-    if getattr(args, "dificuldade", None):
-        receita["dificuldade"] = args.dificuldade
-    for item in getattr(args, "opcao", None) or []:
+def _recipe(args) -> dict:
+    """O que alguem precisa reproduzir para o save ser aceito na room."""
+    recipe = {}
+    if getattr(args, "ship", None):
+        recipe["ship"] = args.ship
+    if getattr(args, "difficulty", None):
+        recipe["difficulty"] = args.difficulty
+    for item in getattr(args, "option", None) or []:
         if "=" not in item:
             raise ClientError(f"--opcao espera chave=valor, veio {item!r}")
         chave, valor = item.split("=", 1)
-        receita[chave.strip()] = valor.strip()
-    return receita
+        recipe[chave.strip()] = valor.strip()
+    return recipe
 
 
-def cmd_configurar_sala(args) -> int:
+def cmd_configure_room(args) -> int:
     payload = {}
-    receita = _receita(args)
-    if receita:
-        atual = json_request("GET", f"/api/v1/rooms/{args.sala}")
-        payload["options"] = {**(atual.get("options") or {}), **receita}
-    if args.nome:
-        payload["name"] = args.nome
-    if args.prazo:
-        payload["leaseHours"] = args.prazo
+    recipe = _recipe(args)
+    if recipe:
+        atual = json_request("GET", f"/api/v1/rooms/{args.room}")
+        payload["options"] = {**(atual.get("options") or {}), **recipe}
+    if args.name:
+        payload["name"] = args.name
+    if args.lease_hours:
+        payload["leaseHours"] = args.lease_hours
     if not payload:
         raise ClientError("nada para mudar. Use --nave, --dificuldade, "
-                          "--opcao chave=valor, --nome ou --prazo")
-    json_request("PATCH", f"/api/v1/rooms/{args.sala}", payload)
-    print(f"sala {args.sala} atualizada")
-    return cmd_como_entrar(args)
+                          "--opcao chave=valor, --nome ou --deadline")
+    json_request("PATCH", f"/api/v1/rooms/{args.room}", payload)
+    print(f"room {args.room} updated")
+    return cmd_how_to_join(args)
 
 
-def cmd_como_entrar(args) -> int:
-    """A receita, do jeito que a pessoa vai seguir na tela de criação."""
+def cmd_how_to_join(args) -> int:
+    """The recipe, laid out the way the creation screen asks for it."""
     head = {"X-Room-Password": getattr(args, "senha", None) or ""}
-    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.sala}", None, head)
-    sala = json.loads(raw)
-    if "seed" not in sala:
-        raise ClientError("esta sala tem senha; passe --senha para ver a receita")
+    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.room}", None, head)
+    room = json.loads(raw)
+    if "seed" not in room:
+        raise ClientError("esta room tem senha; passe --senha para ver a recipe")
 
-    print(f"Para entrar na sala {sala['id']} ({sala['name']}):")
+    print(f"To join room {room['id']} ({room['name']}):")
     print()
-    print("  1. No Space Haven, crie uma partida nova com:")
-    print(f"       seed: {sala['seed']}")
-    receita = sala.get("options") or {}
-    if receita.get("nave"):
-        print(f"       nave inicial: {receita['nave']}")
-    if receita.get("dificuldade"):
-        print(f"       dificuldade: {receita['dificuldade']}")
-    outras = {k: v for k, v in receita.items()
-              if k not in ("nave", "dificuldade")}
+    print("  1. In Space Haven, create a new game with:")
+    print(f"       seed: {room['seed']}")
+    recipe = room.get("options") or {}
+    if recipe.get("ship"):
+        print(f"       nave inicial: {recipe['nave']}")
+    if recipe.get("difficulty"):
+        print(f"       dificuldade: {recipe['dificuldade']}")
+    outras = {k: v for k, v in recipe.items()
+              if k not in ("ship", "difficulty")}
     for chave, valor in sorted(outras.items()):
         print(f"       {chave}: {valor}")
-    if not receita:
-        print("       (o dono da sala ainda não publicou as opções de cenário)")
+    if not recipe:
+        print("       (the room owner has not published the scenario options yet)")
     print()
-    print("  2. Salve a partida e feche o jogo.")
+    print("  2. Save the game and close it.")
     print()
-    print("  3. Suba o save:")
-    print(f"       python3 tools/sgalaxy.py entrar {sala['id']} \\")
+    print("  3. Upload the save:")
+    print(f"       python3 tools/sgalaxy.py entrar {room['id']} \\")
     print(f"           --save CAMINHO/DA/PARTIDA")
     print()
-    if sala.get("galaxyDigest"):
-        print(f"  A galáxia desta sala é {sala['galaxyDigest']}. Se o seu save")
-        print("  não bater, foi opção de criação diferente — a seed sozinha não")
-        print("  basta.")
+    if room.get("galaxyDigest"):
+        print(f"  This room's galaxy is {room['galaxyDigest']}. If your save does")
+        print("  not match, a creation option differed — the seed alone is not")
+        print("  enough.")
     else:
-        print("  Ninguém entrou ainda: o primeiro save que subir define a")
-        print("  galáxia da sala, e os seguintes têm que bater com ele.")
+        print("  Nobody has joined yet: the first save uploaded defines the")
+        print("  room's galaxy, and later ones must match it.")
     return 0
 
 
-def cmd_entrar(args) -> int:
-    pasta = resolve_save(args.save)
-    print(f"subindo {pasta} …")
-    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.sala}/join",
-                          pack(pasta),
+def cmd_join(args) -> int:
+    folder = resolve_save(args.save)
+    print(f"subindo {folder} …")
+    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/join",
+                          pack(folder),
                           {"Content-Type": "application/zip",
-                           "X-Room-Password": args.senha or ""})
-    dados = json.loads(raw)
-    galaxia = dados["galaxy"]
-    print(f"entrou na sala {args.sala}")
+                           "X-Room-Password": args.password or ""})
+    data = json.loads(raw)
+    galaxia = data["galaxy"]
+    print(f"joined room {args.room}")
     print(f"  galáxia:    {galaxia['digest']} "
           f"({galaxia['systems']} sistemas, {galaxia['bodies']} corpos)")
-    print(f"  idade: {dados['ageDays']}")
-    print(f"  sua nave:    {dados['presence']['shipName']}")
+    print(f"  age:     {data['ageDays']} days")
+    print(f"  sua nave:    {data['presence']['shipName']}")
     print()
-    print("  O servidor é dono deste save agora. Use `retirar` para jogar.")
+    print("  The server owns this save now. Use `play` to start a session.")
     return 0
 
 
-def cmd_retirar(args) -> int:
-    aberto = game_is_running()
-    if aberto:
+def cmd_checkout(args) -> int:
+    running = game_is_running()
+    if running:
         raise ClientError(
-            f"o Space Haven está aberto ({aberto}). Feche o jogo antes: "
-            f"escrever num save com o jogo aberto destrói a partida")
+            f"Space Haven is open ({running}). Close it first: "
+            f"writing to a save with the game running destroys the run")
     if shutil.which("pgrep") is None:
-        print("aviso: não consegui conferir se o jogo está aberto (sem `pgrep`).")
-        print("       Certifique-se de que o Space Haven está fechado.")
+        print("warning: could not check whether the game is open (no `pgrep`).")
+        print("         Make sure Space Haven is closed.")
 
-    _s, data, headers = request("POST", f"/api/v1/rooms/{args.sala}/checkout")
-    destino = args.para or os.path.join(os.getcwd(), f"Sala-{args.sala}")
+    _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
+    destino = args.into or os.path.join(os.getcwd(), f"Sala-{args.room}")
     final = unpack(data, destino)
-    print(f"save retirado para {final}")
-    print(f"  prazo até: {_prazo(headers.get('x-lease-expires'))}")
-    print(f"  {_tamanho(len(data))}")
+    print(f"save checked out to {final}")
+    print(f"  due:  {_deadline(headers.get('x-lease-expires'))}")
+    print(f"  {_size(len(data))}")
     print()
-    print("  Jogue, e depois devolva com:")
-    print(f"    python3 tools/sgalaxy.py devolver {args.sala} --save {destino}")
-    print("  Passado o prazo, a sessão volta ao estado de quando foi retirada.")
+    print("  Play, then return it with:")
+    print(f"    python3 tools/sgalaxy.py devolver {args.room} --save {destino}")
+    print("  Past the deadline, the session reverts to the state it was checked out in.")
     return 0
 
 
-def _prazo(iso: str | None) -> str:
-    """O prazo em hora local, mais quanto falta — que e o que a pessoa quer."""
+def _deadline(iso: str | None) -> str:
+    """O deadline em hora local, mais quanto falta — que e o que a pessoa quer."""
     if not iso:
         return "?"
     import datetime as dt
@@ -492,13 +491,13 @@ def _prazo(iso: str | None) -> str:
     return f"{local} (faltam {horas:.1f}h)"
 
 
-def _tamanho(n: int) -> str:
+def _size(n: int) -> str:
     """KB ate 1 MB. Um save novo tem 40 KB comprimido, e '0.0 MB' nao informa."""
     return f"{n / 1000:.0f} KB" if n < 1_000_000 else f"{n / 1_000_000:.1f} MB"
 
 
-def _melhor_estado(caminho: str) -> tuple:
-    """A pasta a devolver: o estado mais avancado, nao o mais obvio.
+def _best_state(caminho: str) -> tuple:
+    """A folder a devolver: o estado mais avancado, nao o mais obvio.
 
     Apontar para `save/` parece certo e e a armadilha: quem sai do jogo sem
     salvar na mao deixa o avanco no autosave, e `save/` fica no estado de
@@ -506,7 +505,7 @@ def _melhor_estado(caminho: str) -> tuple:
     horas de jogo — visto acontecendo, com `save/` no dia 1,29 e `autosave3` no
     2,79.
 
-    Se o caminho apontar direto para uma pasta de save, respeita: quem foi
+    Se o caminho apontar direto para uma folder de save, respeita: quem foi
     especifico sabe o que quer.
     """
     caminho = os.path.abspath(os.path.expanduser(caminho))
@@ -518,29 +517,29 @@ def _melhor_estado(caminho: str) -> tuple:
         return resolve_save(caminho), None, -1.0
 
 
-def cmd_devolver(args) -> int:
-    aberto = game_is_running()
-    if aberto:
+def cmd_return_save(args) -> int:
+    running = game_is_running()
+    if running:
         raise ClientError(
-            f"o Space Haven está aberto ({aberto}). Feche o jogo antes de "
-            f"devolver: o save pode não estar gravado por completo")
-    pasta, qual, dia = _melhor_estado(args.save)
-    if qual:
-        print(f"devolvendo {qual} (dia {dia:.2f}) de {args.save} …")
+            f"Space Haven is open ({running}). Close it before returning: "
+            f"the save may not be fully written yet")
+    folder, which, dia = _best_state(args.save)
+    if which:
+        print(f"devolvendo {which} (dia {dia:.2f}) de {args.save} …")
     else:
-        print(f"devolvendo {pasta} …")
-    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.sala}/checkin",
-                          pack(pasta), {"Content-Type": "application/zip"})
-    dados = json.loads(raw)
-    print("devolvido")
-    print(f"  idade: {dados['ageDays']}")
-    print(f"  versão:      {dados['versionId']}")
-    if dados.get("pruned"):
-        print(f"  {dados['pruned']} versão(ões) antiga(s) saíram da janela")
+        print(f"returning {folder} …")
+    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
+                          pack(folder), {"Content-Type": "application/zip"})
+    data = json.loads(raw)
+    print("returned")
+    print(f"  age:     {data['ageDays']} days")
+    print(f"  version: {data['versionId']}")
+    if data.get("pruned"):
+        print(f"  {data['pruned']} old version(s) fell out of the window")
     return 0
 
 
-def cmd_jogar(args) -> int:
+def cmd_play(args) -> int:
     """Retira, abre o jogo, espera, e devolve. Um comando para a sessao inteira.
 
     E o fluxo que a secao 2.4 descreve, sem o jogador precisar lembrar de
@@ -548,131 +547,131 @@ def cmd_jogar(args) -> int:
     terminar, ele sabe com certeza quando a sessao comecou e acabou — que e
     exatamente o que a secao 2.9 diz ser a razao de o cliente lancar o jogo.
     """
-    aberto = game_is_running()
-    if aberto:
-        raise ClientError(f"o Space Haven já está aberto ({aberto}). Feche "
-                          f"antes: preciso controlar a sessão inteira")
+    running = game_is_running()
+    if running:
+        raise ClientError(f"Space Haven is already open ({running}). Close it "
+                          f"first: I need to own the whole session")
 
-    exe = args.jogo or find_game()
+    exe = args.game or find_game()
     if not exe or not os.path.isfile(exe):
         raise ClientError(
-            "não achei o executável do Space Haven. Passe --jogo CAMINHO ou "
-            "defina SPACEHAVEN_BIN")
+            "could not find the Space Haven executable. Pass --game PATH or "
+            "set SPACEHAVEN_BIN")
 
-    destino = args.para or _room_folder(args.sala)
+    destino = args.into or _room_folder(args.room)
 
     # -- 1. retirar
-    print(f"[1/4] retirando o save da sala {args.sala} …")
-    _s, data, headers = request("POST", f"/api/v1/rooms/{args.sala}/checkout")
+    print(f"[1/4] checking out the save from room {args.room} …")
+    _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
     final = unpack(data, destino)
-    prazo = headers.get("x-lease-expires")
-    print(f"      {final}  ({_tamanho(len(data))})")
-    print(f"      prazo: {_prazo(prazo)}")
+    deadline = headers.get("x-lease-expires")
+    print(f"      {final}  ({_size(len(data))})")
+    print(f"      due: {_deadline(deadline)}")
 
     # -- 2. jogar
-    nome_pasta = os.path.basename(destino.rstrip("/"))
-    print(f"[2/4] abrindo o jogo. Carregue a partida '{nome_pasta}'.")
-    print("      Quando você fechar o jogo, eu devolvo sozinho.")
+    folder_name = os.path.basename(destino.rstrip("/"))
+    print(f"[2/4] launching the game. Load the save named '{folder_name}'.")
+    print("      When you close the game, I return it for you.")
     try:
         proc = subprocess.Popen([exe], cwd=os.path.dirname(exe))
         proc.wait()
     except KeyboardInterrupt:
-        print("\n      interrompido; vou devolver o que houver")
+        print("\n      interrupted; returning whatever is there")
     except OSError as exc:
-        raise ClientError(f"não consegui abrir o jogo: {exc}") from exc
+        raise ClientError(f"could not launch the game: {exc}") from exc
 
     # -- 3. escolher o estado mais avancado
-    print("[3/4] procurando o estado mais avançado …")
-    pasta, qual, dia = most_advanced(destino)
-    print(f"      {qual} (dia {dia:.2f})")
+    print("[3/4] finding the most advanced state …")
+    folder, which, dia = most_advanced(destino)
+    print(f"      {which} (dia {dia:.2f})")
 
     # -- 4. devolver
-    print("[4/4] devolvendo …")
+    print("[4/4] returning …")
     try:
-        _s, raw, _h = request("POST", f"/api/v1/rooms/{args.sala}/checkin",
-                              pack(pasta), {"Content-Type": "application/zip"})
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
+                              pack(folder), {"Content-Type": "application/zip"})
     except ClientError as exc:
-        print(f"\nerro ao devolver: {exc}", file=sys.stderr)
-        print(f"\nO seu progresso NÃO foi perdido: está em {pasta}.")
-        print("Quando resolver, devolva com:")
-        print(f"  python3 tools/sgalaxy.py devolver {args.sala} --save {pasta}")
+        print(f"\nfailed to return: {exc}", file=sys.stderr)
+        print(f"\nYour progress is NOT lost: it is in {folder}.")
+        print("Once fixed, return it with:")
+        print(f"  python3 tools/sgalaxy.py devolver {args.room} --save {folder}")
         return 1
-    dados = json.loads(raw)
-    print(f"      dia {dados['ageDays']}, versão {dados['versionId']}")
+    data = json.loads(raw)
+    print(f"      age {data['ageDays']} days, version {data['versionId']}")
     print()
-    print("sessão fechada. O save está no servidor.")
+    print("session closed. The save is on the server.")
     return 0
 
 
-def _room_folder(sala: str) -> str:
-    """Onde a pasta da sala mora, ao lado das outras partidas do jogo."""
+def _room_folder(room: str) -> str:
+    """Onde a folder da room mora, ao lado das outras partidas do jogo."""
     exe = find_game()
     if exe:
         saves = os.path.join(os.path.dirname(exe), "savegames")
         if os.path.isdir(saves):
-            return os.path.join(saves, f"Sala-{sala}")
-    return os.path.join(os.getcwd(), f"Sala-{sala}")
+            return os.path.join(saves, f"Sala-{room}")
+    return os.path.join(os.getcwd(), f"Sala-{room}")
 
 
-def cmd_situacao(args) -> int:
-    """O que está em aberto, antes de você abrir o jogo por engano."""
-    dados = json_request("GET", f"/api/v1/rooms/{args.sala}/state")
+def cmd_status(args) -> int:
+    """What is open, before you launch the wrong save by accident."""
+    data = json_request("GET", f"/api/v1/rooms/{args.room}/state")
     eu = load_credentials().get("playerId")
-    meu = next((p for p in dados["players"] if p["playerId"] == eu), None)
-    if meu is None:
-        print(f"você não está na sala {args.sala}")
+    mine = next((p for p in data["players"] if p["playerId"] == eu), None)
+    if mine is None:
+        print(f"you are not in room {args.room}")
         return 1
-    print(f"sala {args.sala}")
-    print(f"  sua nave:    {meu['shipName'] or '—'}")
-    print(f"  dia no servidor: {meu['ageDays'] or '—'}")
-    print(f"  empréstimo:  {'ABERTO' if meu['playing'] else 'fechado'}")
+    print(f"room {args.room}")
+    print(f"  your ship:   {mine['shipName'] or '—'}")
+    print(f"  age on server: {mine['ageDays'] or '—'} days")
+    print(f"  lease:       {'OPEN' if mine['playing'] else 'closed'}")
 
-    pasta = _room_folder(args.sala)
-    if not os.path.isdir(pasta):
-        print(f"  pasta local: não existe ({pasta})")
+    folder = _room_folder(args.room)
+    if not os.path.isdir(folder):
+        print(f"  local folder: none ({folder})")
         return 0
     try:
-        _p, qual, dia = most_advanced(pasta)
+        _p, which, dia = most_advanced(folder)
     except ClientError:
-        print(f"  pasta local: {pasta} (sem savegame dentro)")
+        print(f"  local folder: {folder} (no savegame inside)")
         return 0
-    print(f"  pasta local: {pasta}")
-    print(f"               mais avançado: {qual}, dia {dia:.2f}")
-    if not meu["playing"]:
-        servidor = meu["ageDays"] or 0
+    print(f"  local folder: {folder}")
+    print(f"                most advanced: {which}, age {age:.2f} days")
+    if not mine["playing"]:
+        servidor = mine["ageDays"] or 0
         if dia > servidor + 0.01:
             print()
-            print("  AVISO: a pasta local está À FRENTE do servidor e não há")
-            print("  empréstimo aberto. Isso quer dizer que você jogou sem")
-            print("  retirar. Uma nova retirada vai sobrescrever esse avanço.")
-            print("  Esse avanço não tem como ser entregue: a sala só aceita")
-            print("  o que saiu de um empréstimo. Guarde uma cópia da pasta")
-            print("  antes de retirar, se quiser conservá-lo fora da sala.")
+            print("  WARNING: the local folder is AHEAD of the server and no lease")
+            print("  is open. That means you played without checking out. A new")
+            print("  checkout will overwrite that progress.")
+            print("  It cannot be handed in: the room only accepts what came out")
+            print("  of a lease. Copy the folder aside first if you want to keep")
+            print("  it outside the room.")
     return 0
 
 
-def cmd_estado(args) -> int:
-    dados = json_request("GET", f"/api/v1/rooms/{args.sala}/state")
-    if not dados["players"]:
-        print("sala vazia")
+def cmd_state(args) -> int:
+    data = json_request("GET", f"/api/v1/rooms/{args.room}/state")
+    if not data["players"]:
+        print("empty room")
         return 0
-    print(f"{'jogador':<18}{'nave':<24}{'sistema':<10}{'corpo':<8}{'dia':<8}onde")
-    for p in dados["players"]:
+    print(f"{'player':<18}{'ship':<24}{'system':<10}{'body':<8}{'age':<8}where")
+    for p in data["players"]:
         print(f"{(p['name'] or '?'):<18}{(p['shipName'] or '—'):<24}"
               f"{(p['system'] or '—'):<10}{(p['celeid'] or '—'):<8}"
               f"{str(p['ageDays'] or '—'):<8}"
-              f"{'jogando' if p['playing'] else 'fora'}")
+              f"{'playing' if p['playing'] else 'away'}")
     return 0
 
 
-def cmd_apagar_conta(args) -> int:
-    print("Isto apaga a sua conta e TODOS os seus saves neste servidor.")
-    print("Não há como desfazer.")
+def cmd_delete_account(args) -> int:
+    print("This deletes your account and ALL your saves on this server.")
+    print("There is no undo.")
     if input("Type 'delete everything' to confirm: ").strip() != "delete everything":
-        print("cancelado")
+        print("cancelled")
         return 1
-    dados = json_request("DELETE", "/api/v1/me?confirm=delete%20everything")
-    print(dados["message"])
+    data = json_request("DELETE", "/api/v1/me?confirm=delete%20everything")
+    print(data["message"])
     if os.path.isfile(CREDENTIALS):
         todos = json.load(open(CREDENTIALS, encoding="utf-8"))
         todos.pop(base_url(), None)
@@ -687,88 +686,88 @@ def cmd_apagar_conta(args) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="cliente da Galáxia Compartilhada",
-        epilog=f"servidor: {base_url()} (mude com SGALAXY_URL)")
+        description="Shared Galaxy client",
+        epilog=f"server: {base_url()} (change with SGALAXY_URL)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("registrar", help="cria uma conta neste servidor")
+    p = sub.add_parser("register", help="create an account on this server")
     p.add_argument("nome")
-    p.add_argument("--convite", help="se o servidor exigir")
-    p.set_defaults(func=cmd_registrar)
+    p.add_argument("--invite", help="if the server requires one")
+    p.set_defaults(func=cmd_register)
 
-    p = sub.add_parser("salas", help="lista as salas abertas")
-    p.set_defaults(func=cmd_salas)
+    p = sub.add_parser("rooms", help="list open rooms")
+    p.set_defaults(func=cmd_rooms)
 
-    p = sub.add_parser("criar-sala", help="cria uma sala")
-    p.add_argument("--seed", required=True, help="a seed da galáxia")
-    p.add_argument("--nome", default="")
-    p.add_argument("--senha")
-    p.add_argument("--prazo", type=int, default=12, help="horas de empréstimo")
-    p.add_argument("--max-jogadores", type=int, default=8)
-    p.add_argument("--nave", help="nave inicial que todos devem escolher")
-    p.add_argument("--dificuldade")
-    p.add_argument("--opcao", action="append", metavar="CHAVE=VALOR",
-                   help="opção de cenário; pode repetir")
-    p.set_defaults(func=cmd_criar_sala)
+    p = sub.add_parser("create-room", help="create a room")
+    p.add_argument("--seed", required=True, help="the galaxy seed")
+    p.add_argument("--name", default="")
+    p.add_argument("--password")
+    p.add_argument("--lease-hours", type=int, default=12, help="lease hours")
+    p.add_argument("--max-players", type=int, default=8)
+    p.add_argument("--ship", help="starting ship everyone must pick")
+    p.add_argument("--difficulty")
+    p.add_argument("--option", action="append", metavar="CHAVE=VALOR",
+                   help="scenario option; repeatable")
+    p.set_defaults(func=cmd_create_room)
 
-    p = sub.add_parser("configurar-sala",
-                       help="publica ou corrige a receita da sala")
-    p.add_argument("sala")
-    p.add_argument("--nave", help="nave inicial que todos devem escolher")
-    p.add_argument("--dificuldade")
-    p.add_argument("--opcao", action="append", metavar="CHAVE=VALOR",
-                   help="opção de cenário; pode repetir")
-    p.add_argument("--nome")
-    p.add_argument("--prazo", type=int)
-    p.add_argument("--senha", help="se a sala tiver")
-    p.set_defaults(func=cmd_configurar_sala)
+    p = sub.add_parser("configure-room",
+                       help="publish or fix the room recipe")
+    p.add_argument("room")
+    p.add_argument("--ship", help="starting ship everyone must pick")
+    p.add_argument("--difficulty")
+    p.add_argument("--option", action="append", metavar="CHAVE=VALOR",
+                   help="scenario option; repeatable")
+    p.add_argument("--name")
+    p.add_argument("--lease-hours", type=int)
+    p.add_argument("--password", help="if the room has one")
+    p.set_defaults(func=cmd_configure_room)
 
-    p = sub.add_parser("como-entrar",
-                       help="a receita para reproduzir a galáxia da sala")
-    p.add_argument("sala")
-    p.add_argument("--senha")
-    p.set_defaults(func=cmd_como_entrar)
+    p = sub.add_parser("how-to-join",
+                       help="the recipe for reproducing the room's galaxy")
+    p.add_argument("room")
+    p.add_argument("--password")
+    p.set_defaults(func=cmd_how_to_join)
 
-    p = sub.add_parser("entrar", help="sobe o save inicial e entra numa sala")
-    p.add_argument("sala")
-    p.add_argument("--save", required=True, help="pasta do savegame")
-    p.add_argument("--senha")
-    p.set_defaults(func=cmd_entrar)
+    p = sub.add_parser("join", help="upload your first save and join a room")
+    p.add_argument("room")
+    p.add_argument("--save", required=True, help="savegame folder")
+    p.add_argument("--password")
+    p.set_defaults(func=cmd_join)
 
-    p = sub.add_parser("retirar", help="retira o save para jogar")
-    p.add_argument("sala")
-    p.add_argument("--para", help="pasta de destino")
-    p.set_defaults(func=cmd_retirar)
+    p = sub.add_parser("checkout", help="check the save out to play")
+    p.add_argument("room")
+    p.add_argument("--into", help="destination folder")
+    p.set_defaults(func=cmd_checkout)
 
-    p = sub.add_parser("devolver", help="devolve o save depois de jogar")
-    p.add_argument("sala")
+    p = sub.add_parser("return", help="return the save after playing")
+    p.add_argument("room")
     p.add_argument("--save", required=True)
-    p.set_defaults(func=cmd_devolver)
+    p.set_defaults(func=cmd_return_save)
 
-    p = sub.add_parser("jogar",
-                       help="retira, abre o jogo, e devolve ao fechar")
-    p.add_argument("sala")
-    p.add_argument("--para", help="pasta da sala (padrão: ao lado do jogo)")
-    p.add_argument("--jogo", help="caminho do executável do Space Haven")
-    p.set_defaults(func=cmd_jogar)
+    p = sub.add_parser("play",
+                       help="checkout, launch the game, return when it closes")
+    p.add_argument("room")
+    p.add_argument("--into", help="room folder (default: next to the game)")
+    p.add_argument("--game", help="path to the Space Haven executable")
+    p.set_defaults(func=cmd_play)
 
-    p = sub.add_parser("situacao",
-                       help="o que está em aberto, antes de abrir o jogo")
-    p.add_argument("sala")
-    p.set_defaults(func=cmd_situacao)
+    p = sub.add_parser("status",
+                       help="what is open, before you launch the game")
+    p.add_argument("room")
+    p.set_defaults(func=cmd_status)
 
-    p = sub.add_parser("estado", help="quem está onde na sala")
-    p.add_argument("sala")
-    p.set_defaults(func=cmd_estado)
+    p = sub.add_parser("state", help="who is where in the room")
+    p.add_argument("room")
+    p.set_defaults(func=cmd_state)
 
-    p = sub.add_parser("apagar-conta", help="apaga conta e saves, sem volta")
-    p.set_defaults(func=cmd_apagar_conta)
+    p = sub.add_parser("delete-account", help="delete account and saves, no undo")
+    p.set_defaults(func=cmd_delete_account)
 
     args = ap.parse_args()
     try:
         return args.func(args)
     except ClientError as exc:
-        print(f"erro: {exc}", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
         return 1
 
 

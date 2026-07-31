@@ -6,9 +6,9 @@ Working document. It complements `shared-galaxy-server.md`, which is the design,
 and `savegame-format.md`, which is the survey. What is here is the order, the
 decisions taken and what each stage has to deliver for the next one to start.
 
-Written in Portuguese only for now: the plan changes every week and maintaining a
-translation of a document that churns is waste. The English version comes in when
-the repository goes public, together with the README.
+English is canonical; the Portuguese version alongside it may lag by a
+step. This plan changes often — treat a stale translation as the older
+document, not as a second opinion.
 
 ---
 
