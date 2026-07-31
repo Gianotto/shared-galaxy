@@ -44,6 +44,7 @@ lidar com isso e adicionar o caminho ao perfil de ruido, nao adivinhar.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -64,25 +65,67 @@ from sgalaxy.savefile import SaveError, SaveFile  # noqa: E402
 # sao locais a nave, o que basta porque so comparamos irmaos entre si.
 IDENTITY_KEYS = ("sid", "entId", "eid", "id", "celeid", "systemId")
 
-# Atributos que sao o conteudo de uma lista, nao a identidade dela. Um <l> de
-# recurso e identificado pelo que ele guarda, nao por posicao: quando o jogo
-# reordena o inventario, casar por posicao inventaria mudanca que nao houve.
-CONTENT_KEYS = ("elementId", "element", "eid", "id")
+# Pares de atributos que juntos identificam um elemento sem id proprio. Medido
+# em save real: a tabela de relacoes entre faccoes tem 92 linhas <l> sem id
+# nenhum, cada uma um par de faccoes em `s1`/`s2` — e por nome, nao por numero.
+IDENTITY_PAIRS = (("s1", "s2"),)
+
+# Atributos que sao o conteudo de uma lista, nao a identidade dela. Um <s> de
+# armazem e identificado pelo recurso que guarda, nao por posicao: quando o
+# jogo reordena o inventario, casar por posicao inventaria mudanca que nao
+# houve. `elementaryId` e o nome real do atributo no save, medido em 1.0.4.
+CONTENT_KEYS = ("elementaryId", "elementId", "element", "eid", "id")
+
+# Valores que o jogo usa para dizer "sem id". Medido nos saves de teste: todo
+# elemento <e> de dentro de uma nave vem com id="-1", as centenas. Tratar isso
+# como identidade e pior do que nao ter identidade nenhuma — todos os irmaos
+# viram o mesmo elemento, um so casa e o resto vira remocao fantasma.
+# `0` fica de fora da lista de proposito: e id legitimo, o da frota do jogador.
+SENTINEL_IDS = {"-1", ""}
 
 
 def _identity(el: ET.Element) -> str | None:
     """Chave estavel do elemento, ou None se ele nao tiver nenhuma."""
     for key in IDENTITY_KEYS:
         val = el.get(key)
-        if val is not None:
+        if val is not None and val not in SENTINEL_IDS:
             return f"{key}={val}"
-    # Sem id proprio: se e um no de lista com conteudo declarado, o conteudo
+    # Sem id proprio: um par de atributos pode identificar.
+    for pair in IDENTITY_PAIRS:
+        vals = [el.get(k) for k in pair]
+        if all(v is not None and v not in SENTINEL_IDS for v in vals):
+            return ",".join(f"{k}={v}" for k, v in zip(pair, vals))
+    # Ainda sem: se e um no de lista com conteudo declarado, o conteudo
     # serve de identidade entre irmaos.
     for key in CONTENT_KEYS:
         val = el.get(key)
-        if val is not None:
+        if val is not None and val not in SENTINEL_IDS:
             return f"{el.tag}:{key}={val}"
     return None
+
+
+def _subtree_digest(el: ET.Element, memo: dict) -> str:
+    """Hash do elemento inteiro, subarvore inclusa.
+
+    Serve para casar dois elementos que sao identicos mesmo sem id: se o
+    conteudo bate exatamente, sao a mesma coisa e nao ha o que reportar. E o
+    que salva os <e> de uma nave, que nao tem identidade propria.
+    """
+    cached = memo.get(id(el))
+    if cached is not None:
+        return cached
+    h = hashlib.blake2b(digest_size=16)
+    h.update(el.tag.encode("utf-8"))
+    for key in sorted(el.attrib):
+        h.update(f"\x00{key}={el.attrib[key]}".encode("utf-8"))
+    h.update(b"\x01")
+    h.update((el.text or "").strip().encode("utf-8"))
+    for child in el:
+        h.update(b"\x02")
+        h.update(_subtree_digest(child, memo).encode("ascii"))
+    out = h.hexdigest()
+    memo[id(el)] = out
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +136,12 @@ def _identity(el: ET.Element) -> str | None:
 # caminho de tags (ex.: "game/ships/ship/shipBank/..."), nao XPath: o objetivo e
 # filtrar rapido sem inventar uma linguagem de consulta.
 FOCUS = {
-    # A pergunta do experimento de comercio: estoque de nave, banco de nave,
-    # creditos do jogador e carga em armazem.
-    "economy": ("shipBank", "playerBank", "/inv", "storage", "markup",
-                "discount", "credits"),
+    # A pergunta do experimento de comercio. Os nomes de tag vem de save real
+    # 1.0.4: a carga negociavel nao mora num campo do <shipBank>, mora em
+    # pilhas <s elementaryId=... inStorage=...> dentro dos <inv> de armazem. O
+    # <shipBank> guarda credito (`ca`) e regra de preco (<markup>).
+    "economy": ("shipBank", "playerBank", "/inv", "/cinv", "/pinv", "stored",
+                "items", "markup", "discount"),
     # Onde o jogador esta e o que ha no setor.
     "position": ("starmap", "fleets", "/f", "space", "spaceItems"),
     # Tripulacao.
@@ -167,60 +212,93 @@ def _attrs_preview(blob: str | None, limit: int = 4) -> str:
     return text + (" …" if len(attrs) > limit else "")
 
 
-def _pair_children(a: ET.Element, b: ET.Element) -> list:
-    """Casa os filhos de dois elementos.
+def _usable_identities(a: ET.Element, b: ET.Element) -> dict:
+    """Identidades que servem para casar, por (tag, chave).
 
-    Por chave estavel quando existe, por posicao dentro do grupo (tag, indice)
-    quando nao existe. Devolve uma lista de pares (antes, depois), com None de
-    um dos lados para o que so existe num.
+    Uma identidade so vale se for **unica entre os irmaos dos dois lados**.
+    Chave repetida nao identifica ninguem: casaria o primeiro e deixaria todos
+    os outros orfaos, inventando remocao onde nao houve. Medido em save real,
+    onde os <e> de uma nave vem todos com o mesmo id.
     """
-    pairs: list = []
-    used_b: set[int] = set()
+    counts: dict[tuple[str, str], list] = {}
+    for side, parent in ((0, a), (1, b)):
+        for child in parent:
+            ident = _identity(child)
+            if ident is None:
+                continue
+            slot = counts.setdefault((child.tag, ident), [0, 0])
+            slot[side] += 1
+    return {key for key, (na, nb) in counts.items() if na <= 1 and nb <= 1}
 
-    # Indice dos filhos de b por chave estavel, agrupado por tag para uma chave
-    # local nao colidir com a de outro tipo de no.
-    by_key: dict[tuple[str, str], int] = {}
-    for i, child in enumerate(b):
+
+def _pair_children(a: ET.Element, b: ET.Element, memo: dict) -> list:
+    """Casa os filhos de dois elementos, em tres passadas.
+
+    1. por identidade estavel, quando ela e unica entre os irmaos
+    2. por conteudo identico, para o que nao tem identidade
+    3. por posicao dentro da tag, para o que sobrou — e so aqui que uma
+       mudanca de atributo aparece
+
+    Devolve pares (antes, depois), com None de um lado para o que so existe num.
+    """
+    usable = _usable_identities(a, b)
+    unmatched_a = list(range(len(a)))
+    unmatched_b = list(range(len(b)))
+    matched: dict[int, int] = {}
+
+    # -- 1. identidade unica
+    by_ident: dict[tuple[str, str], int] = {}
+    for i in unmatched_b:
+        child = b[i]
         ident = _identity(child)
-        if ident is not None:
-            by_key.setdefault((child.tag, ident), i)
+        if ident is not None and (child.tag, ident) in usable:
+            by_ident[(child.tag, ident)] = i
 
-    # Contador de posicao por tag, para o fallback posicional.
-    pos_a: dict[str, int] = {}
-    pos_b_index: dict[tuple[str, int], int] = {}
-    counter: dict[str, int] = {}
-    for i, child in enumerate(b):
-        n = counter.get(child.tag, 0)
-        pos_b_index[(child.tag, n)] = i
-        counter[child.tag] = n + 1
-
-    for child in a:
+    still_a, still_b = [], set(unmatched_b)
+    for i in unmatched_a:
+        child = a[i]
         ident = _identity(child)
-        match: int | None = None
-        if ident is not None:
-            match = by_key.get((child.tag, ident))
-            if match is not None and match in used_b:
-                match = None
-        if match is None:
-            n = pos_a.get(child.tag, 0)
-            candidate = pos_b_index.get((child.tag, n))
-            # So aceita o par posicional se o outro lado tambem nao tiver
-            # identidade propria; senao seria casar coisas diferentes.
-            if candidate is not None and candidate not in used_b:
-                other = b[candidate]
-                if _identity(other) is None or ident is None:
-                    match = candidate
-        pos_a[child.tag] = pos_a.get(child.tag, 0) + 1
-
-        if match is None:
-            pairs.append((child, None))
+        key = (child.tag, ident) if ident is not None else None
+        if key is not None and key in usable and key in by_ident:
+            j = by_ident.pop(key)
+            matched[i] = j
+            still_b.discard(j)
         else:
-            used_b.add(match)
-            pairs.append((child, b[match]))
+            still_a.append(i)
 
-    for i, child in enumerate(b):
-        if i not in used_b:
-            pairs.append((None, child))
+    # -- 2. conteudo identico: mesma subarvore, mesmo elemento
+    by_digest: dict[str, list] = {}
+    for j in sorted(still_b):
+        by_digest.setdefault(_subtree_digest(b[j], memo), []).append(j)
+
+    leftover_a = []
+    for i in still_a:
+        bucket = by_digest.get(_subtree_digest(a[i], memo))
+        if bucket:
+            j = bucket.pop(0)
+            matched[i] = j
+            still_b.discard(j)
+        else:
+            leftover_a.append(i)
+
+    # -- 3. posicao dentro da tag, so para o que ainda sobrou
+    remaining_b: dict[str, list] = {}
+    for j in sorted(still_b):
+        remaining_b.setdefault(b[j].tag, []).append(j)
+
+    pairs: list = []
+    for i in leftover_a:
+        bucket = remaining_b.get(a[i].tag)
+        if bucket:
+            j = bucket.pop(0)
+            matched[i] = j
+            still_b.discard(j)
+
+    for i in range(len(a)):
+        j = matched.get(i)
+        pairs.append((a[i], b[j] if j is not None else None))
+    for j in sorted(still_b):
+        pairs.append((None, b[j]))
 
     return pairs
 
@@ -232,7 +310,7 @@ def _label(el: ET.Element) -> str:
 
 
 def _walk(a: ET.Element | None, b: ET.Element | None, path: str,
-          out: list, depth: int = 0, max_depth: int = 40) -> None:
+          out: list, memo: dict, depth: int = 0, max_depth: int = 40) -> None:
     """Percorre os dois lados em paralelo acumulando mudancas em `out`."""
     if depth > max_depth:
         return
@@ -260,11 +338,25 @@ def _walk(a: ET.Element | None, b: ET.Element | None, path: str,
     if ta != tb:
         out.append(Change("text", path, a.tag, None, ta, tb))
 
-    for child_a, child_b in _pair_children(a, b):
+    pairs = _pair_children(a, b, memo)
+
+    # Irmaos sem identidade produzem caminhos identicos, e ai duas coisas
+    # quebram: nao da para saber de qual deles o relatorio esta falando, e uma
+    # assinatura de ruido aprendida num deles silenciaria todos. Quando o
+    # rotulo se repete, o indice de ocorrencia entra junto.
+    labels = [_label(c if c is not None else d) for c, d in pairs]
+    repeated = {lab for lab in labels if labels.count(lab) > 1}
+    seen: dict[str, int] = {}
+
+    for (child_a, child_b), label in zip(pairs, labels):
         ref = child_a if child_a is not None else child_b
         if ref is None:
             continue
-        _walk(child_a, child_b, f"{path}/{_label(ref)}", out, depth + 1,
+        if label in repeated:
+            n = seen.get(label, 0)
+            seen[label] = n + 1
+            label = f"{label}[#{n}]"
+        _walk(child_a, child_b, f"{path}/{label}", out, memo, depth + 1,
               max_depth)
 
 
@@ -276,8 +368,9 @@ def compare(before: str, after: str, max_depth: int = 40) -> dict:
     changes: list[Change] = []
     docs_a, docs_b = set(sf_a.docs), set(sf_b.docs)
 
+    memo: dict = {}
     for key in sorted(docs_a & docs_b):
-        _walk(sf_a.docs[key].root, sf_b.docs[key].root, key, changes,
+        _walk(sf_a.docs[key].root, sf_b.docs[key].root, key, changes, memo,
               max_depth=max_depth)
 
     # Um arquivo de nave que aparece ou some e o jogo movendo uma nave entre

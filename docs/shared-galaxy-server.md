@@ -110,11 +110,17 @@ Três coisas precisam concordar:
 | Onde | O quê |
 |---|---|
 | `<f isPlayer="true">` dentro do `<fleets>` de um corpo celeste | a frota |
-| `starmap/@pa` | id do corpo onde ela está |
-| `starmap/@sys` | id do sistema |
+| `starmap/@pa` | o `id` do corpo onde ela está — **não** o `celeid` |
+| `starmap/@sys` | o `systemId` do sistema |
 
 Mudar os três realoca o jogador e o jogo aceita. O corpo de destino em geral não
 tem `<fleets>`; é preciso criar, entre `<stuff>` e `<info>`.
+
+**Um corpo celeste tem dois ids e confundi-los põe o vizinho no setor errado.**
+`id` é local ao save, tirado de `starmap/@objectIdCounter`; `celeid` vem da seed
+e é o único que significa a mesma coisa para todos os jogadores da sala. `@pa`
+aponta para o `id`. Medido: `@pa=226` casa com `<l id="226" celeid="1689">`, e
+não existe corpo com `celeid=226` no save. Ver `findings.md`, item 1.
 
 No `<info>` do corpo:
 
@@ -331,7 +337,8 @@ Para cada vizinho da sala cuja frota esteja no mesmo corpo celeste:
 4. `<asi>` copiado de uma nave de NPC, para a IA existir
 5. `<shipBank>` contendo **apenas o que aquele jogador consignou**, com `ca`
    limitando quanto ela consegue comprar
-6. `fg="0"` em cada célula, `unex="1"`, `forceRoof="1"`
+6. `fg="0"` em cada célula, `unex="1"`, `forceRoof="1"` e `fog="true"` na
+   raiz `<ship>` (medido: toda nave de NPC tem os quatro; ver `findings.md`)
 7. uma frota `<f>` no corpo celeste, com `createdShipId` apontando para o `sid`
 8. no `hostmap`, as permissões daquela facção: `accessTrade` conforme a relação,
    `accessVision` e `accessShip` desligados

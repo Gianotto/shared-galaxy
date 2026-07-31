@@ -85,11 +85,15 @@ Três coisas precisam concordar:
 | Onde | O quê |
 |---|---|
 | `<f isPlayer="true">` dentro do `<fleets>` de um corpo celeste | a frota |
-| `starmap/@pa` | id do corpo onde ela está |
-| `starmap/@sys` | id do sistema |
+| `starmap/@pa` | o `id` do corpo onde ela está — **não** o `celeid` |
+| `starmap/@sys` | o `systemId` do sistema |
 
 Mudar os três realoca o jogador, e o jogo aceita sem reclamar. O corpo de
 destino costuma não ter `<fleets>`; é preciso criar, entre `<stuff>` e `<info>`.
+
+Um corpo celeste tem **dois** ids: `id`, local ao save e tirado de
+`starmap/@objectIdCounter`, e `celeid`, derivado da seed e portanto igual em
+todo save da mesma galáxia. `@pa` aponta para o `id`. Ver `findings.md`, item 1.
 
 Dois detalhes de apresentação, no `<info>` do corpo:
 

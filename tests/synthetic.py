@@ -38,8 +38,10 @@ GAME_TEMPLATE = """<game seed="0" mode="0">\
 </systems>\
 </starmap>\
 <hostmap><map>\
-<l f1="461" f2="{other_faction}" rel="{relation}" accessTrade="{trade}"\
- accessShip="0" accessVision="{vision}" accessHire="0"/>\
+<l s1="Player" s2="Player" stance="Player" relationship="0"\
+ accessTrade="false" accessShip="false" accessVision="false"/>\
+<l s1="Player" s2="{other_side}" stance="Friendly" relationship="{relation}"\
+ accessTrade="{trade}" accessShip="false" accessVision="{vision}"/>\
 </map></hostmap>\
 <ships>{ships}</ships>\
 <spaceItems/>\
@@ -78,8 +80,13 @@ def _crew(entries) -> str:
 
 
 def _cargo(entries) -> str:
+    # Nomes medidos em save real 1.0.4: a pilha e um <s>, o recurso e
+    # `elementaryId` e a quantidade e `inStorage`. Errei os tres na primeira
+    # versao deste molde, e os testes passavam mesmo assim — modelo errado nao
+    # falha sozinho.
     return "".join(
-        f'<l elementId="{e["element"]}" inStorage="{e["amount"]}"/>'
+        f'<s elementaryId="{e["element"]}" inStorage="{e["amount"]}"'
+        f' onTheWayIn="0" onTheWayOut="0"/>'
         for e in entries)
 
 
@@ -93,9 +100,9 @@ def build_game(id_counter: int = 1000,
                pa: int = 102,
                visited: str = "false",
                relation: int = 70,
-               trade: str = "1",
-               vision: str = "1",
-               other_faction: int = 462,
+               trade: str = "true",
+               vision: str = "true",
+               other_side: str = "Civilian",
                ships=None) -> str:
     """Monta o documento `game` inteiro como texto."""
     ships = ships if ships is not None else [default_player_ship()]
@@ -122,7 +129,7 @@ def build_game(id_counter: int = 1000,
     return GAME_TEMPLATE.format(
         id_counter=id_counter, player_credits=player_credits, pa=pa,
         visited=visited, relation=relation, trade=trade, vision=vision,
-        other_faction=other_faction,
+        other_side=other_side,
         fleets=FLEETS_TEMPLATE.format(npc_fleet=npc_fleets),
         ships=ship_xml)
 
@@ -153,7 +160,7 @@ def write_save(root: str, game_xml: str, ships: dict | None = None) -> str:
     with open(os.path.join(root, "game"), "w", encoding="utf-8") as fh:
         fh.write(game_xml)
     with open(os.path.join(root, "info"), "w", encoding="utf-8") as fh:
-        fh.write('<info version="1.0.4" date="2026-07-31"/>\n')
+        fh.write('<info version="21" date="3289920" realTimeDate="1785467969073"/>\n')
     if ships:
         ships_dir = os.path.join(root, "ships")
         os.makedirs(ships_dir, exist_ok=True)

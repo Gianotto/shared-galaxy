@@ -137,6 +137,50 @@ class DiffTestCase(unittest.TestCase):
             f"arquivo de nave novo nao foi reportado: "
             f"{[str(c) for c in changes]}")
 
+    # -- o defeito que so o save real encontrou -----------------------------
+
+    def test_sentinel_ids_do_not_pair_everything_together(self):
+        """Centenas de irmaos com id="-1" nao sao o mesmo elemento.
+
+        Regressao de um defeito real. Todo elemento <e> dentro de uma nave vem
+        com id="-1" no save 1.0.4 — o jogo usa isso para dizer "sem id". A
+        primeira versao tratava como identidade, entao so o primeiro irmao
+        casava e os outros viravam remocao mais adicao: 358 mudancas fantasma
+        em dois saves que diferiam em seis atributos.
+        """
+        cells = "".join(
+            f'<e id="-1" m="{900 + i}" rot="R90" x="{i}" y="7"/>'
+            for i in range(200))
+        ship = f'<ship sid="55" sname="Scrapper">{cells}</ship>'
+        xml = f'<game><masterData idCounter="99"/><ships>{ship}</ships></game>\n'
+
+        self.assertEqual(self._pair(xml, xml), [],
+                         "irmaos com id sentinela viraram mudanca")
+
+        # E uma mudanca de verdade no meio ainda aparece.
+        changed = xml.replace('m="1000" rot="R90"', 'm="1000" rot="R180"')
+        self.assertNotEqual(xml, changed, "o teste nao alterou nada")
+        found = self._pair(xml, changed)
+        self.assertTrue(found, "a mudanca real sumiu junto com o ruido")
+        self.assertLessEqual(
+            len(found), 4,
+            f"uma mudanca virou muitas: {[str(c) for c in found]}")
+
+    def test_hostmap_rows_are_identified_by_faction_pair(self):
+        """Cada linha do hostmap e um par `s1`/`s2`, e sem id nenhum.
+
+        Sem identidade por par, as 92 linhas do save real produzem caminhos
+        iguais e uma assinatura de ruido aprendida numa silenciaria todas.
+        """
+        changes = self._pair(
+            synthetic.build_game(other_side="Civilian", trade="true"),
+            synthetic.build_game(other_side="Civilian", trade="false"))
+        self.assertTrue(changes, "a mudanca de permissao nao apareceu")
+        self.assertTrue(
+            all("s1=Player,s2=Civilian" in c.path for c in changes),
+            f"a linha do hostmap nao foi identificada pelo par: "
+            f"{[c.path for c in changes]}")
+
     # -- ruido e foco ------------------------------------------------------
 
     def test_noise_profile_suppresses_known_churn(self):
@@ -177,8 +221,8 @@ class DiffTestCase(unittest.TestCase):
 
     def test_relation_change_is_visible(self):
         """A tabela de relacoes e o painel de controle do servidor (1.8)."""
-        changes = self._pair(synthetic.build_game(trade="1", vision="1"),
-                             synthetic.build_game(trade="0", vision="0"))
+        changes = self._pair(synthetic.build_game(trade="true", vision="true"),
+                             synthetic.build_game(trade="false", vision="false"))
         attrs = {c.attr for c in changes}
         self.assertIn("accessTrade", attrs)
         self.assertIn("accessVision", attrs)
