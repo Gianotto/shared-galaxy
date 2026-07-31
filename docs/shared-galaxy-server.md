@@ -471,7 +471,14 @@ configuráveis por arquivo de texto, e as classes do jogo não estão ofuscadas.
 ### Existe um template de mod da comunidade
 
 <https://github.com/Spacehaven-modding-tools/SpaceHavenModTemplate> — **da
-comunidade, não da Bugbyte.** Não há API oficial nem hooks providos pelo jogo.
+comunidade, não da Bugbyte.**
+
+> **Corrigido em 2026-07-31.** Há, sim, hook provido pelo jogo:
+> `SpacehavenSteam.tryToLaunchModLoader` procura e lança um mod loader
+> distribuído pela Steam Workshop, e **esse loader já traz `aspectjweaver`
+> dentro**. Some quase toda a fricção que este documento usa para adiar o mod:
+> quem assina o item na Workshop recebe o AspectJ pronto e o jogo o chama
+> sozinho. Ver `findings.md`, item 14.
 
 Ele usa AspectJ com weaving em tempo de carga: você declara pointcuts que
 envolvem métodos do jogo, coloca seu jar em `mods/` e acrescenta a entrada no

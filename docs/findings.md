@@ -364,7 +364,51 @@ procurando arquivos, não lê um índice. `cloud.xml` e `cloudZipFile.zip`
 aparecem só no caminho de sincronia. Um save escrito sem eles deve aparecer
 normalmente — a confirmar na primeira retirada.
 
-## 14. Miudezas
+## 14. O jogo tem mod loader nativo, e ele já traz o AspectJ
+
+**Corrige a seção 2.9**, que diz: "da comunidade, não da Bugbyte. Não há API
+oficial nem hooks providos pelo jogo."
+
+`fi.bugbyte.spacehaven.steam.SpacehavenSteam` tem um método
+`tryToLaunchModLoader`, e as strings da classe apontam para itens de Steam
+Workshop:
+
+```
+/workshop/content/979110/3703674043/spacehaven-modloader.exe
+/workshop/content/979110/3715831202/spacehaven-modloader
+```
+
+Ou seja: **o próprio jogo procura e lança um mod loader** distribuído pela
+Workshop. Não é gambiarra de fora; é caminho que o executável conhece.
+
+E o conteúdo do item 3703674043, já instalado nesta máquina, traz:
+
+```
+aspectj-1.9.19.jar
+aspectjweaver-1.9.19.jar
+spacehaven-modloader.exe
+```
+
+**O AspectJ vem junto.** A seção 2.9 estima o custo do mod como "o jogador
+precisa instalar AspectJ, editar o `config.json` e ter Java 17". Os dois
+primeiros somem: quem assina o mod loader na Workshop já recebe o weaver, e o
+jogo o chama sozinho.
+
+Isso derruba quase todo o argumento de fricção que fez o mod ser adiado. A
+decisão de 2.9 — "o mod é opcional e não bloqueia fase nenhuma" — foi tomada
+sobre um custo que não é o real.
+
+**O que continua verdade da 2.9:** a simulação segue local e não determinística,
+e cada atualização do jogo pode quebrar pointcuts, porque eles apontam para
+assinaturas de método que ninguém prometeu manter.
+
+**Não verificado:** como se registra um aspecto próprio no loader, e se ele
+aceita qualquer weaving ou só o que os mods de dados usam. O outro item
+instalado (3731405861) é mod de dados puro — `info.xml` mais `patches/*.xml` —
+então o caminho de dados está confirmado e o de código, só inferido pela
+presença do weaver.
+
+## 15. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
