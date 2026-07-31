@@ -217,6 +217,13 @@ Neutral e as portas fecham.
 **Essa tabela é o painel de controle do servidor** sobre o que um jogador pode
 fazer com o retrato do outro.
 
+> **Corrigido em 2026-07-31 pelo E3.** `accessVision="false"` **não** fecha o
+> interior: atravessa o load intacto e a nave continua visível na tela. O jogo
+> ainda apaga `unex` e `forceRoof` da raiz `<ship>` e restaura o `fg` de cada
+> célula ao carregar. A névoa tem outra fonte de verdade, ainda não encontrada.
+> `accessTrade` **funciona** e é o que sustenta a seção 2.6. Se `accessShip`
+> funciona é a pergunta em aberto. Ver `findings.md`, item 10.
+
 Destroços são outro mecanismo: registrados no `<stuff>` do corpo com
 `derelict="true"`, só se revelam abordando, independente de facção.
 

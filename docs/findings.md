@@ -196,7 +196,85 @@ quem os tem.
 
 **Para o construtor de retratos:** não copiar `<markers>` é seguro.
 
-## 10. Miudezas
+## 10. A névoa não sobrevive a um load, e o `hostmap` não fecha o interior
+
+**Refuta a seção 1.8 e o item 6 da receita 2.5.** Medido no E3, com nave montada
+pela ferramenta e carregada no jogo.
+
+A ferramenta gravou exatamente o que a receita manda:
+
+| | gravado pela ferramenta | depois de o jogo carregar |
+|---|---|---|
+| `<ship fog>` | `true` | **`false`** |
+| `<ship unex>` | `1` | **removido** |
+| `<ship forceRoof>` | `1` | **removido** |
+| células com `fg` | 616 em `0` | **616 em `191`** |
+
+O jogo não só ignorou: ele **apagou** os dois atributos e restaurou cada célula
+ao valor exato que ela tinha na nave de origem. Existe outra fonte de verdade
+para a névoa, e ela não é nenhum desses campos. Não achamos qual — o `<roof>` da
+nave injetada é estruturalmente igual ao de uma nave de NPC que continua
+escondida.
+
+E o `hostmap` **não** é o que manda, ao contrário do que a seção 1.8 conclui:
+
+```
+antes   Player x Civilian  accessTrade=true  accessShip=false  accessVision=false
+depois  Player x Civilian  accessTrade=true  accessShip=false  accessVision=false
+```
+
+`accessVision="false"` atravessou o load intacto **e o interior está visível na
+tela** — teto aberto, tripulação à mostra. A afirmação "desligar `accessVision`
+fecha o interior na hora" não se sustenta.
+
+**O que isso quebra e o que não quebra.** A proteção *econômica* da seção 2.6
+continua inteira: só o que foi consignado está na nave, então só isso pode ser
+comprado, e o painel de comércio mostrou exatamente o estoque montado. O que cai
+é a privacidade *visual* — o vizinho vê a planta e a tripulação do retrato.
+
+**Não é a relação entre facções.** Foi a primeira hipótese e o próprio save a
+derruba: `CB DUDDE` e `VIZINHO E3` são as duas do lado `Civilian`, no mesmo
+save, sob a mesma linha do `hostmap` — e a autêntica continua escondida enquanto
+a injetada foi revelada. Mais: o Escravagista está em `Enemies` com relação −82
+e está **revelado**, enquanto a Civil a −3 está escondida.
+
+**O que as reveladas têm em comum é contato.** Nas dez naves do save:
+
+| Estado | Naves |
+|---|---|
+| revelada (`fog=false`, sem `unex`, `fg` 191/255) | a do jogador; a que ele está sucateando; a Mercante com quem negociou no E2; a injetada |
+| escondida (`fog=true`, `unex=1`, `forceRoof=1`, `fg=0`) | as quatro com que nunca houve contato |
+
+A leitura que sobra: `fog` é **estado de exploração**, mantido pelo jogo a partir
+de alguma coisa que não é nenhum dos campos que a receita mexe, e escrever nele
+de fora não cola. O retrato de um vizinho nasce condenado, porque a nave de
+origem é a nave *dele* — sempre explorada.
+
+**Próximo teste, e é barato:** montar um retrato a partir de uma nave que já
+seja NPC não explorado (a `CS DASHERS SCRAPPER` do `ship17`, com `fg=0`) em vez
+de uma nave de jogador. Se ele continuar escondido, a regra é "a névoa vem da
+história da nave de origem e não se falsifica", e o projeto tem uma restrição
+real a aceitar.
+
+**Fica em aberto, e é a pergunta séria:** `accessShip="false"` impede de abordar?
+Se não impedir, o vizinho embarca e leva o que quiser, e aí não é mais estética.
+Não testado.
+
+## 11. Um armazém tem capacidade, e o excesso não é ofertado
+
+O retrato foi montado com 40 Produtos químicos e 30 Placas de aço, e a ferramenta
+pôs os dois no **mesmo** armazém — 70 unidades. O painel de comércio do jogo
+ofereceu 40 e **26**, ou seja 66 no total.
+
+66 é a capacidade aparente do armazém, e o que passa dela fica no arquivo mas não
+é ofertado. A venda debitou corretamente do total real (30 → 25), então o excesso
+existe, só não está à venda.
+
+**Para o construtor de retratos:** consignar sem respeitar capacidade entrega ao
+vizinho menos do que o dono ofereceu, em silêncio. O estoque precisa ser
+distribuído por armazém, com teto por armazém.
+
+## 12. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
