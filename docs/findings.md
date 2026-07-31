@@ -419,6 +419,40 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 17. A galaxy can be grafted into a save, and the game accepts it
+
+**The biggest lever found so far for onboarding.** Measured 2026-07-31.
+
+Replacing a save's `<starmap>` with another galaxy's, moving the player's fleet
+to the new starting body and fixing `@sys`/`@pa`, produces a save the game opens
+normally. Tested on the hardest case available: a 124-day, twenty-crew base
+grafted into a galaxy from a different seed.
+
+After loading and saving back, everything held — same galaxy digest, same
+position, same age, 64 systems, exactly one player fleet. The player's ship,
+crew, research and 1,379,043 credits were never touched, because the graft moves
+the galaxy rather than the player.
+
+Why that direction: the player's state is not one node — ship, crew, bank,
+research and faction standing sit scattered across the save — while the galaxy
+**is** one node.
+
+**What it changes.** Today a player must create a game with the room's exact
+seed *and* every scenario option right, or the fingerprint refuses them. With
+this, they create a game however they like and the server hands back a save
+already in the room's galaxy. Section 2.3 can stop being a gate.
+
+**`sta="1"` marks an asteroid base.** The save used was one, and the game loaded
+the asteroid as a ship — which is how a base is stored. The graft did not care,
+but a base cannot travel, so such a player stays in the starting sector: a fixed
+trading post rather than an explorer.
+
+**The known seam.** The starting sector's `<space>` came from the player's
+original body, and the game does not regenerate sectors on load (section 1.6).
+That one sector keeps the asteroid field it was born with while the new galaxy
+declares different `<stuff>` for that body. Everything travelled to afterwards is
+generated from the shared galaxy. Not yet inspected up close.
+
 ## 16. Everyone in a room starts on the same rock
 
 Section 1.4 records that the seed reproduces the starting point — x=75724,

@@ -302,22 +302,28 @@ Exactly one player fleet, 64 systems, `@sys`/`@pa` agreeing, and the player's
 `playerBank` of 1,379,043 credits untouched. Both inputs byte-identical
 afterwards.
 
-**What is not yet known: whether the game loads it.** Everything above is
-structure. Load `E7 enxerto` and look for:
+**Answered: the game loads it.** Measured 2026-07-31 — the grafted save opened
+at day 124.11 with the whole 124-day base, its twenty crew and its bank intact,
+sitting in the room's galaxy. After the game saved it back, everything held:
+same digest `c06bd078ea891448`, same position (system 31, `celeid` 1689), same
+age, 64 systems, exactly one player fleet.
 
-- does it appear in the save list, and open?
-- is the player where the map says — system 31, the starting asteroid?
-- is the crew, the research and the bank still theirs?
-- what does the starting sector look like? Its `<space>` was generated from the
-  player's *original* body and the game does not regenerate sectors on load
-  (section 1.6), so it keeps the asteroid field it was born with while the new
-  galaxy declares different `<stuff>` for that body. One sector's worth of
-  disagreement, expected — the question is whether it is cosmetic or breaks
-  mining.
+**So the onboarding story changes.** Create a game with any seed and any
+options; the server hands back a save already in the room's galaxy. The
+fingerprint stops being a gate and becomes a check.
 
-**If it loads,** the onboarding story changes completely: create a game with any
-seed and any options, and the server hands back a save already in the room's
-galaxy. The fingerprint stops being a gate and becomes a check.
+**One caveat the test surfaced.** The save used was an asteroid base, not a
+mobile ship — `sta="1"` on the `<ship>` root is what marks it. The game loaded
+the asteroid as a ship, which is how a base is stored, and the graft did not
+care. But a base cannot travel, so that player would sit in the starting sector
+forever: a permanent trading post rather than an explorer. That is a role, not a
+bug, but a room should know which it is getting.
+
+**Still worth checking:** the same graft with an ordinary mobile ship, and what
+the starting sector looks like up close. Its `<space>` came from the player's
+original body and the game does not regenerate sectors on load (section 1.6), so
+it keeps the asteroid field it was born with while the new galaxy declares
+different `<stuff>` for that body.
 
 ---
 
