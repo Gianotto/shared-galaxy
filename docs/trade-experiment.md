@@ -62,23 +62,42 @@ vezes já difere em milhares de pontos: relógios, posição de tripulante, fase
 orbital, contadores. Se você não medir esse chão primeiro, a compra de dez
 minérios vai estar enterrada no meio dele.
 
-1. Abra o jogo, carregue a partida, **não faça nada**, salve.
-2. Tire o primeiro snapshot:
+São **duas** medidas, e a diferença entre elas é informação por si só.
 
-   ```bash
-   python3 tools/save_snapshot.py CAMINHO/DO/SAVE E1-antes
-   ```
+### E1a — o piso puro
 
-3. Carregue de novo, espere alguns segundos de jogo, salve de novo.
-4. Segundo snapshot e aprendizado do ruído:
+Quanto muda num ciclo de salvar, sem nada acontecer no jogo.
 
-   ```bash
-   python3 tools/save_snapshot.py CAMINHO/DO/SAVE E1-depois
-   python3 tools/save_diff.py \
-       "$(python3 tools/save_snapshot.py --path E1-antes)" \
-       "$(python3 tools/save_snapshot.py --path E1-depois)" \
-       --learn-noise experiments/noise.json
-   ```
+1. Abra o jogo, carregue a partida, salve **imediatamente**, saia para o menu.
+2. `python3 tools/save_snapshot.py CAMINHO/DO/SAVE E1a-1`
+3. Carregue de novo, salve imediatamente de novo, saia.
+4. `python3 tools/save_snapshot.py CAMINHO/DO/SAVE E1a-2`
+
+```bash
+python3 tools/save_diff.py \
+    "$(python3 tools/save_snapshot.py --path E1a-1)" \
+    "$(python3 tools/save_snapshot.py --path E1a-2)" \
+    --learn-noise experiments/noise-puro.json
+```
+
+### E1b — o piso realista
+
+O E2 não vai ser um ciclo puro: negociar leva tempo de jogo, a tripulação anda,
+os módulos produzem. O ruído que o E2 vai carregar é este, e é maior.
+
+Mesma coisa, mas **deixe o jogo correr mais ou menos o tempo que uma negociação
+leva** — um minuto de relógio, sem dar ordem nenhuma — antes de salvar.
+
+```bash
+python3 tools/save_diff.py \
+    "$(python3 tools/save_snapshot.py --path E1b-1)" \
+    "$(python3 tools/save_snapshot.py --path E1b-2)" \
+    --learn-noise experiments/noise.json
+```
+
+O `noise.json` do E1b é o que os outros experimentos usam. O `noise-puro.json`
+fica de referência: a diferença entre os dois é exatamente o que "o tempo
+passar" custa, e é o número que a conferência da seção 2.7 vai ter que tolerar.
 
 **O que anotar:** quantas mudanças brutas apareceram e em que áreas. Esse número
 é interessante por si só — ele diz o quanto o save se mexe sozinho, o que a
