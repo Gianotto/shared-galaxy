@@ -109,6 +109,9 @@ def room_list(rooms: list, lang: str) -> str:
     </p>
   </div>""" for r in rooms)
         body = f'<div class="cards">{cards}</div>'
+    body += (f'<p style="margin-top:2rem">'
+             f'<a href="/register?lang={lang}">{t("create_account", lang)}</a>'
+             f' · <a href="/new-room?lang={lang}">{t("new_room", lang)}</a></p>')
     return layout(t("site", lang), body, lang, t("tagline", lang), "/")
 
 
@@ -244,8 +247,11 @@ def starmap_svg(galaxy: dict, roster: list, lang: str,
 
 
 def room_page(room: dict, roster: list, galaxy: dict, lang: str,
-              visits: dict | None = None) -> str:
+              visits: dict | None = None, just_made: bool = False) -> str:
     map_svg = starmap_svg(galaxy, roster, lang, visits)
+    banner = (f'<p style="background:#16304a;border:1px solid #2b5b86;'
+              f'padding:.8rem;border-radius:.4rem">'
+              f'{t("owner_next", lang)}</p>' if just_made else '')
 
     if roster:
         rows = "".join(f"""
@@ -282,7 +288,7 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
 <pre>python3 tools/sgalaxy.py join {_esc(room['id'])} --save PATH/TO/GAME</pre>
 <p class="sub">{t("wrong_options", lang)}</p>"""
 
-    body = f"""{map_svg}
+    body = f"""{banner}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
 {table}
 {how}"""
@@ -395,3 +401,84 @@ segurança absoluta é quem não pensou no assunto.</p>
 
 def privacy_page(lang: str) -> str:
     return layout(t("privacy_title", lang), PRIVACY[lang], lang, "", "/privacy")
+
+
+# ---------------------------------------------------------------------------
+# Onboarding pela web
+# ---------------------------------------------------------------------------
+#
+# O degrau 2 da secao 2.11 diz que a pessoa deve poder ver a sala e decidir sem
+# instalar nada. Registrar e criar sala pelo navegador estende isso: o cliente
+# de linha de comando deixa de ser a porta de entrada e vira a ferramenta de
+# quem ja decidiu.
+#
+# Formularios HTML puros, sem JavaScript. O token entra num cookie
+# `SameSite=Strict` e `HttpOnly` — o primeiro barra POST vindo de outro site, o
+# segundo tira o token do alcance de script. E o suficiente para paginas que nao
+# executam nada de terceiro.
+
+FORM_CSS = """
+  form {{ max-width:26rem; }}
+  label {{ display:block; margin:1rem 0 .3rem; color:var(--dim);
+          font-size:.9rem; }}
+  input[type=text] {{ width:100%; padding:.55rem .7rem; border-radius:.35rem;
+    border:1px solid var(--line); background:#0f1730; color:var(--fg);
+    font:inherit; }}
+  button {{ margin-top:1.4rem; padding:.6rem 1.2rem; border-radius:.35rem;
+    border:0; background:#3b6fd4; color:#fff; font:inherit; font-weight:600;
+    cursor:pointer; }}
+  .code {{ font-size:1.05rem; letter-spacing:.06em; word-break:break-all;
+    background:#161d38; padding:.9rem; border-radius:.4rem;
+    border:1px solid #3d4a72; }}
+"""
+
+
+def register_form(lang: str, error: str = "") -> str:
+    aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
+    body = f"""{aviso}
+<p>{t("no_email", lang)}</p>
+<form method="post" action="/register?lang={lang}">
+  <label for="name">{t("your_name", lang)}</label>
+  <input type="text" id="name" name="name" maxlength="40" required
+         autocomplete="off">
+  <button type="submit">{t("create_account", lang)}</button>
+</form>
+<style>{FORM_CSS.format()}</style>"""
+    return layout(t("create_account", lang), body, lang, "", "/register")
+
+
+def registered_page(name: str, code: str, lang: str) -> str:
+    body = f"""
+<p>{t("signed_as", lang)} <b>{_esc(name)}</b>.</p>
+<h2>{t("your_code", lang)}</h2>
+<p class="code">{_esc(code)}</p>
+<p><b>{t("code_warning", lang)}</b></p>
+<h2>{t("use_in_client", lang)}</h2>
+<pre>python3 tools/sgalaxy.py register --recover "{_esc(code)}"</pre>
+<p><a href="/new-room?lang={lang}">{t("new_room", lang)}</a> ·
+   <a href="/?lang={lang}">{t("rooms", lang)}</a></p>
+<style>{FORM_CSS.format()}</style>"""
+    return layout(t("account_made", lang), body, lang, "", "/register")
+
+
+def new_room_form(lang: str, name: str | None, error: str = "") -> str:
+    if not name:
+        body = (f'<p>{t("need_account", lang)}</p>'
+                f'<p><a href="/register?lang={lang}">'
+                f'{t("create_account", lang)}</a></p>')
+        return layout(t("new_room", lang), body, lang, "", "/new-room")
+
+    aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
+    body = f"""{aviso}
+<p>{t("signed_as", lang)} <b>{_esc(name)}</b>.</p>
+<p>{t("room_seed_help", lang)}</p>
+<form method="post" action="/new-room?lang={lang}">
+  <label for="name">{t("room_name", lang)}</label>
+  <input type="text" id="name" name="name" maxlength="80" required>
+  <label for="seed">{t("seed", lang)}</label>
+  <input type="text" id="seed" name="seed" maxlength="40" required
+         inputmode="numeric">
+  <button type="submit">{t("create", lang)}</button>
+</form>
+<style>{FORM_CSS.format()}</style>"""
+    return layout(t("new_room", lang), body, lang, "", "/new-room")

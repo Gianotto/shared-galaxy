@@ -117,6 +117,57 @@ STRINGS: dict = {
               "creation options.",
     },
 
+    # -- onboarding pela web
+    "join_us": {"pt": "Entrar", "en": "Join"},
+    "create_account": {"pt": "Criar uma conta", "en": "Create an account"},
+    "your_name": {"pt": "Como você quer ser chamado",
+                  "en": "What you want to be called"},
+    "no_email": {
+        "pt": "Sem e-mail, sem senha, sem login de Steam. O servidor gera um "
+              "código aleatório e guarda só o resumo dele.",
+        "en": "No email, no password, no Steam login. The server generates a "
+              "random code and keeps only a digest of it.",
+    },
+    "account_made": {"pt": "Conta criada", "en": "Account created"},
+    "your_code": {"pt": "O seu código de recuperação",
+                  "en": "Your recovery code"},
+    "code_warning": {
+        "pt": "Guarde agora, num lugar que você vá reencontrar. É a única "
+              "forma de voltar a esta conta: o servidor não tem cópia, não há "
+              "e-mail de recuperação, e perder é perder.",
+        "en": "Save it now, somewhere you will find again. It is the only way "
+              "back into this account: the server keeps no copy, there is no "
+              "recovery email, and losing it means losing the account.",
+    },
+    "use_in_client": {
+        "pt": "Para usar no cliente:",
+        "en": "To use it in the client:",
+    },
+    "new_room": {"pt": "Criar uma sala", "en": "Create a room"},
+    "room_name": {"pt": "Nome da sala", "en": "Room name"},
+    "room_seed_help": {
+        "pt": "A seed que você usou ao criar a sua partida. O servidor não "
+              "consegue gerar uma galáxia — quem cria é o jogo, na sua "
+              "máquina. Você cria a partida uma vez, sobe o save, e a partir "
+              "daí o servidor entrega essa galáxia a quem entrar.",
+        "en": "The seed you used when creating your game. The server cannot "
+              "generate a galaxy — the game does, on your machine. You create "
+              "the game once, upload the save, and from then on the server "
+              "hands that galaxy to whoever joins.",
+    },
+    "create": {"pt": "Criar", "en": "Create"},
+    "owner_next": {
+        "pt": "Sala criada. Agora suba o save da sua partida: é ele que "
+              "define a galáxia que todos vão dividir.",
+        "en": "Room created. Now upload your game's save: it is what defines "
+              "the galaxy everyone will share.",
+    },
+    "need_account": {
+        "pt": "Você precisa de uma conta para criar uma sala.",
+        "en": "You need an account to create a room.",
+    },
+    "signed_as": {"pt": "conectado como", "en": "signed in as"},
+
     # -- data policy
     "privacy_title": {"pt": "O que acontece com o seu save",
                       "en": "What happens to your save"},

@@ -28,8 +28,8 @@ import json
 import os
 
 import psycopg
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from server.api import db
 from server.domain import rules
@@ -589,7 +589,8 @@ def index(request: Request, lang: str = ""):
 
 
 @app.get("/room/{room_id}", response_class=HTMLResponse)
-def room_web(room_id: str, request: Request, lang: str = ""):
+def room_web(room_id: str, request: Request, lang: str = "",
+             new: str = ""):
     """A sala como página. Sem conta, sem instalar nada — é o degrau 2 da 2.11."""
     idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
     with db.pool().connection() as conn:
@@ -600,7 +601,7 @@ def room_web(room_id: str, request: Request, lang: str = ""):
         galaxy = db.galaxy_map(conn, room_id)
         visits = db.room_visits(conn, room_id)
     return pages.room_page(dict(room), [dict(r) for r in roster], galaxy,
-                           idioma, visits)
+                           idioma, visits, just_made=bool(new))
 
 
 # O caminho antigo, para links já compartilhados não morrerem.
@@ -608,6 +609,103 @@ def room_web(room_id: str, request: Request, lang: str = ""):
 def room_web_pt(room_id: str, request: Request):
     from fastapi.responses import RedirectResponse
     return RedirectResponse(f"/room/{room_id}?lang=pt", status_code=308)
+
+
+# ---------------------------------------------------------------------------
+# Onboarding pela web
+# ---------------------------------------------------------------------------
+#
+# O cliente de linha de comando deixa de ser a porta de entrada. Quem chega pelo
+# Discord registra e cria sala no navegador, e só instala alguma coisa quando
+# for de fato jogar.
+
+COOKIE = "sgalaxy_token"
+
+
+def _web_player(request: Request) -> dict | None:
+    """Quem está conectado, pelo cookie. Sem cookie não é erro: é visitante."""
+    token = request.cookies.get(COOKIE, "")
+    if not token:
+        return None
+    with db.pool().connection() as conn:
+        row = db.player_by_token(conn, rules.hash_token(token))
+    return dict(row) if row and not row["blocked"] else None
+
+
+def _set_session(response, token: str) -> None:
+    # HttpOnly tira o token do alcance de qualquer script; SameSite=Strict barra
+    # POST vindo de outro site, que é a proteção de CSRF destes formulários.
+    response.set_cookie(COOKIE, token, httponly=True, samesite="strict",
+                        max_age=60 * 60 * 24 * 365, path="/")
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request, lang: str = ""):
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.register_form(idioma)
+
+
+@app.post("/register", response_class=HTMLResponse)
+def register_submit(request: Request, name: str = Form(""), lang: str = ""):
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    limpo = name.strip()[:40]
+    if not limpo:
+        return HTMLResponse(pages.register_form(idioma, "?"), status_code=400)
+    if INVITE_ONLY:
+        return HTMLResponse(
+            pages.register_form(idioma,
+                                "this server requires an invite"),
+            status_code=403)
+
+    token = rules.new_token()
+    with db.pool().connection() as conn:
+        player = db.create_player(conn, rules.hash_token(token), limpo)
+    resposta = HTMLResponse(pages.registered_page(
+        player["display_name"], rules.recovery_code(token), idioma))
+    _set_session(resposta, token)
+    return resposta
+
+
+@app.get("/new-room", response_class=HTMLResponse)
+def new_room_page(request: Request, lang: str = ""):
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    player = _web_player(request)
+    return pages.new_room_form(idioma, player["display_name"] if player else None)
+
+
+@app.post("/new-room")
+def new_room_submit(request: Request, name: str = Form(""),
+                    seed: str = Form(""), lang: str = ""):
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    player = _web_player(request)
+    if player is None:
+        return HTMLResponse(pages.new_room_form(idioma, None), status_code=403)
+
+    ok, motivo = rules.can_create_room(player["rooms_created"],
+                                       player["blocked"])
+    if not ok:
+        return HTMLResponse(
+            pages.new_room_form(idioma, player["display_name"], motivo),
+            status_code=403)
+    if not seed.strip():
+        return HTMLResponse(
+            pages.new_room_form(idioma, player["display_name"],
+                                "the seed is required"),
+            status_code=400)
+
+    room = {
+        "id": rules.new_room_id(),
+        "name": name.strip()[:80] or f"{player['display_name']}'s room",
+        "seed": seed.strip()[:40],
+        "options": json.dumps({}),
+        "password_hash": None,
+        "owner_id": player["id"],
+        "lease_hours": 12, "retention_n": 20, "max_players": 32,
+    }
+    with db.pool().connection() as conn:
+        created = db.create_room(conn, room)
+    return RedirectResponse(f"/room/{created['id']}?lang={idioma}&new=1",
+                            status_code=303)
 
 
 @app.get("/privacy", response_class=HTMLResponse)

@@ -71,6 +71,12 @@ class ClientError(Exception):
 # Credenciais
 # ---------------------------------------------------------------------------
 
+def parse_recovery_code(code: str) -> str:
+    """Aceita o codigo com ou sem os tracos, e em qualquer caixa."""
+    import re
+    return re.sub(r"[\s-]", "", code).upper()
+
+
 def base_url() -> str:
     return os.environ.get("SGALAXY_URL", DEFAULT_URL).rstrip("/")
 
@@ -312,6 +318,19 @@ def unpack(data: bytes, dest: str) -> str:
 # ---------------------------------------------------------------------------
 
 def cmd_register(args) -> int:
+    # Quem registrou pelo navegador já tem conta; aqui só guarda o código.
+    if args.recover:
+        code = parse_recovery_code(args.recover)
+        save_credentials({"token": code})
+        me = json_request("GET", "/api/v1/me")
+        save_credentials({"token": code, "playerId": me["playerId"],
+                          "name": me["name"]})
+        print(f"signed in as {me['name']} on {base_url()}")
+        return 0
+
+    if not args.name:
+        raise ClientError("give a name, or --recover CODE if you registered "
+                          "on the website")
     data = json_request("POST", "/api/v1/players",
                          {"name": args.name, "invite": args.invite or ""},
                          auth=False)
@@ -697,7 +716,10 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("register", help="create an account on this server")
-    p.add_argument("name")
+    p.add_argument("name", nargs="?")
+    p.add_argument("--recover", metavar="CODE",
+                   help="use the recovery code from the website instead of "
+                        "creating a new account")
     p.add_argument("--invite", help="if the server requires one")
     p.set_defaults(func=cmd_register)
 

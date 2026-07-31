@@ -609,3 +609,81 @@ class WebPagesTestCase(unittest.TestCase):
                              headers=self._auth(player))
         self.assertEqual(r.status_code, 201, r.text)
         self.assertEqual(r.json()["maxPlayers"], 200)
+
+
+@unittest.skipUnless(HAS_DB, "defina DATABASE_URL para rodar os testes da API")
+class WebOnboardingTestCase(unittest.TestCase):
+    """Registrar e criar sala pelo navegador, sem instalar nada (2.11)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        with db.pool().connection() as conn:
+            conn.execute("TRUNCATE lease, membership, save_version, room_visit,"
+                         " galaxy_system, room, player RESTART IDENTITY CASCADE")
+
+    def test_register_by_form_shows_the_code_once(self):
+        r = self.client.post("/register", data={"name": "Ana"})
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("Ana", r.text)
+        self.assertIn("recovery code", r.text.lower())
+        self.assertIn("losing it means losing", r.text)
+
+    def test_registering_signs_you_in(self):
+        self.client.post("/register", data={"name": "Ana"})
+        r = self.client.get("/new-room")
+        self.assertIn("Ana", r.text, "não reconheceu quem acabou de registrar")
+        self.assertNotIn("You need an account", r.text)
+
+    def test_the_session_cookie_is_locked_down(self):
+        """O token no cookie fora do alcance de script e de POST de outro site."""
+        r = self.client.post("/register", data={"name": "Ana"})
+        raw = r.headers.get("set-cookie", "")
+        self.assertIn("httponly", raw.lower())
+        self.assertIn("samesite=strict", raw.lower())
+
+    def test_new_room_needs_an_account(self):
+        r = self.client.get("/new-room")
+        self.assertIn("You need an account", r.text)
+
+    def test_create_room_by_form_and_land_on_it(self):
+        self.client.post("/register", data={"name": "Ana"})
+        r = self.client.post("/new-room",
+                             data={"name": "Frontier", "seed": "1654267488"},
+                             follow_redirects=True)
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIn("Frontier", r.text)
+        self.assertIn("1654267488", r.text, "a receita não apareceu")
+        self.assertIn("upload your game", r.text.lower(),
+                      "não diz ao dono qual é o próximo passo")
+
+    def test_the_room_belongs_to_who_created_it(self):
+        self.client.post("/register", data={"name": "Ana"})
+        self.client.post("/new-room", data={"name": "R", "seed": "1"})
+        with db.pool().connection() as conn:
+            dono = conn.execute(
+                """SELECT p.display_name FROM room r
+                     JOIN player p ON p.id = r.owner_id""").fetchone()
+        self.assertEqual(dono["display_name"], "Ana")
+
+    def test_a_room_without_a_seed_is_refused_with_the_form_back(self):
+        self.client.post("/register", data={"name": "Ana"})
+        r = self.client.post("/new-room", data={"name": "R", "seed": "  "})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("seed is required", r.text)
+        self.assertIn("<form", r.text, "perdeu o formulário na recusa")
+
+    def test_the_room_quota_holds_on_the_web_too(self):
+        from server.domain.rules import MAX_ROOMS_PER_PLAYER
+        self.client.post("/register", data={"name": "Ana"})
+        for i in range(MAX_ROOMS_PER_PLAYER):
+            self.client.post("/new-room", data={"name": f"R{i}", "seed": "1"})
+        r = self.client.post("/new-room", data={"name": "extra", "seed": "1"})
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("limit", r.text.lower())
+
+    def test_the_front_page_offers_the_way_in(self):
+        r = self.client.get("/")
+        self.assertIn("/register", r.text)
