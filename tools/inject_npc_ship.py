@@ -757,7 +757,8 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
     entregar a um vizinho.
     """
     racks = ship_racks(ship)
-    report: dict = {"racks": len(racks), "cleared": 0, "placed": [], "warnings": []}
+    report: dict = {"racks": len(racks), "used": 0, "cleared": 0,
+                    "placed": [], "warnings": []}
     if not racks:
         report["warnings"].append(
             "esta nave não tem nenhum <inv> de armazém (<feat>/<storage>): "
@@ -772,9 +773,19 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
     if not stock:
         return report
 
-    rack = racks[0]
-    existing = {s.get("elementaryId"): s for s in rack.findall("s")}
-    for ident, amount in stock:
+    # Um recurso por armazem, girando entre eles. A primeira versao empilhava
+    # tudo no racks[0], e no E3 o jogo ofertou 26 de 30 Placas de aco que
+    # estavam la — nunca descobrimos por que, e a concentracao e a suspeita
+    # obvia. Espalhar tambem e o que uma nave de verdade parece: as autenticas
+    # do save tem carga distribuida, nao amontoada num movel so.
+    #
+    # Nao ha teto por armazem aqui de proposito. Chegamos a supor 66 e a medicao
+    # desmentiu: armazens autenticos guardam 1.530, 514, 278 unidades. Inventar
+    # um limite que nao existe seria pior do que nao ter nenhum.
+    by_rack: dict[int, list] = {}
+    for i, (ident, amount) in enumerate(stock):
+        rack = racks[i % len(racks)]
+        existing = {s.get("elementaryId"): s for s in rack.findall("s")}
         stack = existing.get(ident)
         if stack is not None:
             stack.set("inStorage", amount)
@@ -782,8 +793,17 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
             stack = ET.Element("s", {"elementaryId": ident, "inStorage": amount,
                                      **STACK_DEFAULTS})
             attach(rack, stack)
-            existing[ident] = stack
-        report["placed"].append({"element": ident, "amount": amount})
+        by_rack.setdefault(i % len(racks), []).append(ident)
+        report["placed"].append({"element": ident, "amount": amount,
+                                 "rack": i % len(racks)})
+
+    report["used"] = len(by_rack)
+    if len(stock) > len(racks):
+        report["warnings"].append(
+            f"{len(stock)} recursos consignados para {len(racks)} armazém(ns): "
+            f"alguns dividem móvel. Se o vizinho vir menos do que foi ofertado, "
+            f"é o primeiro lugar para olhar"
+        )
     return report
 
 
@@ -1099,14 +1119,21 @@ def print_report(report: dict, dry_run: bool) -> None:
     print(f"  banca: {bank['credits']} créditos, lado {bank['side']}"
           + (f", molde da nave {bank['template']}" if bank["template"] else ", sem molde"))
     if stock["placed"]:
-        itens = ", ".join(f"{s['element']}×{s['amount']}" for s in stock["placed"])
-        print(f"  estoque: {itens} (em {stock['racks']} armazém/armazéns, "
-              f"{stock['cleared']} pilha(s) anteriores removidas)")
+        itens = ", ".join(f"{s['element']}×{s['amount']} (armazém {s['rack']})"
+                          for s in stock["placed"])
+        print(f"  estoque: {itens}")
+        print(f"           {stock['used']} de {stock['racks']} armazém(ns) usados, "
+              f"{stock['cleared']} pilha(s) anteriores removidas")
     else:
         print(f"  estoque: nenhum ({stock['cleared']} pilha(s) removidas, "
-              f"{stock['racks']} armazém/armazéns)")
+              f"{stock['racks']} armazém/armazéns disponíveis)")
     print(f"  névoa: {fog['fogged']}/{fog['cells']} célula(s) com fg=0, "
           + " ".join(f"{k}={v}" for k, v in fog["shipAttrs"].items()))
+    # Medido no E3: o jogo desfaz tudo isto ao carregar. Fica porque nao custa e
+    # porque a fonte de verdade da nevoa ainda nao foi encontrada, mas prometer
+    # que esconde o interior seria mentira. Ver findings.md, item 10.
+    print("           (o jogo desfaz isto ao carregar — o interior fica "
+          "visível; ver findings.md item 10)")
     print(f"  tamanho da nave montada: {report['bytes']} bytes")
 
     body, fleet = report["body"], report["fleet"]

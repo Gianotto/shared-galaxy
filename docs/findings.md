@@ -162,11 +162,23 @@ O jogo não teleporta mercadoria: um ônibus vai buscar. Entre fechar o negócio
 a carga encostar no armazém passa tempo de jogo, e um save tirado nesse meio —
 que é o caso normal, porque autosave não espera — pega o estado partido.
 
-**Consequência para a conciliação (seção 2.7):** somar `inStorage` é errado. O
-servidor precisa contar os três lugares — `inStorage`, `onTheWayIn` e os itens
-em voo — ou vai ver carga sumir e acusar de perda o que o próprio jogo ainda
-está entregando. Vale também para a devolução: uma sessão pode terminar com
-mercadoria comprada e não entregue.
+**E a entrega tem duas etapas, não uma.** O ônibus larga a mercadoria **em
+caixas no chão da nave**. Só depois um tripulante, um robô ou o jogador leva
+para o depósito — *e só se houver espaço*. Sem espaço, a caixa fica no chão.
+
+Confere com a estrutura: `<items>/<i>` tem `x`, `y` e **`grndTime`** — tempo de
+chão. Na nave do jogador havia 7 caixas paradas, agrupadas na mesma coordenada,
+com `grndTime` perto de 480 e nenhuma com `mo="BeingMoved"`. Não estavam
+viajando: estavam largadas.
+
+**Consequência para a conciliação (seção 2.7):** somar `inStorage` é errado, e
+não é um erro transitório que se resolve sozinho. O servidor precisa contar
+**três lugares** — `inStorage`, `onTheWayIn` e as caixas em `<items>` — porque
+com o depósito cheio a mercadoria pode morar no chão pelo resto da partida.
+Quem somar só a prateleira acusa de perda o que está a três metros dela.
+
+Vale também para a devolução: uma sessão pode terminar com mercadoria comprada,
+entregue e nunca guardada.
 
 ## 9. `<markers>` não é necessário para comerciar
 
@@ -307,19 +319,40 @@ isso.
 A identidade visual continua vindo do `sname` (seção 1.10). O que colide é o
 controle de permissão e a propagação de guerra, não o nome.
 
-## 12. Um armazém tem capacidade, e o excesso não é ofertado
+## 12. O painel de comércio ofertou menos do que o save guardava
 
-O retrato foi montado com 40 Produtos químicos e 30 Placas de aço, e a ferramenta
-pôs os dois no **mesmo** armazém — 70 unidades. O painel de comércio do jogo
-ofereceu 40 e **26**, ou seja 66 no total.
+Não resolvido. Fica registrado porque afeta a consignação e porque a explicação
+fácil está **errada** — vale poupar o próximo de segui-la.
 
-66 é a capacidade aparente do armazém, e o que passa dela fica no arquivo mas não
-é ofertado. A venda debitou corretamente do total real (30 → 25), então o excesso
-existe, só não está à venda.
+O retrato do E3 foi montado com 40 Produtos químicos e 30 Placas de aço, os dois
+no mesmo armazém. O painel de comércio do jogo ofertou 40 e **26**.
 
-**Para o construtor de retratos:** consignar sem respeitar capacidade entrega ao
-vizinho menos do que o dono ofereceu, em silêncio. O estoque precisa ser
-distribuído por armazém, com teto por armazém.
+A primeira hipótese foi capacidade de armazém: 40 + 26 = 66, número redondo
+demais. **A medição desmente.** Armazéns de naves autênticas no mesmo save
+guardam 1.530 unidades em 63 pilhas, 514 em 17, 278 em 22, 269 em 24. Não há
+teto em 66.
+
+A segunda hipótese foi consumo pela tripulação construindo. Também não: o
+`E3-antes` não tem nenhuma célula com `bc="1"` nem `<blueprints>` pendente, e a
+venda debitou de 30 para 25 — as 4 unidades da diferença nunca saíram.
+
+O que sobra é que **a quantidade ofertada não é a quantidade guardada**, e o
+mecanismo não foi encontrado.
+
+**O que foi feito a respeito:** o injetor empilhava toda a consignação no
+primeiro armazém (`racks[0]`), e o relatório dizia "em 2 armazéns" contando os
+disponíveis em vez dos usados. Agora ele distribui um recurso por armazém,
+girando entre eles, e relata em qual cada coisa foi parar. Não é a explicação —
+é remover a suspeita óbvia e parar de mentir no relatório.
+
+**Candidato ainda não excluído:** a mecânica de caixas do item 8. Se o que o
+painel oferta depende de o vendedor conseguir encaixotar e entregar, o número
+ofertado pode ser função de espaço e logística da nave vendedora, não do
+estoque. Isso explicaria por que ofertado e guardado divergem sem nada sumir.
+
+**Como fechar isto:** consignar um recurso só, num armazém só, em quantidade
+redonda, e comparar o ofertado com o guardado. Se der diferença de novo, o
+mecanismo não é concentração.
 
 ## 13. Miudezas
 
