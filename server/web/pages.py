@@ -1,42 +1,48 @@
 """
-As paginas da sala.
+The room pages.
 
-E o degrau 2 da secao 2.11, e o mais importante da estrategia de adocao: a
-pessoa ve o mundo compartilhado vivo e decide se quer entrar, **sem instalar
-nada**. Nao ha app, nao ha conta, nao ha download — so um endereco.
+This is step 2 of section 2.11, and the most important part of the adoption
+plan: someone sees the shared world alive and decides whether to join, **without
+installing anything**. No app, no account, no download — just an address.
 
-Por isso tudo aqui e HTML gerado no servidor, com o SVG do mapa desenhado em
-Python. Sem build de frontend, sem framework, sem pacote de terceiro no
-navegador: quem abrir o codigo-fonte da pagina entende o que ela faz. Numa
-comunidade que — com razao — desconfia de aplicativo desconhecido, isso nao e
-gosto pessoal, e argumento.
+That is why everything here is server-rendered HTML with the map's SVG drawn in
+Python. No frontend build, no framework, no third-party package in the browser:
+whoever opens the page source understands what it does. In a community that —
+rightly — distrusts unknown applications, that is an argument, not a taste.
 
-O mapa desenha os sistemas na posicao da estrela de cada um, e marca onde cada
-jogador esta. As coordenadas vem da galaxia da sala, guardada uma vez quando o
-primeiro save entrou.
+The map places each system at its star's position and marks where each player
+is. Coordinates come from the room's galaxy, stored once when the first save
+arrived.
 """
 
 from __future__ import annotations
 
 import html
 
-# Tamanho do desenho. A galaxia medida tem 900000 x 400000, proporcao 2,25:1.
+from server.web.i18n import t
+
+# Drawing size. The measured galaxy is 900000 x 400000, a 2.25:1 ratio.
 MAP_W = 900
 MAP_PAD = 30
 
 
-def _esc(valor) -> str:
-    return html.escape(str(valor)) if valor is not None else ""
+def _esc(value) -> str:
+    return html.escape(str(value)) if value is not None else ""
 
 
-def layout(title: str, body: str, subtitle: str = "") -> str:
-    """O molde comum. Escuro porque o assunto e um mapa estelar.
+def layout(title: str, body: str, lang: str, subtitle: str = "",
+           path: str = "/") -> str:
+    """The shared shell.
 
-    ESCAPA o titulo. Quem chama passa texto cru — escapar dos dois lados
-    produzia `&amp;lt;script&amp;gt;` na tela, que e seguro e ilegivel.
-    `body` e `subtitle` vem prontos, com o HTML que o chamador montou.
+    ESCAPES the title. Callers pass raw text — escaping on both sides produced
+    `&amp;lt;script&amp;gt;` on screen, which is safe and unreadable. `body` and
+    `subtitle` arrive as finished HTML.
     """
-    return f"""<!doctype html><html lang="pt-BR"><meta charset="utf-8">
+    other = "pt" if lang == "en" else "en"
+    sep = "&" if "?" in path else "?"
+    switch = (f'<a href="{_esc(path)}{sep}lang={other}">'
+              f'{"Português" if other == "pt" else "English"}</a>')
+    return f"""<!doctype html><html lang="{lang}"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_esc(title)}</title>
 <style>
@@ -50,6 +56,7 @@ def layout(title: str, body: str, subtitle: str = "") -> str:
   h1 {{ font-size:1.6rem; margin:0 0 .2rem; }}
   h2 {{ font-size:1.05rem; margin:2.2rem 0 .6rem; font-weight:600; }}
   .sub {{ color:var(--dim); margin:0 0 1.6rem; }}
+  .lang {{ float:right; font-size:.85rem; }}
   table {{ width:100%; border-collapse:collapse; }}
   th,td {{ text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line); }}
   th {{ color:var(--dim); font-weight:600; font-size:.85rem;
@@ -71,139 +78,235 @@ def layout(title: str, body: str, subtitle: str = "") -> str:
            color:var(--dim); font-size:.85rem; }}
 </style>
 <div class="wrap">
+<p class="lang">{switch}</p>
 <h1>{_esc(title)}</h1>
 <p class="sub">{subtitle}</p>
 {body}
 <footer>
-<p><b>Space Haven</b> é um jogo da <a href="https://bugbyte.fi/">Bugbyte Ltd.</a>
-Este é um projeto independente, feito por fã: não é oficial, não tem endosso e
-não tem vínculo com ela. Nada aqui altera o jogo.</p>
-<p><a href="/">salas</a> · <a href="/privacidade">o que acontece com o seu
-save</a> · <a href="https://github.com/Gianotto/shared-galaxy">o código</a></p>
+<p>{t("disclaimer", lang)}</p>
+<p><a href="/?lang={lang}">{t("rooms", lang)}</a> ·
+   <a href="/privacy?lang={lang}">{t("privacy_link", lang)}</a> ·
+   <a href="https://github.com/Gianotto/shared-galaxy">{t("code", lang)}</a></p>
 </footer>
 </div></html>"""
 
 
-def room_list(rooms: list) -> str:
+def room_list(rooms: list, lang: str) -> str:
     if not rooms:
-        corpo = ("<p>Nenhuma sala aberta ainda. Quem criar a primeira define a "
-                 "galáxia que todos vão dividir.</p>")
+        body = f'<p>{t("no_rooms", lang)}</p>'
     else:
-        cartoes = "".join(f"""
+        cards = "".join(f"""
   <div class="card">
-    <h3><a href="/sala/{_esc(r['id'])}">{_esc(r['name'])}</a></h3>
+    <h3><a href="/room/{_esc(r['id'])}?lang={lang}">{_esc(r['name'])}</a></h3>
     <p class="sub" style="margin:0">
-      {r['players']}/{r['max_players']} jogadores
-      {'· <span class="tag">com senha</span>' if r['has_password'] else ''}
+      {r['players']}/{r['max_players']} {t("players", lang)}
+      {f'· <span class="tag">{t("has_password", lang)}</span>' if r['has_password'] else ''}
     </p>
   </div>""" for r in rooms)
-        corpo = f'<div class="cards">{cartoes}</div>'
-    return layout(
-        "Galáxia Compartilhada", corpo,
-        "Várias pessoas jogando Space Haven na mesma galáxia, cada uma no seu "
-        "próprio jogo.")
+        body = f'<div class="cards">{cards}</div>'
+    return layout(t("site", lang), body, lang, t("tagline", lang), "/")
 
 
-def starmap_svg(galaxy: dict, roster: list) -> str:
-    """O mapa da sala, desenhado no servidor.
+def starmap_svg(galaxy: dict, roster: list, lang: str) -> str:
+    """The room map, drawn on the server.
 
-    Cada sistema e um ponto na posicao da estrela dele. Onde ha jogador, o ponto
-    vira um circulo maior com o nome da nave — e o `sname` e o que distingue um
-    jogador do outro, porque nao existe identidade de jogador dentro do save.
+    Each system is a dot at its star's position. Where there are players, the
+    dot becomes a larger circle labelled with the ship name — and `sname` is
+    what tells one player from another, because there is no player identity
+    inside a save.
     """
-    sistemas = galaxy.get("systems") or []
-    if not sistemas:
-        return ('<p class="sub">O mapa aparece quando o primeiro jogador '
-                'entrar: é o save dele que define a galáxia da sala.</p>')
+    systems = galaxy.get("systems") or []
+    if not systems:
+        return f'<p class="sub">{t("map_later", lang)}</p>'
 
-    gw = galaxy.get("w") or max(s["x"] for s in sistemas) or 1
-    gh = galaxy.get("h") or max(s["y"] for s in sistemas) or 1
-    escala = (MAP_W - 2 * MAP_PAD) / gw
-    altura = gh * escala + 2 * MAP_PAD
+    gw = galaxy.get("w") or max(s["x"] for s in systems) or 1
+    gh = galaxy.get("h") or max(s["y"] for s in systems) or 1
+    scale = (MAP_W - 2 * MAP_PAD) / gw
+    height = gh * scale + 2 * MAP_PAD
 
     def px(s):
-        return MAP_PAD + s["x"] * escala, MAP_PAD + s["y"] * escala
+        return MAP_PAD + s["x"] * scale, MAP_PAD + s["y"] * scale
 
-    # Onde ha gente, por systemId.
-    gente: dict = {}
+    here: dict = {}
     for p in roster:
         if p["at_system"]:
-            gente.setdefault(str(p["at_system"]), []).append(p)
+            here.setdefault(str(p["at_system"]), []).append(p)
 
-    pontos, marcas = [], []
-    for s in sistemas:
+    dots, marks = [], []
+    for s in systems:
         x, y = px(s)
-        aqui = gente.get(str(s["systemId"]))
-        titulo = _esc(s["name"] or f"sistema {s['systemId']}")
-        if aqui:
-            nomes = ", ".join(_esc(p["ship_name"] or p["display_name"])
-                              for p in aqui)
-            jogando = any(p["playing"] for p in aqui)
-            cor = "var(--on)" if jogando else "var(--me)"
-            marcas.append(
+        people = here.get(str(s["systemId"]))
+        title = _esc(s["name"] or f'system {s["systemId"]}')
+        if people:
+            names = ", ".join(_esc(p["ship_name"] or p["display_name"])
+                              for p in people)
+            playing = any(p["playing"] for p in people)
+            colour = "var(--on)" if playing else "var(--me)"
+            marks.append(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="none" '
-                f'stroke="{cor}" stroke-width="1.5" opacity=".9">'
-                f'<title>{titulo} — {nomes}</title></circle>'
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.5" fill="{cor}"/>'
-                f'<text x="{x:.1f}" y="{y - 11:.1f}" fill="{cor}" '
-                f'font-size="10" text-anchor="middle">{nomes}</text>')
+                f'stroke="{colour}" stroke-width="1.5" opacity=".9">'
+                f'<title>{title} — {names}</title></circle>'
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.5" fill="{colour}"/>'
+                f'<text x="{x:.1f}" y="{y - 11:.1f}" fill="{colour}" '
+                f'font-size="10" text-anchor="middle">{names}</text>')
         else:
-            pontos.append(
+            dots.append(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.6" fill="#3d4a72" '
-                f'opacity=".55"><title>{titulo}</title></circle>')
+                f'opacity=".55"><title>{title}</title></circle>')
 
-    return (f'<svg class="map" viewBox="0 0 {MAP_W} {altura:.0f}" '
-            f'role="img" aria-label="mapa da galáxia da sala">'
-            f'{"".join(pontos)}{"".join(marcas)}</svg>')
+    return (f'<svg class="map" viewBox="0 0 {MAP_W} {height:.0f}" '
+            f'role="img" aria-label="galaxy map">'
+            f'{"".join(dots)}{"".join(marks)}</svg>')
 
 
-def room_page(room: dict, roster: list, galaxy: dict) -> str:
-    mapa = starmap_svg(galaxy, roster)
+def room_page(room: dict, roster: list, galaxy: dict, lang: str) -> str:
+    map_svg = starmap_svg(galaxy, roster, lang)
 
     if roster:
-        linhas = "".join(f"""
+        rows = "".join(f"""
     <tr>
       <td>{_esc(p['display_name'])}</td>
       <td>{_esc(p['ship_name'] or '—')}</td>
       <td>{_esc(p['at_system'] or '—')}</td>
       <td>{_esc(p['at_celeid'] or '—')}</td>
-      <td>{_esc(f"{float(p['game_day']):.1f}") if p['game_day'] else '—'}</td>
-      <td>{'<span class="tag on">jogando</span>' if p['playing'] else ''}</td>
+      <td>{_esc(f"{float(p['age_days']):.1f} {t('days', lang)}") if p['age_days'] else '—'}</td>
+      <td>{f'<span class="tag on">{t("playing", lang)}</span>' if p['playing'] else ''}</td>
     </tr>""" for p in roster)
-        tabela = f"""<table>
-  <tr><th>jogador</th><th>nave</th><th>sistema</th><th>corpo</th>
-      <th>dia</th><th></th></tr>{linhas}</table>"""
+        table = f"""<table>
+  <tr><th>{t("th_player", lang)}</th><th>{t("th_ship", lang)}</th>
+      <th>{t("th_system", lang)}</th><th>{t("th_body", lang)}</th>
+      <th>{t("th_age", lang)}</th><th></th></tr>{rows}</table>"""
     else:
-        tabela = ('<p class="sub">Ninguém entrou ainda. O primeiro save a subir '
-                  'define a galáxia desta sala.</p>')
+        table = f'<p class="sub">{t("nobody_yet", lang)}</p>'
 
-    receita = room.get("options") or {}
-    itens = "".join(f"<li>{_esc(k)}: <b>{_esc(v)}</b></li>"
-                    for k, v in sorted(receita.items()))
-    como = f"""
-<h2>Como entrar</h2>
-<p>Crie uma partida no Space Haven com esta seed e estas opções. A seed reproduz
-a galáxia inteira, mas não a sua tripulação nem a sua nave — mesmo universo,
-gente diferente.</p>
+    if room["password_hash"]:
+        how = (f'<h2>{t("how_to_join", lang)}</h2>'
+               f'<p class="sub">{t("locked_room", lang)}</p>')
+    else:
+        recipe = room.get("options") or {}
+        items = "".join(f"<li>{_esc(k)}: <b>{_esc(v)}</b></li>"
+                        for k, v in sorted(recipe.items()))
+        how = f"""
+<h2>{t("how_to_join", lang)}</h2>
+<p>{t("how_intro", lang)}</p>
 <ul>
-  <li>seed: <code>{_esc(room['seed'])}</code></li>
-  {itens or '<li class="sub">o dono da sala ainda não publicou as opções</li>'}
+  <li>{t("seed", lang)}: <code>{_esc(room['seed'])}</code></li>
+  {items or f'<li class="sub">{t("no_options_yet", lang)}</li>'}
 </ul>
-<p>Depois, suba o save:</p>
-<pre>python3 tools/sgalaxy.py entrar {_esc(room['id'])} --save CAMINHO/DA/PARTIDA</pre>
-<p class="sub">Opção de criação diferente dá outra galáxia, e o servidor recusa
-o save — com o motivo.</p>""" if not room["password_hash"] else """
-<h2>Como entrar</h2>
-<p class="sub">Esta sala tem senha. Peça ao dono a seed e as opções de
-criação.</p>"""
+<p>{t("then_upload", lang)}</p>
+<pre>python3 tools/sgalaxy.py join {_esc(room['id'])} --save PATH/TO/GAME</pre>
+<p class="sub">{t("wrong_options", lang)}</p>"""
 
-    corpo = f"""{mapa}
-<h2>Quem está onde</h2>
-{tabela}
-{como}"""
+    body = f"""{map_svg}
+<h2>{t("who_is_where", lang)}</h2>
+{table}
+{how}"""
     return layout(
-        room["name"],
-        corpo,
-        f'sala <code>{_esc(room["id"])}</code> · '
-        f'{len(roster)}/{room["max_players"]} jogadores · '
-        f'empréstimo de {room["lease_hours"]}h')
+        room["name"], body, lang,
+        f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '
+        f'{len(roster)}/{room["max_players"]} {t("players", lang)} · '
+        f'{t("lease_of", lang)} {room["lease_hours"]}h',
+        f'/room/{room["id"]}')
+
+
+# ---------------------------------------------------------------------------
+# The data policy
+# ---------------------------------------------------------------------------
+
+# Section 2.11 says to write this **before** it exists, in plain language, where
+# people read it before joining. The savegame editor promises nothing leaves
+# your computer; this server breaks that promise, and pretending otherwise would
+# be the worst possible mistake.
+#
+# It lives here as prose rather than in i18n.py because it is two pages of text,
+# not a handful of labels, and a policy split across dozens of dictionary keys is
+# a policy nobody proofreads.
+
+PRIVACY = {
+    "en": """
+<h2>What is uploaded</h2>
+<p><b>The entire savegame</b>, zipped: the <code>game</code> file, the ships, the
+sectors and the binaries the game writes alongside them. Not a summary — your
+whole run.</p>
+
+<h2>Where to</h2>
+<p>To this server, run by a private individual. There is no company behind it,
+no third party receiving a copy, and nothing is forwarded to another service.</p>
+
+<h2>Who can see it</h2>
+<p>Whoever administers the server has technical access to the files — no
+encryption prevents that, and saying otherwise would be a lie. Other players in
+the same room will see, once the next stage exists, only a <b>storefront</b>: a
+shop with the name you choose and only the goods you consign. Your actual hold
+is not in that copy.</p>
+
+<h2>For how long</h2>
+<p>The last 20 versions of each save, per room. Older ones are deleted
+automatically. If you leave, everything goes at once.</p>
+
+<h2>What personal data</h2>
+<p><b>None.</b> We do not ask for an email, a real name, a password or a Steam
+login. Your identity here is a random code the server generates and keeps only a
+cryptographic digest of. The consequence is harsh and honest: <b>losing the code
+means losing the account</b>, and there is no recovery.</p>
+
+<h2>How to delete everything and leave</h2>
+<p>One call, and there is no second-guessing step:</p>
+<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=delete%20everything" \\
+     -H "Authorization: Bearer YOUR-TOKEN"</pre>
+<p>It deletes your account and all your saves. Rooms you created that still have
+other players stay up — erasing them would destroy the saves of people who asked
+for nothing — but they leave the public listing and your token is invalidated.</p>
+
+<h2>What cannot be promised</h2>
+<p>The game runs on your machine, on files you can edit. There is no way to stop
+anyone from altering their own save, and this project does not pretend
+otherwise: the design is cooperative, and the server <b>checks</b> rather than
+guesses. Anyone promising absolute security hasn't thought about it.</p>
+""",
+    "pt": """
+<h2>O que sobe</h2>
+<p><b>O savegame inteiro</b>, compactado: o arquivo <code>game</code>, as naves,
+os setores e os binários que o jogo grava junto. Não é um resumo — é a sua
+partida completa.</p>
+
+<h2>Para onde</h2>
+<p>Para este servidor, mantido por um particular. Não há empresa por trás, não há
+terceiro recebendo cópia, e nada é enviado para outro serviço.</p>
+
+<h2>Quem enxerga</h2>
+<p>Quem administra o servidor tem acesso técnico aos arquivos — não há
+criptografia que impeça isso, e dizer o contrário seria mentira. Outros jogadores
+da mesma sala verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
+uma loja com o nome que você escolher e só a mercadoria que você consignar. O seu
+porão de verdade não entra nessa cópia.</p>
+
+<h2>Por quanto tempo</h2>
+<p>As últimas 20 versões de cada save, por sala. As mais antigas são apagadas
+sozinhas. Se você sair, apaga tudo na hora.</p>
+
+<h2>Que dado pessoal</h2>
+<p><b>Nenhum.</b> Não pedimos e-mail, nome real, senha ou login de Steam. A sua
+identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
+resumo criptográfico. A consequência é dura e é honesta: <b>quem perde o código
+perde a conta</b>, e não há como recuperar.</p>
+
+<h2>Como apagar tudo e sair</h2>
+<p>Uma chamada, e não há etapa de arrependimento:</p>
+<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=delete%20everything" \\
+     -H "Authorization: Bearer SEU-TOKEN"</pre>
+<p>Apaga a sua conta e todos os seus saves. Salas que você criou e onde há outros
+jogadores continuam de pé — sumir com elas destruiria o save de quem não pediu
+nada —, mas saem da listagem e o seu token é invalidado.</p>
+
+<h2>O que não dá para prometer</h2>
+<p>O jogo roda na sua máquina, em arquivos que você consegue editar. Não há como
+impedir que alguém altere o próprio save, e o projeto não finge que há: o desenho
+é cooperativo, e o servidor <b>confere</b> em vez de adivinhar. Quem promete
+segurança absoluta é quem não pensou no assunto.</p>
+""",
+}
+
+
+def privacy_page(lang: str) -> str:
+    return layout(t("privacy_title", lang), PRIVACY[lang], lang, "", "/privacy")

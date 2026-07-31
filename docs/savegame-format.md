@@ -1,201 +1,208 @@
-# Anatomia de um savegame do Space Haven
+# Anatomy of a Space Haven savegame
 
-Notas levantadas medindo saves reais do jogo 1.0.4, não lendo o código dele.
-Cada afirmação aqui foi verificada carregando o save alterado no jogo e olhando
-o resultado na tela; onde ficou dúvida, está dito.
+*[Leia em português](savegame-format.pt-BR.md)*
 
-O que motivou o levantamento foi uma pergunta específica: dá para vários
-jogadores dividirem uma galáxia, cada um rodando o próprio jogo, com um servidor
-costurando as partes? A resposta acabou sendo mais interessante que a pergunta.
+Notes gathered by measuring real saves from game 1.0.4, not by reading its code.
+Every claim here was verified by loading the modified save into the game and
+looking at the result on screen; where doubt remains, it is said so.
 
-## Como um save é organizado
+What motivated the survey was a specific question: can several players share one
+galaxy, each running their own game, with a server stitching the parts together?
+The answer turned out to be more interesting than the question.
+
+## How a save is organised
 
 ```
 save/
-  game               a partida inteira e o setor onde você está agora
-  ships/shipNNNN     uma nave que está em outro setor, um arquivo por nave
-  info               versão e data
+  game               the whole game and the sector you are in right now
+  ships/shipNNNN     a ship that is in another sector, one file per ship
+  info               version and date
   stats.bin, timeline.xml
 ```
 
-O nome do arquivo de nave é `ship` seguido do `sid` dela. São documentos XML
-soltos, com `<ship>` na raiz, sem cabeçalho, terminando em quebra de linha.
+The ship file's name is `ship` followed by its `sid`. They are loose XML
+documents, with `<ship>` at the root, no header, ending in a line break.
 
-A divisão importa: **`game/ships` são as naves do setor carregado**, e `ships/`
-são as que estão longe. Mover uma nave entre os dois é o que o jogo faz quando
-você viaja.
+The split matters: **`game/ships` are the ships of the loaded sector**, and
+`ships/` are the ones that are far away. Moving a ship between the two is what
+the game does when you travel.
 
-## Identificadores
+## Identifiers
 
-`masterData/@idCounter` é o contador global do save: toda entidade nova —
-personagem, nave, objeto — tira o `entId` dali. Reservar um id e avançar o
-contador é o que o editor faz para criar tripulante sem colidir com nada.
+`masterData/@idCounter` is the save's global counter: every new entity —
+character, ship, object — takes its `entId` from there. Reserving an id and
+advancing the counter is what the editor does to create a crew member without
+colliding with anything.
 
-Os ids **dentro** de uma nave (`id`, `eid`) são locais a ela. Duas naves que
-convivem no mesmo save compartilham 448 ids sem conflito nenhum, o que torna
-copiar uma nave inteira uma operação barata: só o `sid` e os `entId` da
-tripulação precisam ser renumerados.
+The ids **inside** a ship (`id`, `eid`) are local to it. Two ships living in the
+same save share 448 ids without any conflict, which makes copying a whole ship a
+cheap operation: only the `sid` and the crew's `entId` need renumbering.
 
-Consumo observado do contador global: 55 num jogo recém-criado, 4.539 no dia 37,
-62.174 no dia 124. O teto de um inteiro de 32 bits está a quatro ordens de
-grandeza de distância.
+Observed consumption of the global counter: 55 in a freshly created game, 4,539
+on day 37, 62,174 on day 124. The ceiling of a 32-bit integer is four orders of
+magnitude away.
 
-`starmap/@objectIdCounter` é um contador à parte, para frotas e objetos do mapa
-estelar.
+`starmap/@objectIdCounter` is a separate counter, for fleets and star map
+objects.
 
-## O mapa estelar e a seed
+## The star map and the seed
 
-`<starmap>` guarda o tamanho da galáxia (`w`, `h`) e a lista de sistemas. Cada
-sistema tem:
+`<starmap>` holds the galaxy's size (`w`, `h`) and the list of systems. Each
+system has:
 
-- `sn` e `smn`: nome longo e curto, **em hexadecimal**
-- `bodies/l`: estrela, planetas, luas, asteroides, campos de asteroides. Cada
-  corpo tem semente própria, tipo, `celeid`, raio de órbita (`ox`, `oy`) e de
-  quem orbita (`centerId`)
-- `emptySectors/l`: o resto do terreno — campos de asteroides, destroços,
-  bases, minas
-- `clouds`: nebulosas
+- `sn` and `smn`: long and short name, **in hexadecimal**
+- `bodies/l`: star, planets, moons, asteroids, asteroid fields. Each body has
+  its own seed, type, `celeid`, orbit radius (`ox`, `oy`) and what it orbits
+  (`centerId`)
+- `emptySectors/l`: the rest of the terrain — asteroid fields, debris, bases,
+  mines
+- `clouds`: nebulae
 
-**A seed digitada na criação reproduz a galáxia inteira.** Dois jogos criados
-com a mesma seed e as mesmas opções deram mapas idênticos: mesmos sistemas,
-mesmos corpos com as mesmas sementes, mesmos setores de terreno, mesmo ponto de
-partida. Isso é a fundação de qualquer ideia de universo compartilhado, porque
-significa que uma coordenada quer dizer a mesma coisa para todos os jogadores, e
-que os ids de corpo celeste são vocabulário comum.
+**The seed typed at creation reproduces the whole galaxy.** Two games created
+with the same seed and the same options gave identical maps: same systems, same
+bodies with the same seeds, same terrain sectors, same starting point. This is
+the foundation of any shared-universe idea, because it means a coordinate means
+the same thing to every player, and celestial body ids are common vocabulary.
 
-**A seed não reproduz o resto.** A tripulação inicial sai diferente (outros
-nomes, outros atributos, outras perícias), o nome da nave muda, e o interior das
-naves não bate: na nave inicial 338 de 630 elementos coincidem, e a nave
-abandonada do setor inicial tem 414 elementos num jogo e 407 no outro.
+**The seed does not reproduce the rest.** The starting crew comes out different
+(other names, other attributes, other skills), the ship's name changes, and the
+insides of the ships do not match: on the starting ship 338 out of 630 elements
+coincide, and the abandoned ship in the starting sector has 414 elements in one
+game and 407 in the other.
 
-O save **não guarda a seed** que foi digitada — o atributo `seed` da raiz veio
-`0` em todas as partidas examinadas, inclusive em galáxias completamente
-diferentes. Quem quiser comparar precisa anotar a seed por fora.
+The save **does not store the seed** that was typed — the root's `seed`
+attribute came out as `0` in every game examined, including completely different
+galaxies. Anyone wanting to compare has to write the seed down elsewhere.
 
-`tools/compare_galaxy.py` monta uma impressão digital do mundo gerado e compara
-saves. Ele ignora de propósito o que muda enquanto se joga: a posição e a fase
-orbital dos corpos, os setores temporários (missões, naves no mapa, ofertas de
-novo lar) e o nome dos sistemas, que num save recém-criado ainda está vazio e só
-aparece depois.
+`tools/compare_galaxy.py` builds a fingerprint of the generated world and
+compares saves. It deliberately ignores what changes while you play: the
+position and orbital phase of the bodies, the temporary sectors (missions, ships
+on the map, new home offers) and the system names, which in a freshly created
+save are still empty and only show up later.
 
-## Onde o jogador está
+## Where the player is
 
-Três coisas precisam concordar:
+Three things have to agree:
 
-| Onde | O quê |
+| Where | What |
 |---|---|
-| `<f isPlayer="true">` dentro do `<fleets>` de um corpo celeste | a frota |
-| `starmap/@pa` | o `id` do corpo onde ela está — **não** o `celeid` |
-| `starmap/@sys` | o `systemId` do sistema |
+| `<f isPlayer="true">` inside a celestial body's `<fleets>` | the fleet |
+| `starmap/@pa` | the `id` of the body it is at — **not** the `celeid` |
+| `starmap/@sys` | the system's `systemId` |
 
-Mudar os três realoca o jogador, e o jogo aceita sem reclamar. O corpo de
-destino costuma não ter `<fleets>`; é preciso criar, entre `<stuff>` e `<info>`.
+Changing all three relocates the player, and the game accepts it without
+complaint. The destination body usually has no `<fleets>`; it has to be created,
+between `<stuff>` and `<info>`.
 
-Um corpo celeste tem **dois** ids: `id`, local ao save e tirado de
-`starmap/@objectIdCounter`, e `celeid`, derivado da seed e portanto igual em
-todo save da mesma galáxia. `@pa` aponta para o `id`. Ver `findings.md`, item 1.
+A celestial body has **two** ids: `id`, local to the save and taken from
+`starmap/@objectIdCounter`, and `celeid`, derived from the seed and therefore
+the same in every save of the same galaxy. `@pa` points at the `id`. See
+`findings.md`, item 1.
 
-Dois detalhes de apresentação, no `<info>` do corpo:
+Two presentation details, in the body's `<info>`:
 
-- `visited` e `isVisible` controlam o rótulo "Unvisited sector" e se o lugar
-  aparece no mapa. Num jogo novo o **próprio setor inicial** vem com os dois
-  desligados, e o jogo os liga em algum momento da partida.
-- `isst="1"` aparece uma única vez no save, sempre num asteroide: é a origem do
-  jogador. Ele e `pa` coincidem num jogo novo e divergem depois que a pessoa
-  viaja, então são conceitos separados.
+- `visited` and `isVisible` control the "Unvisited sector" label and whether the
+  place shows on the map. In a new game the **starting sector itself** comes
+  with both turned off, and the game turns them on at some point during play.
+- `isst="1"` appears exactly once in the save, always on an asteroid: it is the
+  player's origin. It and `pa` coincide in a new game and diverge once the
+  person travels, so they are separate concepts.
 
-## Do que um setor carregado é feito
+## What a loaded sector is made of
 
-| Nó | Conteúdo | Ao mudar de setor |
+| Node | Content | On changing sector |
 |---|---|---|
-| `<space>` | células de rocha, campos de minério, ordens de mineração | fica |
-| `<ships>` | naves presentes | as de lá ficam, a sua vai |
-| `<spaceItems>` | itens soltos flutuando | fica |
-| `<crafts>` | naves pequenas atracadas, ligadas por `homeSid` | vão com você |
+| `<space>` | rock cells, ore fields, mining orders | stays |
+| `<ships>` | ships present | the local ones stay, yours goes |
+| `<spaceItems>` | loose items floating around | stays |
+| `<crafts>` | small docked ships, linked by `homeSid` | go with you |
 
-O `<space>` é montado a partir do `<stuff>` do corpo celeste: os minérios
-listados em `<mining>/<toMine>` são exatamente os que o corpo declara.
+The `<space>` is built from the celestial body's `<stuff>`: the ores listed in
+`<mining>/<toMine>` are exactly the ones the body declares.
 
-**O jogo não regenera o setor ao carregar.** Realocar o jogador sem tocar no
-`<space>` leva o cenário antigo junto; esvaziar o `<space>` deixa a pessoa no
-vácuo, e o flag `visited` não muda isso. A geração de um setor só acontece
-durante uma viagem feita dentro do jogo. Esvaziar dá para fazer com precisão;
-preencher, não — para isso seria preciso escrever um gerador de campo de
-asteroides, e o formato é conhecido mas o resultado não teria a cara do que o
-jogo desenha.
+**The game does not regenerate the sector on load.** Relocating the player
+without touching the `<space>` takes the old scenery along; emptying the
+`<space>` leaves the person in the void, and the `visited` flag does not change
+that. A sector is only generated during a trip made inside the game. Emptying
+can be done precisely; filling cannot — that would require writing an asteroid
+field generator, and the format is known but the result would not look like what
+the game draws.
 
-## De quem é uma nave
+## Who a ship belongs to
 
-Descoberto na marra, testando quatro hipóteses erradas antes:
+Found out the hard way, after testing four wrong hypotheses:
 
-**`<ship>/<settings>` tem `of` (id da facção) e `owner` (nome do lado).** É isso
-que manda. Uma nave copiada da sua continua sendo sua enquanto esses dois
-disserem `461` e `Player`, mesmo que a tripulação seja de outra facção e mesmo
-que exista uma frota de NPC registrada apontando para ela.
+**`<ship>/<settings>` has `of` (faction id) and `owner` (side name).** That is
+what rules. A ship copied from yours stays yours as long as those two say `461`
+and `Player`, even if the crew belongs to another faction and even if an NPC
+fleet is registered pointing at it.
 
-Registrar a nave numa frota do mapa estelar também é necessário — um `<f>` no
-corpo celeste, com `factionId`, `isPlayer="false"` e um `<createdShips><l>` cujo
-`createdShipId` é o `sid` da nave e `created="true"`.
+Registering the ship in a star map fleet is also necessary — an `<f>` on the
+celestial body, with `factionId`, `isPlayer="false"` and a `<createdShips><l>`
+whose `createdShipId` is the ship's `sid` and `created="true"`.
 
-Sem dono declarado o jogo improvisa, e o improviso depende da tripulação:
+With no declared owner the game improvises, and the improvisation depends on the
+crew:
 
-- tripulação `Player`: o jogo entrega a nave inteira para você
-- tripulação de outra facção: o jogo trata as pessoas como náufragos, seu ônibus
-  vai buscá-las e a nave vira destroço reivindicável
+- `Player` crew: the game hands you the whole ship
+- crew of another faction: the game treats the people as castaways, your shuttle
+  goes to fetch them and the ship becomes a claimable derelict
 
-Naves de NPC costumam ter três nós que a sua não tem: `<asi>` (a IA — rádio,
-postura de combate), `<shipBank>` (créditos próprios e regras de preço, é com
-isso que ela negocia) e `<markers>`. Uma nave sem `<shipBank>` não tem com que
-comerciar; existe precedente disso no jogo.
+NPC ships usually have three nodes that yours does not: `<asi>` (the AI — radio,
+combat stance), `<shipBank>` (its own credits and pricing rules, this is what it
+trades with) and `<markers>`. A ship without a `<shipBank>` has nothing to trade
+with; there is precedent for this in the game.
 
-## Quem enxerga o quê
+## Who sees what
 
-O interior de uma nave alheia **não** é escondido pelos dados da nave. Uma nave
-de NPC autêntica, transplantada de outro save com toda a sua névoa (`fg="0"` em
-cada célula), `unex="1"` e `forceRoof="1"`, continuou aberta.
+The inside of someone else's ship is **not** hidden by the ship's data. An
+authentic NPC ship, transplanted from another save with all its fog (`fg="0"` on
+every cell), `unex="1"` and `forceRoof="1"`, stayed open.
 
-Quem manda é `hostmap/map/l`, a tabela de relações entre facções, por par:
+What rules is `hostmap/map/l`, the table of relations between factions, per
+pair:
 
-| Permissão | O que governa |
+| Permission | What it governs |
 |---|---|
-| `accessTrade` | comerciar |
-| `accessShip` | subir na nave |
-| `accessVision` | ver dentro dela |
-| `accessHire` | contratar a tripulação |
+| `accessTrade` | trading |
+| `accessShip` | boarding the ship |
+| `accessVision` | seeing inside it |
+| `accessHire` | hiring the crew |
 
-Num jogo novo o jogador começa **Friendly** com Civis, Mercantes e Militares, com
-relação na casa dos 70, e as permissões vêm todas ligadas — por isso se enxerga
-o interior das naves deles logo no primeiro dia. Com o tempo a relação decai
-para Neutral e as portas fecham. Desligar `accessVision` fecha o interior na
-hora.
+In a new game the player starts **Friendly** with Civilians, Traders and
+Military, with relationship around 70, and the permissions all come turned on —
+which is why you can see the inside of their ships on the very first day. Over
+time the relationship decays to Neutral and the doors close. Turning
+`accessVision` off closes the interior immediately.
 
-Destroços são outro mecanismo: ficam registrados no `<stuff>` do corpo com
-`derelict="true"` e só se revelam abordando, independente de facção.
+Derelicts are a different mechanism: they are registered in the body's `<stuff>`
+with `derelict="true"` and only reveal themselves on boarding, regardless of
+faction.
 
-## O que o jogo entrega de graça
+## What the game gives away for free
 
-Uma nave de outra facção parada no seu setor oferece **HAIL, TRADE e MISSIONS**
-sem que nada precise ser construído, e chega a gerar missão própria. Para a
-ideia de comércio entre jogadores isso é significativo: a interface já existe,
-é nativa, e funciona sem os dois jogadores estarem online — a nave fica ali como
-uma loja aberta.
+A ship of another faction sitting in your sector offers **HAIL, TRADE and
+MISSIONS** without anything needing to be built, and it even generates a mission
+of its own. For the idea of trading between players this is significant: the
+interface already exists, it is native, and it works without both players being
+online — the ship sits there like an open shop.
 
-O que uma nave dessas negocia é o estoque e os créditos **dela**, não os do
-jogo. Quem monta o retrato decide o que fica exposto.
+What such a ship trades is **its** stock and credits, not the game's. Whoever
+builds the portrait decides what gets put on show.
 
-## Resumo do que dá e do que não dá
+## Summary of what works and what does not
 
-Dá, verificado no jogo:
+Works, verified in the game:
 
-- reproduzir a mesma galáxia em vários saves pela seed
-- mover o jogador para qualquer corpo celeste, em qualquer sistema
-- descarregar um setor por completo, peça por peça
-- inserir a nave de outro jogador como NPC legítimo, com dono, frota, comércio e
-  interior fechado
-- criar tripulante, mover carga, ajustar relações entre facções
+- reproducing the same galaxy across several saves from the seed
+- moving the player to any celestial body, in any system
+- unloading a sector completely, piece by piece
+- inserting another player's ship as a legitimate NPC, with owner, fleet, trade
+  and a closed interior
+- creating a crew member, moving cargo, adjusting relations between factions
 
-Não dá, de fora do jogo:
+Does not work, from outside the game:
 
-- gerar o cenário de um setor novo
-- fazer qualquer coisa aparecer num jogo que está aberto: o jogo reescreve o
-  save ao gravar, então o que vem de fora só entra entre sessões
+- generating the scenery of a new sector
+- making anything appear in a game that is open: the game rewrites the save when
+  it saves, so anything coming from outside only gets in between sessions

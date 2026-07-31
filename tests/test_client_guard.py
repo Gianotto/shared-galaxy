@@ -150,7 +150,7 @@ class MostAdvancedTestCase(unittest.TestCase):
         _p, qual, _d = client.most_advanced(self.tmp.name)
         self.assertEqual(qual, "save")
 
-    def test_compares_game_day_not_file_time(self):
+    def test_compares_age_days_not_file_time(self):
         """Depois de uma queda o relógio do sistema não diz quanto se jogou."""
         antigo = self._estado("autosave1", 30.0)
         recente = self._estado("save", 5.0)

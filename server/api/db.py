@@ -155,7 +155,7 @@ def room_roster(conn: psycopg.Connection, room_id: str) -> list:
     return conn.execute(
         """SELECT m.player_id, p.display_name, m.ship_name, m.at_system,
                   m.at_celeid, m.joined_at, m.last_seen_at,
-                  v.game_day, v.created_at AS canonical_at,
+                  v.age_days, v.created_at AS canonical_at,
                   (l.id IS NOT NULL) AS playing
              FROM membership m
              JOIN player p        ON p.id = m.player_id
@@ -180,9 +180,9 @@ def count_players(conn: psycopg.Connection, room_id: str) -> int:
 def add_version(conn: psycopg.Connection, version: dict) -> dict:
     return conn.execute(
         """INSERT INTO save_version (room_id, player_id, sha256, bytes, kind,
-                                     game_day, galaxy_digest)
+                                     age_days, galaxy_digest)
            VALUES (%(room_id)s, %(player_id)s, %(sha256)s, %(bytes)s,
-                   %(kind)s, %(game_day)s, %(galaxy_digest)s)
+                   %(kind)s, %(age_days)s, %(galaxy_digest)s)
            RETURNING *""", version).fetchone()
 
 
@@ -195,7 +195,7 @@ def player_versions(conn: psycopg.Connection, room_id: str,
                     player_id: int) -> list:
     """Do mais novo para o mais velho, que e a ordem que a poda espera."""
     return conn.execute(
-        """SELECT id, sha256, bytes, kind, game_day, created_at
+        """SELECT id, sha256, bytes, kind, age_days, created_at
              FROM save_version
             WHERE room_id = %s AND player_id = %s
             ORDER BY created_at DESC, id DESC""",

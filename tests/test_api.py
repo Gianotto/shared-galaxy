@@ -379,17 +379,17 @@ class PrivacyTestCase(unittest.TestCase):
         return r.json()
 
     def test_policy_page_is_served_and_says_the_hard_parts(self):
-        r = self.client.get("/privacidade")
+        r = self.client.get("/privacy")
         self.assertEqual(r.status_code, 200)
-        for trecho in ("savegame inteiro", "perde a conta", "apagar tudo",
-                       "não finge", "Bugbyte"):
+        for trecho in ("entire savegame", "losing the account",
+                       "delete%20everything", "does not pretend", "Bugbyte"):
             self.assertIn(trecho, r.text, f"a política não diz {trecho!r}")
 
     def test_delete_requires_explicit_confirmation(self):
         player = self._player()
         r = self.client.delete("/api/v1/me", headers=self._auth(player))
         self.assertEqual(r.status_code, 400)
-        self.assertIn("apagar tudo", r.json()["detail"])
+        self.assertIn("delete everything", r.json()["detail"])
 
     def test_delete_removes_account_saves_and_blobs(self):
         """A promessa de 'apagar tudo e sair' vale se o disco esvaziar."""
@@ -400,12 +400,12 @@ class PrivacyTestCase(unittest.TestCase):
                          content=_save_zip(), headers=self._auth(player))
         self.assertEqual(self.client.get("/api/v1/health").json()["storage"]["blobs"], 1)
 
-        r = self.client.delete("/api/v1/me?confirm=apagar tudo",
+        r = self.client.delete("/api/v1/me?confirm=delete everything",
                                headers=self._auth(player))
         self.assertEqual(r.status_code, 200, r.text)
         self.assertTrue(r.json()["deleted"])
         self.assertEqual(self.client.get("/api/v1/health").json()["storage"]["blobs"], 0,
-                         "o save continuou no disco depois de 'apagar tudo'")
+                         "the save stayed on disk after 'delete everything'")
         # E o token para de funcionar.
         self.assertEqual(
             self.client.get("/api/v1/me", headers=self._auth(player)).status_code, 401)
@@ -421,7 +421,7 @@ class PrivacyTestCase(unittest.TestCase):
         self.client.post(f"/api/v1/rooms/{room['id']}/join",
                          content=_save_zip(), headers=self._auth(vizinho))
 
-        r = self.client.delete("/api/v1/me?confirm=apagar tudo",
+        r = self.client.delete("/api/v1/me?confirm=delete everything",
                                headers=self._auth(dono))
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["roomsKept"], 1)
@@ -526,7 +526,7 @@ class WebPagesTestCase(unittest.TestCase):
                                 headers=self._auth(player)).json()
         self.client.post(f"/api/v1/rooms/{room['id']}/join",
                          content=_save_zip(), headers=self._auth(player))
-        r = self.client.get(f"/sala/{room['id']}")
+        r = self.client.get(f"/room/{room['id']}")
         self.assertEqual(r.status_code, 200)
         self.assertIn("1654267488", r.text, "a receita não apareceu")
         self.assertIn("Compact", r.text)
@@ -536,12 +536,12 @@ class WebPagesTestCase(unittest.TestCase):
         player = self._player()
         room = self.client.post("/api/v1/rooms", json={"seed": "1"},
                                 headers=self._auth(player)).json()
-        antes = self.client.get(f"/sala/{room['id']}").text
+        antes = self.client.get(f"/room/{room['id']}").text
         self.assertNotIn("<svg", antes, "desenhou mapa sem galáxia definida")
 
         self.client.post(f"/api/v1/rooms/{room['id']}/join",
                          content=_save_zip(), headers=self._auth(player))
-        depois = self.client.get(f"/sala/{room['id']}").text
+        depois = self.client.get(f"/room/{room['id']}").text
         self.assertIn("<svg", depois, "não desenhou o mapa depois do primeiro save")
 
     def test_locked_room_does_not_publish_the_seed_on_the_web(self):
@@ -550,11 +550,11 @@ class WebPagesTestCase(unittest.TestCase):
         room = self.client.post("/api/v1/rooms",
                                 json={"seed": "SEGREDO123", "password": "x"},
                                 headers=self._auth(player)).json()
-        r = self.client.get(f"/sala/{room['id']}")
+        r = self.client.get(f"/room/{room['id']}")
         self.assertNotIn("SEGREDO123", r.text)
 
     def test_unknown_room_is_a_clean_404(self):
-        self.assertEqual(self.client.get("/sala/NAOEXISTE").status_code, 404)
+        self.assertEqual(self.client.get("/room/NOSUCHROOM").status_code, 404)
 
     def test_room_name_is_escaped(self):
         """Nome de sala é texto de quem criou, e a página é pública."""
@@ -563,6 +563,6 @@ class WebPagesTestCase(unittest.TestCase):
             "/api/v1/rooms",
             json={"seed": "1", "name": "<script>alert(1)</script>"},
             headers=self._auth(player)).json()
-        r = self.client.get(f"/sala/{room['id']}")
+        r = self.client.get(f"/room/{room['id']}")
         self.assertNotIn("<script>alert(1)</script>", r.text)
         self.assertIn("&lt;script&gt;", r.text)

@@ -1,5 +1,7 @@
 # Experimento de comércio
 
+*[Read in English](trade-experiment.md)*
+
 O experimento que decide a fase 3 do projeto. Está na seção 2.12 do documento de
 projeto como a suposição mais cara ainda não testada:
 

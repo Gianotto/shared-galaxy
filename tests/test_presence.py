@@ -51,10 +51,10 @@ class PresenceTestCase(unittest.TestCase):
         folder = self._save(synthetic.build_game())
         self.assertEqual(presence.read(folder)["celeid"], "102")
 
-    def test_game_day_comes_from_info(self):
+    def test_age_days_comes_from_info(self):
         folder = self._save(synthetic.build_game(),
                             info='<info version="21" date="864000"/>')
-        self.assertEqual(presence.read(folder)["gameDay"], 10.0)
+        self.assertEqual(presence.read(folder)["ageDays"], 10.0)
 
     def test_counts_every_ship_but_names_only_the_player_one(self):
         ships = [synthetic.default_player_ship(), synthetic.npc_trader_ship()]
@@ -71,7 +71,7 @@ class PresenceTestCase(unittest.TestCase):
                                       synthetic.build_game())
         os.remove(os.path.join(folder, "info"))
         here = presence.read(folder)
-        self.assertIsNone(here["gameDay"])
+        self.assertIsNone(here["ageDays"])
         self.assertEqual(here["shipName"], "Homestead")
 
     def test_survives_a_folder_that_is_not_a_save(self):

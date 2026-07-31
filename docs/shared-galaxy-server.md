@@ -1,195 +1,201 @@
-# Galáxia Compartilhada — projeto do servidor
+# Shared Galaxy — server design
 
-Documento de projeto para um servidor que permite a vários jogadores de Space
-Haven dividirem a mesma galáxia, cada um rodando o próprio jogo, sem que uma
-linha do código do jogo seja alterada.
+*[Leia em português](shared-galaxy-server.pt-BR.md)*
 
-Escrito para ser lido sozinho, por quem for implementar o servidor num
-repositório separado. Tudo que está aqui como fato foi medido carregando saves
-alterados no jogo 1.0.4 e olhando o resultado; o que é suposição está marcado
-como tal.
+Design document for a server that lets several Space Haven players share one
+galaxy, each running their own game, without a single line of the game's code
+being changed.
 
-Projeto de origem, onde as ferramentas de leitura e escrita de save já existem:
+Written to be read on its own, by whoever implements the server in a separate
+repository. Everything stated here as fact was measured by loading modified
+saves into game 1.0.4 and looking at the result; what is an assumption is marked
+as such.
+
+Origin project, where the tools for reading and writing saves already exist:
 <https://github.com/Gianotto/Space-Haven-SaveGameEditor>
 
 ---
 
-# Parte 1 — O que o jogo permite
+# Part 1 — What the game allows
 
-## 1.1 O que não dá para fazer, e por quê
+## 1.1 What cannot be done, and why
 
-Antes do desenho, os três limites que o moldam. Nenhum deles se contorna de
-fora do jogo.
+Before the design, the three limits that shape it. None of them can be worked
+around from outside the game.
 
-**A simulação não roda sem o cliente.** Não existe modo headless. As classes de
-simulação do jogo (mundo, coisas, IA, mapa estelar) referenciam a biblioteca
-gráfica em 36% a 48% dos casos e chamam direto o pacote de interface em 10% a
-23%. Não há costura para cortar. Um servidor autoritativo que simule o mundo
-está fora de alcance.
+**The simulation does not run without the client.** There is no headless mode.
+The game's simulation classes (world, things, AI, star map) reference the
+graphics library in 36% to 48% of cases and call the interface package directly
+in 10% to 23%. There is no seam to cut. An authoritative server that simulates
+the world is out of reach.
 
-**A simulação não é determinística.** Das classes de simulação que sorteiam,
-312 criam gerador sem semente. Duas máquinas partindo do mesmo estado divergem
-de imediato, então lockstep — a técnica padrão de multiplayer para jogos desse
-gênero — não é viável.
+**The simulation is not deterministic.** Of the simulation classes that draw
+random numbers, 312 create a generator with no seed. Two machines starting from
+the same state diverge immediately, so lockstep — the standard multiplayer
+technique for games of this genre — is not viable.
 
-**O jogo é dono do arquivo enquanto está aberto.** Ele reescreve o save ao
-gravar. Qualquer coisa que o servidor queira colocar dentro do jogo de alguém
-tem que chegar com o jogo fechado.
+**The game owns the file while it is open.** It rewrites the save when it saves.
+Anything the server wants to put inside someone's game has to arrive with the
+game closed.
 
-Existe código de rede no jar (`fi.bugbyte.shared.matchmaking`, 21 classes com
-socket UDP), mas **nenhuma classe do Space Haven o referencia** — é biblioteca
-compartilhada dos outros jogos da Bugbyte, carona morta.
+There is networking code in the jar (`fi.bugbyte.shared.matchmaking`, 21 classes
+with a UDP socket), but **no Space Haven class references it** — it is a shared
+library from Bugbyte's other games, dead weight along for the ride.
 
-## 1.2 Anatomia de um save
+## 1.2 Anatomy of a save
 
 ```
 save/
-  game               a partida inteira e o setor onde o jogador está agora
-  ships/shipNNNN     uma nave que está em outro setor, um arquivo por nave
-  info               versão e data
+  game               the whole game and the sector the player is in right now
+  ships/shipNNNN     a ship that is in another sector, one file per ship
+  info               version and date
   stats.bin, timeline.xml
 ```
 
-O nome do arquivo de nave é `ship` + o `sid` dela. São documentos XML soltos,
-raiz `<ship>`, sem cabeçalho XML, terminando em `</ship>` e quebra de linha.
+The ship file's name is `ship` + its `sid`. They are loose XML documents, root
+`<ship>`, no XML header, ending in `</ship>` and a line break.
 
-A distinção central: **`game/ships` são as naves do setor carregado**; `ships/`
-são as que estão longe. Mover uma nave entre os dois é o que o jogo faz quando
-o jogador viaja.
+The central distinction: **`game/ships` are the ships of the loaded sector**;
+`ships/` are the ones that are far away. Moving a ship between the two is what
+the game does when the player travels.
 
-Tamanho típico: o `game` de uma partida de 124 dias tem 4,5 MB; um save
-recém-criado tem 390 KB.
+Typical size: the `game` of a 124-day game is 4.5 MB; a freshly created save is
+390 KB.
 
-## 1.3 Identificadores
+## 1.3 Identifiers
 
-`masterData/@idCounter` é o contador global do save. Toda entidade nova —
-personagem, nave, objeto — tira o `entId` dali. **Para criar qualquer coisa num
-save, reserve o valor atual e incremente o contador.**
+`masterData/@idCounter` is the save's global counter. Every new entity —
+character, ship, object — takes its `entId` from there. **To create anything in
+a save, reserve the current value and increment the counter.**
 
-Ids **dentro** de uma nave (`id`, `eid`) são locais a ela: duas naves que
-convivem no mesmo save compartilham 448 ids sem conflito. Copiar uma nave
-inteira exige renumerar apenas o `sid` e os `entId` da tripulação.
+Ids **inside** a ship (`id`, `eid`) are local to it: two ships living in the
+same save share 448 ids without conflict. Copying a whole ship requires
+renumbering only the `sid` and the crew's `entId`.
 
-`starmap/@objectIdCounter` é um contador à parte, para frotas e objetos do mapa
-estelar.
+`starmap/@objectIdCounter` is a separate counter, for fleets and star map
+objects.
 
-Consumo observado: 55 num save novo, 4.539 no dia 37, 62.174 no dia 124. Teto de
-inteiro de 32 bits está a quatro ordens de grandeza. **Não há limite prático de
-jogadores por sala vindo daqui**, porque cada save tem o próprio contador e eles
-nunca se encontram — só é preciso renumerar o que for injetado.
+Observed consumption: 55 in a new save, 4,539 on day 37, 62,174 on day 124. The
+ceiling of a 32-bit integer is four orders of magnitude away. **There is no
+practical limit on players per room coming from here**, because each save has
+its own counter and they never meet — all that is needed is renumbering whatever
+is injected.
 
-> O limite vem de outro lugar: **vizinhos visíveis no mesmo setor** competem por
-> facção. O `hostmap` é indexado por par de lados, não por nave, e o jogo tem
-> cerca de nove lados usáveis. Dois vizinhos no mesmo lado deixam de ser
-> controláveis em separado, e uma guerra declarada a um atinge o outro. Ver
+> The limit comes from elsewhere: **neighbours visible in the same sector**
+> compete for factions. The `hostmap` is indexed by pair of sides, not by ship,
+> and the game has about nine usable sides. Two neighbours on the same side stop
+> being separately controllable, and a war declared on one hits the other. See
 > `findings.md`, item 11.
 
-## 1.4 A seed reproduz a galáxia
+## 1.4 The seed reproduces the galaxy
 
-Verificado com dois jogos criados com a seed `1654267488` e as mesmas opções:
+Verified with two games created with seed `1654267488` and the same options:
 
-**Reproduz:** os sistemas (64), os corpos celestes (123) com semente própria,
-tipo, raio de órbita e de quem orbitam, os setores de terreno (99), o tamanho da
-galáxia e **o ponto de partida** (x=75724, y=235080).
+**Reproduces:** the systems (64), the celestial bodies (123) with their own
+seed, type, orbit radius and what they orbit, the terrain sectors (99), the size
+of the galaxy and **the starting point** (x=75724, y=235080).
 
-**Não reproduz:** a tripulação inicial (outros nomes, atributos e perícias), o
-nome da nave do jogador, e o interior das naves — 338 de 630 elementos
-coincidem na nave inicial, e a nave abandonada do setor inicial tem 414
-elementos num jogo e 407 no outro.
+**Does not reproduce:** the starting crew (other names, attributes and skills),
+the name of the player's ship, and the insides of the ships — 338 out of 630
+elements coincide on the starting ship, and the abandoned ship in the starting
+sector has 414 elements in one game and 407 in the other.
 
-Isso é a fundação do projeto: **uma coordenada e um id de corpo celeste
-significam a mesma coisa para todos os jogadores da sala**, sem o servidor
-precisar distribuir mapa nenhum. E cada jogador ganha tripulação própria de
-graça.
+This is the foundation of the project: **a coordinate and a celestial body id
+mean the same thing to every player in the room**, without the server having to
+distribute any map. And every player gets their own crew for free.
 
-**O save não guarda a seed digitada** — o atributo `seed` da raiz vem `0` em
-todas as partidas, inclusive em galáxias completamente diferentes. Quem precisa
-saber a seed de uma sala é o servidor.
+**The save does not store the seed that was typed** — the root's `seed`
+attribute comes out as `0` in every game, including completely different
+galaxies. The one that needs to know a room's seed is the server.
 
-Ferramenta pronta para conferir se duas galáxias são iguais:
-`tools/compare_galaxy.py` no repositório do editor.
+Tool ready for checking whether two galaxies are the same:
+`tools/compare_galaxy.py` in the editor's repository.
 
-## 1.5 Onde o jogador está
+## 1.5 Where the player is
 
-Três coisas precisam concordar:
+Three things have to agree:
 
-| Onde | O quê |
+| Where | What |
 |---|---|
-| `<f isPlayer="true">` dentro do `<fleets>` de um corpo celeste | a frota |
-| `starmap/@pa` | o `id` do corpo onde ela está — **não** o `celeid` |
-| `starmap/@sys` | o `systemId` do sistema |
+| `<f isPlayer="true">` inside a celestial body's `<fleets>` | the fleet |
+| `starmap/@pa` | the `id` of the body it is at — **not** the `celeid` |
+| `starmap/@sys` | the system's `systemId` |
 
-Mudar os três realoca o jogador e o jogo aceita. O corpo de destino em geral não
-tem `<fleets>`; é preciso criar, entre `<stuff>` e `<info>`.
+Changing all three relocates the player and the game accepts it. The destination
+body generally has no `<fleets>`; it has to be created, between `<stuff>` and
+`<info>`.
 
-**Um corpo celeste tem dois ids e confundi-los põe o vizinho no setor errado.**
-`id` é local ao save, tirado de `starmap/@objectIdCounter`; `celeid` vem da seed
-e é o único que significa a mesma coisa para todos os jogadores da sala. `@pa`
-aponta para o `id`. Medido: `@pa=226` casa com `<l id="226" celeid="1689">`, e
-não existe corpo com `celeid=226` no save. Ver `findings.md`, item 1.
+**A celestial body has two ids and confusing them puts the neighbour in the
+wrong sector.** `id` is local to the save, taken from
+`starmap/@objectIdCounter`; `celeid` comes from the seed and is the only one
+that means the same thing to every player in the room. `@pa` points at the `id`.
+Measured: `@pa=226` matches `<l id="226" celeid="1689">`, and there is no body
+with `celeid=226` in the save. See `findings.md`, item 1.
 
-No `<info>` do corpo:
+In the body's `<info>`:
 
-- `visited` e `isVisible` controlam o rótulo "Unvisited sector" e a aparição no
-  mapa. Num jogo novo **o próprio setor inicial vem com os dois desligados** — é
-  comportamento de fábrica, não defeito.
-- `isst="1"` aparece uma vez só no save, sempre num asteroide: é a origem do
-  jogador. Coincide com `pa` num jogo novo e diverge depois que a pessoa viaja.
+- `visited` and `isVisible` control the "Unvisited sector" label and whether it
+  appears on the map. In a new game **the starting sector itself comes with both
+  turned off** — that is factory behaviour, not a defect.
+- `isst="1"` appears exactly once in the save, always on an asteroid: it is the
+  player's origin. It coincides with `pa` in a new game and diverges once the
+  person travels.
 
-## 1.6 Do que um setor carregado é feito
+## 1.6 What a loaded sector is made of
 
-| Nó da raiz | Conteúdo | Ao mudar de setor |
+| Root node | Content | On changing sector |
 |---|---|---|
-| `<space>` | células de rocha, campos de minério, ordens de mineração | fica |
-| `<ships>` | naves presentes | as de lá ficam, a do jogador vai |
-| `<spaceItems>` | itens soltos flutuando | fica |
-| `<crafts>` | naves pequenas atracadas, ligadas por `homeSid` | vão com o jogador |
+| `<space>` | rock cells, ore fields, mining orders | stays |
+| `<ships>` | ships present | the local ones stay, the player's goes |
+| `<spaceItems>` | loose items floating around | stays |
+| `<crafts>` | small docked ships, linked by `homeSid` | go with the player |
 
-O `<space>` é montado a partir do `<stuff>` do corpo celeste: os minérios em
-`<mining>/<toMine>` são exatamente os que o corpo declara.
+The `<space>` is built from the celestial body's `<stuff>`: the ores in
+`<mining>/<toMine>` are exactly the ones the body declares.
 
-**O jogo não regenera o setor ao carregar.** Realocar sem tocar no `<space>`
-leva o cenário antigo junto; esvaziar deixa o jogador no vácuo, e o flag
-`visited` não muda isso. A geração de um setor só acontece durante uma viagem
-feita dentro do jogo.
+**The game does not regenerate the sector on load.** Relocating without touching
+the `<space>` takes the old scenery along; emptying it leaves the player in the
+void, and the `visited` flag does not change that. A sector is only generated
+during a trip made inside the game.
 
-**Consequência de projeto:** o servidor não coloca jogador novo em lugar
-nenhum. Todos nascem em casa e conquistam território voando — o que é melhor de
-jogo, além de mais barato.
+**Design consequence:** the server does not place a new player anywhere. Everyone
+is born at home and takes territory by flying — which makes for a better game,
+besides being cheaper.
 
-## 1.7 De quem é uma nave
+## 1.7 Who a ship belongs to
 
-**`<ship>/<settings>` tem `of` (id da facção) e `owner` (nome do lado). É isso
-que manda.** Uma nave copiada continua sendo do jogador enquanto esses dois
-disserem `461` e `Player`, mesmo com tripulação de outra facção e mesmo com
-frota de NPC registrada apontando para ela.
+**`<ship>/<settings>` has `of` (faction id) and `owner` (side name). That is what
+rules.** A copied ship stays the player's as long as those two say `461` and
+`Player`, even with a crew from another faction and even with an NPC fleet
+registered pointing at it.
 
-Também é necessário registrar a nave numa frota do mapa estelar: um `<f>` no
-`<fleets>` do corpo celeste, com `factionId`, `isPlayer="false"` e:
+Registering the ship in a star map fleet is also necessary: an `<f>` in the
+celestial body's `<fleets>`, with `factionId`, `isPlayer="false"` and:
 
 ```xml
 <createdShips>
   <l seed="..." createdShipId="SID" created="true" station="false"
      shipDamagedNoFTL="false" crew="N" cryoCrew="0" monsters="0" bigMonsters="0"
      hives="0" infesters="0" flybots="0" walkers="0" roboBase="0"
-     derelict="false" addLoot="false" inHyper="false" sx="LARGURA" sy="ALTURA"/>
+     derelict="false" addLoot="false" inHyper="false" sx="WIDTH" sy="HEIGHT"/>
 </createdShips>
 ```
 
-Sem dono declarado o jogo improvisa, e o improviso depende da tripulação:
+With no declared owner the game improvises, and the improvisation depends on the
+crew:
 
-- tripulação `Player` → o jogo entrega a nave inteira ao jogador
-- tripulação de outra facção → o jogo trata as pessoas como náufragos, o ônibus
-  do jogador vai buscá-las e a nave vira destroço reivindicável
+- `Player` crew → the game hands the whole ship to the player
+- crew of another faction → the game treats the people as castaways, the
+  player's shuttle goes to fetch them and the ship becomes a claimable derelict
 
-Naves de NPC costumam ter três nós que a do jogador não tem:
+NPC ships usually have three nodes the player's does not:
 
-- `<asi>` — a IA da nave: rádio, cooldowns de saudação, postura de combate
-- `<shipBank>` — créditos próprios e regras de preço. **É com isso que ela
-  negocia.** Sem esse nó a nave não tem como comerciar
-- `<markers>` — pontos de atracagem
+- `<asi>` — the ship's AI: radio, hail cooldowns, combat stance
+- `<shipBank>` — its own credits and pricing rules. **This is what it trades
+  with.** Without this node the ship has no way to trade
+- `<markers>` — docking points
 
-Exemplo real de `<shipBank>`:
+Real `<shipBank>` example:
 
 ```xml
 <shipBank s="Civilian" ca="12309" cr="0" slp="10066" blp="9891" spmd="2">
@@ -200,261 +206,270 @@ Exemplo real de `<shipBank>`:
 </shipBank>
 ```
 
-## 1.8 Quem enxerga o quê
+## 1.8 Who sees what
 
-O interior de uma nave alheia **não** é escondido pelos dados da nave. Uma nave
-de NPC autêntica, transplantada de outro save com `fg="0"` em cada célula,
-`unex="1"` e `forceRoof="1"`, continuou aberta.
+The inside of someone else's ship is **not** hidden by the ship's data. An
+authentic NPC ship, transplanted from another save with `fg="0"` on every cell,
+`unex="1"` and `forceRoof="1"`, stayed open.
 
-Quem manda é `hostmap/map/l`, a tabela de relações entre facções, por par:
+What rules is `hostmap/map/l`, the table of relations between factions, per
+pair:
 
-| Permissão | O que governa |
+| Permission | What it governs |
 |---|---|
-| `accessTrade` | comerciar |
-| `accessShip` | subir na nave |
-| `accessVision` | ver dentro dela |
-| `accessHire` | contratar a tripulação |
+| `accessTrade` | trading |
+| `accessShip` | boarding the ship |
+| `accessVision` | seeing inside it |
+| `accessHire` | hiring the crew |
 
-Num jogo novo o jogador começa **Friendly** com Civis, Mercantes e Militares,
-relação na casa dos 70, e as permissões vêm todas ligadas — por isso se enxerga
-o interior das naves deles no primeiro dia. Com o tempo a relação decai para
-Neutral e as portas fecham.
+In a new game the player starts **Friendly** with Civilians, Traders and
+Military, relationship around 70, and the permissions all come turned on — which
+is why you can see the inside of their ships on the first day. Over time the
+relationship decays to Neutral and the doors close.
 
-**Essa tabela é o painel de controle do servidor** sobre o que um jogador pode
-fazer com o retrato do outro.
+**That table is the server's control panel** over what one player can do with
+another's portrait.
 
-> **Corrigido em 2026-07-31 pelo E3 e pelo E3b.** `accessVision="false"` **não**
-> fecha o interior: atravessa o load intacto e a nave continua visível.
-> `accessTrade` **funciona**, e é ele que sustenta a seção 2.6.
+> **Corrected on 2026-07-31 by E3 and E3b.** `accessVision="false"` does **not**
+> close the interior: it survives the load intact and the ship stays visible.
+> `accessTrade` **works**, and it is what holds up section 2.6.
 >
-> A névoa tem outra fonte de verdade. Medido com uma variável só: um retrato
-> feito a partir de uma nave de NPC nunca explorada **fica escondido**; feito a
-> partir de uma nave de jogador, o jogo apaga `unex`/`forceRoof` e restaura o
-> `fg` original. Como o retrato de um vizinho seria a nave dele, e nave de
-> jogador é sempre explorada, **o retrato nasce revelado**.
+> The fog has a different source of truth. Measured with a single variable: a
+> portrait built from a never-explored NPC ship **stays hidden**; built from a
+> player's ship, the game erases `unex`/`forceRoof` and restores the original
+> `fg`. Since a neighbour's portrait would be their ship, and a player's ship is
+> always explored, **the portrait is born revealed**.
 >
-> Isso força uma decisão de desenho — aceitar a exposição visual, ou montar o
-> retrato sobre um casco de NPC em vez da nave do vizinho. Ver `findings.md`,
+> This forces a design decision — accept the visual exposure, or build the
+> portrait on an NPC hull instead of the neighbour's ship. See `findings.md`,
 > item 10.
 >
-> Sobre roubo, ver 2.7: não há trava, mas abordar declara guerra.
+> On theft, see 2.7: there is no lock, but boarding declares war.
 
-Destroços são outro mecanismo: registrados no `<stuff>` do corpo com
-`derelict="true"`, só se revelam abordando, independente de facção.
+Derelicts are a different mechanism: registered in the body's `<stuff>` with
+`derelict="true"`, they only reveal themselves on boarding, regardless of
+faction.
 
-## 1.9 O que o jogo entrega de graça
+## 1.9 What the game gives away for free
 
-Uma nave de outra facção parada no setor do jogador oferece **HAIL, TRADE e
-MISSIONS** sem que nada seja construído, e chega a gerar missão própria.
-Verificado: dá para comerciar sem nunca ter tido contato com a tripulação.
+A ship of another faction sitting in the player's sector offers **HAIL, TRADE
+and MISSIONS** with nothing built, and it even generates a mission of its own.
+Verified: you can trade without ever having had contact with the crew.
 
-Para o projeto isso é decisivo: **a interface de comércio entre jogadores não
-precisa ser inventada.** Ela é nativa, e funciona sem os dois estarem online.
+For the project this is decisive: **the trading interface between players does
+not have to be invented.** It is native, and it works without both being online.
 
-O que uma nave dessas negocia é o estoque e os créditos **dela**, não os do
-jogo. Quem monta o retrato decide o que fica exposto.
+What such a ship trades is **its** stock and credits, not the game's. Whoever
+builds the portrait decides what gets put on show.
 
-## 1.10 Não existe identidade de jogador no save
+## 1.10 There is no player identity in the save
 
-Procurado e não encontrado: `steam`, `account`, `userId`, `playerId`, prefixo de
-SteamID64 — zero ocorrências. O que existe é `settings/@f = 461` (a facção do
-jogador, igual em todo save do mundo), a frota `id=0` e o `playerBank`.
+Searched for and not found: `steam`, `account`, `userId`, `playerId`, SteamID64
+prefix — zero occurrences. What exists is `settings/@f = 461` (the player's
+faction, the same in every save in the world), the `id=0` fleet and the
+`playerBank`.
 
-O jogo tem integração com Steam no jar, inclusive tickets de autenticação, mas
-nada disso chega ao savegame.
+The game has Steam integration in the jar, including authentication tickets, but
+none of it reaches the savegame.
 
-**A identidade tem que ser do servidor.** Vantagens: funciona para cópias fora
-da Steam, não depende de API nenhuma, e dentro do próprio save "eu" é sempre a
-facção 461, sem ambiguidade.
+**Identity has to be the server's.** Advantages: it works for copies outside
+Steam, it depends on no API, and inside the save itself "me" is always faction
+461, with no ambiguity.
 
-Como o jogo tem um conjunto fixo de facções, dois vizinhos podem cair na mesma.
-**Quem distingue um jogador do outro na tela é o nome da nave** (`sname`), que é
-texto livre.
+Since the game has a fixed set of factions, two neighbours can land on the same
+one. **What distinguishes one player from another on screen is the ship's name**
+(`sname`), which is free text.
 
 ---
 
-# Parte 2 — Projeto do servidor
+# Part 2 — Server design
 
-## 2.1 Princípios
+## 2.1 Principles
 
-**O servidor é dono da verdade.** Ele guarda o save de cada jogador, empresta a
-cada sessão e recebe de volta. O jogador não tem cópia canônica.
+**The server owns the truth.** It keeps each player's save, lends it out for
+each session and gets it back. The player has no canonical copy.
 
-**Cooperativo, não competitivo.** Cada um roda o jogo na própria máquina, em
-arquivos que consegue abrir. Um desenho onde se vence derrotando os outros pede
-exatamente o comportamento que não dá para policiar. Um desenho onde se
-sobrevive porque os vizinhos abastecem torna a trapaça sem graça.
+**Cooperative, not competitive.** Everyone runs the game on their own machine,
+on files they can open. A design where you win by defeating the others invites
+exactly the behaviour that cannot be policed. A design where you survive because
+the neighbours supply you makes cheating pointless.
 
-**Sai contínuo, entra entre sessões.** O autosave alimenta o servidor enquanto
-se joga; o que vem de volta chega na próxima abertura.
+**Out continuously, in between sessions.** The autosave feeds the server while
+you play; what comes back arrives at the next opening.
 
-## 2.2 Identidade e salas
+## 2.2 Identity and rooms
 
-Conta criada no servidor, token guardado no cliente. Sem Steam.
+Account created on the server, token kept on the client. No Steam.
 
-Uma **sala** é:
+A **room** is:
 
-| Campo | Descrição |
+| Field | Description |
 |---|---|
-| `id` | identificador curto |
-| `seed` | a seed de criação, que define a galáxia |
-| `options` | as opções exatas de criação (dificuldade e os 21 parâmetros de cenário) |
-| `password` | opcional |
-| `roster` | jogadores, com o save canônico de cada um |
-| `world` | estado compartilhado: quem está onde, consignações, eventos |
+| `id` | short identifier |
+| `seed` | the creation seed, which defines the galaxy |
+| `options` | the exact creation options (difficulty and the 21 scenario parameters) |
+| `password` | optional |
+| `roster` | players, each with their canonical save |
+| `world` | shared state: who is where, consignments, events |
 
-A listagem mostra nome, número de jogadores, e se tem senha. O cliente pede a
-senha só na hora de entrar.
+The listing shows the name, the number of players, and whether it has a
+password. The client asks for the password only at the moment of joining.
 
-Por enquanto: um servidor, uma sala, uma seed. A estrutura já nasce por sala
-para não precisar refazer.
+For now: one server, one room, one seed. The structure is born per-room so that
+it does not have to be redone.
 
-**As opções de criação importam tanto quanto a seed.** Dois jogos com a mesma
-seed e opções diferentes não dão a mesma galáxia. A sala precisa publicar as
-opções e o cliente precisa conferi-las no save que receber.
+**The creation options matter as much as the seed.** Two games with the same
+seed and different options do not give the same galaxy. The room has to publish
+the options and the client has to check them against the save it receives.
 
-## 2.3 Entrada de um jogador novo
+## 2.3 A new player joining
 
-É o único momento que exige o jogador, por causa de 1.6 — o servidor não
-consegue gerar uma colônia inicial.
+It is the only moment that requires the player, because of 1.6 — the server
+cannot generate a starting colony.
 
-1. o cliente mostra a seed da sala e as opções exatas
-2. o jogador cria a partida no jogo, normalmente
-3. o cliente sobe o save recém-criado
-4. o servidor confere que a galáxia bate com a da sala (impressão digital, ver
-   `tools/compare_galaxy.py`) e adota o save como canônico daquele jogador
+1. the client shows the room's seed and the exact options
+2. the player creates the game in the game itself, normally
+3. the client uploads the freshly created save
+4. the server checks that the galaxy matches the room's (fingerprint, see
+   `tools/compare_galaxy.py`) and adopts the save as that player's canonical one
 
-Uma vez só. Depois disso o servidor é dono.
+Once only. After that the server owns it.
 
-Se a impressão digital não bater, o save é recusado com a explicação — quase
-sempre é opção de criação diferente.
+If the fingerprint does not match, the save is refused with an explanation —
+almost always it is a different creation option.
 
-## 2.4 Ciclo de uma sessão
+## 2.4 The session cycle
 
 ```
-retirada  → o servidor monta o save do jogador, com vizinhos e entregas
-            pendentes já dentro, e entrega ao cliente
-jogo      → o cliente grava numa pasta dedicada da sala e o jogador joga
-batimento → o cliente observa os autosaves e manda o estado ao servidor
-devolução → o cliente sobe o save final; o servidor concilia e guarda
+checkout  → the server assembles the player's save, with neighbours and pending
+            deliveries already inside, and hands it to the client
+play      → the client saves into a folder dedicated to the room and the player plays
+heartbeat → the client watches the autosaves and sends the state to the server
+return    → the client uploads the final save; the server reconciles and stores it
 ```
 
-**Prazo de retirada.** Quem não devolve volta ao estado de quando pegou. Isso
-tapa o buraco de "só devolvo a sessão que foi boa" e resolve cliente travado.
+**Checkout deadline.** Whoever does not return goes back to the state they
+picked up. This plugs the "I only return the session that went well" hole and
+handles a stuck client.
 
-**Recuperação de queda.** O jogo pode fechar sozinho. O cliente precisa
-conseguir devolver o último autosave, e o servidor valida igual.
+**Crash recovery.** The game can close on its own. The client has to be able to
+return the last autosave, and the server validates it the same way.
 
-**O último batimento é o que fica.** Depois que o jogador desconecta, é esse
-estado que os outros veem.
+**The last heartbeat is what stands.** After the player disconnects, that is the
+state the others see.
 
-## 2.5 O que o servidor injeta na retirada
+## 2.5 What the server injects at checkout
 
-**O retrato não é a nave do vizinho. É uma vitrine.**
+**The portrait is not the neighbour's ship. It is a shop window.**
 
-A primeira versão deste documento mandava copiar a nave dele. O E3b mostrou que
-não dá: a névoa de uma nave só se sustenta se a nave de origem nunca foi
-explorada, e a nave de um jogador é sempre explorada. O retrato nasceria com o
-teto aberto e a tripulação à mostra (`findings.md`, item 10).
+The first version of this document said to copy their ship. E3b showed that this
+does not work: a ship's fog only holds up if the source ship was never explored,
+and a player's ship is always explored. The portrait would be born with the roof
+open and the crew on show (`findings.md`, item 10).
 
-Então o servidor monta uma loja, não uma cópia. Para cada vizinho da sala cuja
-frota esteja no mesmo corpo celeste:
+So the server builds a shop, not a copy. For every neighbour in the room whose
+fleet is at the same celestial body:
 
-1. **um casco de NPC tirado do próprio save de destino**, nunca explorado, com
-   `sid` novo do `masterData/@idCounter`. Vem de dentro do save do jogador, o
-   que também resolve a regra da seção 2.13: nada de conteúdo do jogo é
-   redistribuído, porque nada sai da instalação dele
-2. `entId` novo para cada tripulante do casco, do mesmo contador
-3. `<ship>/<settings>` com `of` e `owner` da facção escolhida
-4. `<shipBank>` contendo **apenas o que aquele jogador consignou**, com `ca`
-   limitando quanto ela consegue comprar
-5. os armazéns esvaziados e preenchidos só com o consignado, um recurso por
-   armazém
-6. **a névoa não se toca.** O casco já nasce escondido; escrever nela é o que
-   não funciona
-7. uma frota `<f>` no corpo celeste, com `createdShipId` apontando para o `sid`
-8. no `hostmap`, as permissões daquela facção: `accessTrade` conforme a relação,
-   `accessVision` e `accessShip` desligados
+1. **an NPC hull taken from the destination save itself**, never explored, with
+   a new `sid` from `masterData/@idCounter`. It comes from inside the player's
+   own save, which also settles the rule in section 2.13: no game content is
+   redistributed, because nothing leaves their installation
+2. a new `entId` for each of the hull's crew members, from the same counter
+3. `<ship>/<settings>` with the `of` and `owner` of the chosen faction
+4. a `<shipBank>` containing **only what that player consigned**, with `ca`
+   limiting how much it can buy
+5. the storages emptied and filled only with the consigned goods, one resource
+   per storage
+6. **the fog is not touched.** The hull is born hidden already; writing to the
+   fog is the thing that does not work
+7. an `<f>` fleet on the celestial body, with `createdShipId` pointing at the
+   `sid`
+8. in the `hostmap`, that faction's permissions: `accessTrade` according to the
+   relationship, `accessVision` and `accessShip` turned off
 
-O nome da nave (`sname`) carrega a identidade do jogador dono.
+The ship's name (`sname`) carries the identity of the owning player.
 
-**O que se ganha, além da névoa.** O retrato deixa de herdar a fila de
-construção da nave de origem — no E3 a tripulação começou a construir e a
-consumir o estoque consignado. Fica pequeno: um casco de vitrine em vez de
-460 KB de nave alheia por vizinho. E a planta da nave de ninguém viaja.
+**What is gained, beyond the fog.** The portrait no longer inherits the source
+ship's build queue — in E3 the crew started building and consuming the consigned
+stock. It stays small: a shop-window hull instead of 460 KB of someone else's
+ship per neighbour. And nobody's ship layout travels.
 
-**O que se perde,** e é real: a sala não mostra mais *a nave do Fulano*. Isso
-volta pelo mapa web da seção 2.11, onde não custa nada e ninguém precisa
-confiar em ninguém para ver.
+**What is lost,** and it is real: the room no longer shows *So-and-so's ship*.
+That comes back through the web map of section 2.11, where it costs nothing and
+nobody has to trust anybody to see it.
 
-Entregas pendentes (compras fechadas, presentes) entram direto no porão da nave
-do jogador, como pilhas em um `<inv>` de armazém.
+Pending deliveries (closed purchases, gifts) go straight into the hold of the
+player's ship, as stacks in a storage's `<inv>`.
 
-## 2.6 Consignação e conciliação
+## 2.6 Consignment and reconciliation
 
-O medo legítimo é: "alguém compra todo o meu estoque e eu abro o jogo sem nada".
+The legitimate fear is: "someone buys my entire stock and I open the game with
+nothing."
 
-O desenho que resolve: **banca de feira, não porão.**
+The design that solves it: **market stall, not cargo hold.**
 
-- o jogador consigna o que quer vender; **só isso entra no retrato**
-- o resto do estoque não existe naquela cópia, então ninguém pode comprar
-- os créditos do `ca` limitam quanto aquela nave consegue comprar
-- na conciliação o servidor desconta do consignado e credita o vendedor
-- o porão real nunca fica exposto
+- the player consigns what they want to sell; **only that goes into the
+  portrait**
+- the rest of the stock does not exist in that copy, so nobody can buy it
+- the `ca` credits limit how much that ship can buy
+- at reconciliation the server deducts from the consignment and credits the
+  seller
+- the real hold is never exposed
 
-Segunda trava: as permissões por facção. Um vizinho pode negociar sem enxergar o
-porão; um desafeto não negocia nem se aproxima.
+Second lock: the per-faction permissions. A neighbour can trade without seeing
+the hold; someone you are on bad terms with neither trades nor comes near.
 
-## 2.7 Postura sobre trapaça
+## 2.7 Stance on cheating
 
-O jogo roda na máquina do jogador, em arquivos que ele consegue editar. Isso não
-tem solução, e o documento não finge que tem.
+The game runs on the player's machine, on files they can edit. There is no
+solution to this, and the document does not pretend there is.
 
-O que dá para fazer, e é bastante:
+What can be done, and it is a lot:
 
-- **fim do save scumming.** Existe uma cópia só e o servidor sabe qual é.
-  Recarregar um save antigo não é aceito
-- **fim da duplicação por sessão paralela**
-- **conferência, não adivinhação.** O servidor montou o arquivo que entregou,
-  então na devolução ele compara os dois e pergunta: quanto tempo passou e
-  quanto os módulos produziriam nele? de onde vieram esses créditos? essa carga
-  cabia na nave que a transportou? esse tripulante estava a bordo na saída? essa
-  pesquisa tinha pontos?
+- **the end of save scumming.** There is a single copy and the server knows
+  which one it is. Reloading an old save is not accepted
+- **the end of duplication via parallel session**
+- **checking, not guessing.** The server assembled the file it handed over, so
+  on return it compares the two and asks: how much time passed and how much
+  would the modules produce in it? where did these credits come from? did this
+  cargo fit in the ship that carried it? was this crew member on board at
+  checkout? did this research have the points?
 
-Divergência não precisa virar punição automática. Pode virar sinalização, e num
-mundo cooperativo isso costuma bastar.
+A discrepancy does not have to become an automatic punishment. It can become a
+flag, and in a cooperative world that usually suffices.
 
-**E o jogo ajuda mais do que este documento supunha.** Não há trava contra
-abordar a nave de outra facção e pegar o que tem dentro — mas fazer isso
-**declara guerra** e derruba a reputação com aquele lado. O dissuasor é nativo, e
-a prova fica no `hostmap` do save devolvido: `stance` virando `Enemies`, queda de
-`relationship`, `awareOfCrew`. O servidor entregou o arquivo e recebe de volta,
-então enxerga tudo isso. Roubar o vizinho não é impedido; é **registrado e
-caro**. Ver `findings.md`, item 10.
+**And the game helps more than this document assumed.** There is no lock against
+boarding another faction's ship and taking what is inside — but doing that
+**declares war** and tanks the reputation with that side. The deterrent is
+native, and the evidence sits in the returned save's `hostmap`: `stance` turning
+to `Enemies`, a drop in `relationship`, `awareOfCrew`. The server handed the
+file over and gets it back, so it sees all of that. Robbing the neighbour is not
+prevented; it is **recorded and expensive**. See `findings.md`, item 10.
 
-## 2.8 Responsabilidades do cliente
+## 2.8 The client's responsibilities
 
-O cliente é a evolução do editor de savegame, que já lê e grava um save byte a
-byte sem perturbar nada que não foi pedido.
+The client is the evolution of the savegame editor, which already reads and
+writes a save byte by byte without disturbing anything that was not asked for.
 
-- autenticar, listar salas, entrar
-- gerenciar uma pasta de savegame por sala
-- **nunca escrever com o jogo aberto** — detectar o processo e recusar. É a
-  regra que evita destruir a partida de alguém
-- observar os autosaves e mandar batimento
-- subir o save final ao detectar que o jogo fechou
-- mostrar o mapa da sala entre sessões
+- authenticate, list rooms, join
+- manage one savegame folder per room
+- **never write with the game open** — detect the process and refuse. It is the
+  rule that keeps someone's game from being destroyed
+- watch the autosaves and send heartbeats
+- upload the final save on detecting that the game has closed
+- show the room's map between sessions
 
-## 2.9 Como o cliente conversa com o jogo
+## 2.9 How the client talks to the game
 
-**Princípio que não se negocia: a simulação é da Bugbyte e não se toca nela.**
-Tudo que este projeto faz é ler e gravar savegame — o mesmo que jogadores fazem
-na mão há anos. O servidor é uma camada ao lado do jogo, nunca dentro dele.
+**A non-negotiable principle: the simulation is Bugbyte's and it is not
+touched.** All this project does is read and write savegames — the same thing
+players have been doing by hand for years. The server is a layer beside the
+game, never inside it.
 
-### O launcher é configurável
+### The launcher is configurable
 
-O executável `spacehaven` não é o jogo: é um launcher nativo de 86 KB que lê
-`config.json`, cria uma JVM e carrega a classe principal.
+The `spacehaven` executable is not the game: it is an 86 KB native launcher that
+reads `config.json`, creates a JVM and loads the main class.
 
 ```json
 {
@@ -464,182 +479,187 @@ O executável `spacehaven` não é o jogo: é um launcher nativo de 86 KB que l�
 }
 ```
 
-Nas strings do binário aparecem `Error: no 'mainClass' element found in config!`
-e a assinatura de `URLClassLoader`. Classpath e classe principal são
-configuráveis por arquivo de texto, e as classes do jogo não estão ofuscadas.
+In the binary's strings you find
+`Error: no 'mainClass' element found in config!` and the signature of
+`URLClassLoader`. Classpath and main class are configurable through a text file,
+and the game's classes are not obfuscated.
 
-### Existe um template de mod da comunidade
+### There is a community mod template
 
-<https://github.com/Spacehaven-modding-tools/SpaceHavenModTemplate> — **da
-comunidade, não da Bugbyte.**
+<https://github.com/Spacehaven-modding-tools/SpaceHavenModTemplate> — **from the
+community, not from Bugbyte.**
 
-> **Corrigido em 2026-07-31.** Há, sim, hook provido pelo jogo:
-> `SpacehavenSteam.tryToLaunchModLoader` procura e lança um mod loader
-> distribuído pela Steam Workshop, e **esse loader já traz `aspectjweaver`
-> dentro**. Some quase toda a fricção que este documento usa para adiar o mod:
-> quem assina o item na Workshop recebe o AspectJ pronto e o jogo o chama
-> sozinho. Ver `findings.md`, item 14.
+> **Corrected on 2026-07-31.** There is indeed a hook provided by the game:
+> `SpacehavenSteam.tryToLaunchModLoader` looks for and launches a mod loader
+> distributed through the Steam Workshop, and **that loader already ships
+> `aspectjweaver` inside it**. That removes almost all the friction this document
+> uses to defer the mod: whoever subscribes to the Workshop item gets AspectJ
+> ready-made and the game calls it by itself. See `findings.md`, item 14.
 
-Ele usa AspectJ com weaving em tempo de carga: você declara pointcuts que
-envolvem métodos do jogo, coloca seu jar em `mods/` e acrescenta a entrada no
-`classPath` do `config.json`. Exige `aspectj-1.9.19` e `aspectjweaver` na pasta
-do jogo, e Java 17+. Pointcuts do tipo `around` envolvem um método e decidem se
-o original chega a rodar.
+It uses AspectJ with load-time weaving: you declare pointcuts that wrap the
+game's methods, drop your jar in `mods/` and add the entry to the `classPath` in
+`config.json`. It requires `aspectj-1.9.19` and `aspectjweaver` in the game's
+folder, and Java 17+. `around` pointcuts wrap a method and decide whether the
+original gets to run at all.
 
-### O que um mod desbloquearia
+### What a mod would unlock
 
-Envolver as rotinas de gravação e carregamento dá **limites de sessão exatos**,
-em vez de vigiar arquivos de autosave e inferir. Indo além, dá para manipular
-objetos vivos do jogo em vez de editar arquivo, o que abriria a porta para
-colocar a nave de um vizinho no setor sem fechar a partida.
+Wrapping the save and load routines gives **exact session boundaries**, instead
+of watching autosave files and inferring. Going further, it allows manipulating
+the game's live objects instead of editing a file, which would open the door to
+placing a neighbour's ship in the sector without closing the game.
 
-### O que ele não muda
+### What it does not change
 
-A simulação continua local e não determinística. Dois jogadores se vendo mover
-ao vivo exigiria uma camada de rede nossa lutando contra as premissas do jogo.
+The simulation stays local and non-deterministic. Two players watching each
+other move live would require a networking layer of our own fighting the game's
+premises.
 
-E o custo é real: o jogador precisa instalar AspectJ, editar o `config.json` e
-ter Java 17. Cada atualização do jogo pode quebrar os pointcuts, porque eles
-apontam para assinaturas de método que ninguém prometeu manter.
+And the cost is real: the player has to install AspectJ, edit `config.json` and
+have Java 17. Every game update can break the pointcuts, because they point at
+method signatures nobody promised to keep.
 
-### A decisão
+### The decision
 
-**O cliente lança o jogo ele mesmo.** Executa o binário e espera o processo
-terminar. Não toca em código nem em configuração, é só gerenciamento de
-processo, e resolve a regra mais importante do cliente: como ele é quem inicia e
-quem espera o fim, sabe com certeza quando o jogo está aberto e nunca escreve
-por cima.
+**The client launches the game itself.** It runs the binary and waits for the
+process to end. It touches neither code nor configuration, it is just process
+management, and it settles the client's most important rule: since it is the one
+that starts the game and waits for the end, it knows for certain when the game
+is open and never writes over it.
 
-**O mod é opcional e não bloqueia fase nenhuma.** Um mod mínimo, que só envolva
-salvar e carregar sem tocar em lógica de jogo, melhora a precisão dos limites de
-sessão. Quem instalar ganha isso; quem não instalar continua funcionando com a
-vigilância de arquivos. Fazer dele um requisito multiplicaria a fricção de
-instalação antes de existir qualquer coisa para aproveitar — e o objetivo das
-primeiras fases é justamente descobrir se alguém quer isso.
+**The mod is optional and blocks no phase.** A minimal mod, one that only wraps
+saving and loading without touching game logic, improves the precision of the
+session boundaries. Whoever installs it gets that; whoever does not carries on
+with file watching. Making it a requirement would multiply the installation
+friction before there is anything to enjoy — and the point of the first phases
+is precisely to find out whether anyone wants this.
 
-**Injeção ao vivo fica para depois de existirem jogadores.** É a evolução
-natural e agora se sabe que é possível.
+**Live injection waits until there are players.** It is the natural evolution
+and it is now known to be possible.
 
-## 2.10 Fases
+## 2.10 Phases
 
-| Fase | Entrega | O que prova |
+| Phase | Delivers | What it proves |
 |---|---|---|
-| **0** | conta, salas, sobe e desce save | a custódia funciona, sem multiplayer nenhum |
-| **1** | batimento por autosave, mapa web da sala | a sala fica viva entre sessões |
-| **2** | injeção de vizinho, sem comércio | você abre o jogo e a nave de alguém está lá |
-| **3** | consignação e conciliação | comércio de verdade entre jogadores |
+| **0** | account, rooms, save upload and download | custody works, with no multiplayer at all |
+| **1** | autosave heartbeat, web map of the room | the room stays alive between sessions |
+| **2** | neighbour injection, no trading | you open the game and someone's ship is there |
+| **3** | consignment and reconciliation | real trading between players |
 
-Fora da fila, sem bloquear nada: o **mod mínimo** de 2.9, que dá limites de
-sessão exatos a quem quiser instalá-lo, e a **injeção ao vivo**, que só faz
-sentido depois que houver gente jogando.
+Off the queue, blocking nothing: the **minimal mod** of 2.9, which gives exact
+session boundaries to whoever wants to install it, and **live injection**, which
+only makes sense once there are people playing.
 
-A fase 0 já é um produto sozinha: save na nuvem, com histórico e sem save
-scumming. E é a que mais ensina, porque expõe cedo o que é chato de verdade —
-sessão abandonada, cliente travado, jogo que fecha sozinho.
+Phase 0 is already a product on its own: save in the cloud, with history and no
+save scumming. And it is the one that teaches the most, because it exposes early
+what is genuinely tedious — an abandoned session, a stuck client, a game that
+closes on its own.
 
-Escopo do primeiro corte: **só comércio e as missões que o próprio jogo gera.**
-Transferir tripulação e naves inteiras é possível (verificado), mas cada uma
-traz regra de jogo própria e pode esperar.
+Scope of the first cut: **trading only, plus the missions the game itself
+generates.** Transferring crew and whole ships is possible (verified), but each
+one brings its own game rules and can wait.
 
-## 2.11 Confiança e adoção
+## 2.11 Trust and adoption
 
-A barreira real deste projeto não é técnica. É que a comunidade — com razão —
-não instala aplicativo desconhecido, e ainda menos um que sobe arquivos para
-algum servidor. Se isso não for resolvido de propósito, o resto não importa.
+This project's real barrier is not technical. It is that the community — rightly
+— does not install an unknown application, let alone one that uploads files to
+some server. If that is not addressed deliberately, the rest does not matter.
 
-### A sequência importa mais que o argumento
+### The sequence matters more than the argument
 
-Cada degrau pede um pouco mais de confiança que o anterior e entrega algo antes
-de pedir o próximo:
+Each step asks for a little more trust than the last and delivers something
+before asking for the next:
 
-1. **O editor de savegame**, que serve sozinho e não manda nada para lugar
-   nenhum. Ganha uma base de gente que já usa e já confia.
-2. **O mapa da sala como página web.** Nada para instalar: a pessoa vê o mundo
-   compartilhado vivo e decide se quer entrar. Dá para permitir participação sem
-   instalação nenhuma, com a pessoa escolhendo a pasta do save no navegador,
-   clique a clique.
-3. **O cliente**, que vira comodidade em vez de porta de entrada — e chega como
-   *uma aba a mais numa ferramenta que a pessoa já tem*, não como app novo.
+1. **The savegame editor**, which is useful on its own and sends nothing
+   anywhere. It earns a base of people who already use it and already trust it.
+2. **The room's map as a web page.** Nothing to install: the person sees the
+   shared world alive and decides whether they want in. It can even allow taking
+   part with no installation at all, with the person picking the save folder in
+   the browser, click by click.
+3. **The client**, which becomes a convenience instead of a front door — and
+   arrives as *one more tab in a tool the person already has*, not as a new app.
 
-A diferença de conversão entre "instale este app desconhecido para jogar com
-estranhos" e "aquele editor que você já usa agora conecta numa sala" é enorme.
+The difference in conversion between "install this unknown app to play with
+strangers" and "that editor you already use now connects to a room" is enormous.
 
-### Verificável em vez de confiável
+### Verifiable instead of trusted
 
-- **Rodar do código é a opção principal.** O editor é biblioteca padrão do
-  Python; o cliente deve manter essa propriedade enquanto for possível.
-- **Build público a partir de fonte público.** O binário é montado pelo GitHub
-  Actions a partir do commit da tag, e o log fica público. A afirmação
-  checável é: *este binário saiu deste commit, e aqui está o registro*.
-  Linkar a execução nas notas da release.
-- **Checksums em toda release**, e link de análise antivírus pública.
-- **Assinatura de código** custa dinheiro e pode esperar; não substitui nada
-  acima.
+- **Running from source is the main option.** The editor is Python standard
+  library; the client should keep that property for as long as possible.
+- **Public build from public source.** The binary is assembled by GitHub Actions
+  from the tag's commit, and the log is public. The checkable claim is: *this
+  binary came out of this commit, and here is the record*. Link the run in the
+  release notes.
+- **Checksums on every release**, and a link to a public antivirus scan.
+- **Code signing** costs money and can wait; it replaces nothing above.
 
-### O servidor precisa ser auto-hospedável
+### The server has to be self-hostable
 
-É a alavanca que mais muda a conversa numa comunidade de modding. Com o servidor
-aberto e fácil de subir, ninguém precisa confiar em ninguém: um grupo de amigos
-levanta a própria sala. O autor deixa de ser um serviço a quem entregar dados e
-passa a ser autor de uma ferramenta. E vai acontecer de qualquer jeito — sempre
-aparece quem quer a sala privada.
+It is the lever that most changes the conversation in a modding community. With
+the server open and easy to stand up, nobody has to trust anybody: a group of
+friends raises their own room. The author stops being a service you hand data to
+and becomes the author of a tool. And it will happen anyway — there is always
+someone who wants the private room.
 
-### Política de dados, escrita antes de existir
+### A data policy, written before it exists
 
-O editor promete hoje que nada sai do computador. **O cliente quebra essa
-promessa**, e fingir que não seria o pior erro possível. Então, em linguagem
-clara e onde a pessoa lê antes de instalar:
+The editor promises today that nothing leaves your computer. **The client breaks
+that promise**, and pretending otherwise would be the worst possible mistake.
+So, in plain language and where the person reads it before installing:
 
-- o que sobe: o arquivo de save, inteiro
-- para onde
-- quem enxerga: o servidor e, em forma de retrato, os outros jogadores da sala
-- por quanto tempo fica guardado
-- como apagar tudo e sair
+- what gets uploaded: the save file, in full
+- where to
+- who sees it: the server and, in portrait form, the other players in the room
+- how long it is kept
+- how to erase everything and leave
 
-E dentro do cliente:
+And inside the client:
 
-- **registro visível** de tudo que foi enviado e de todo arquivo escrito
-- **modo de ensaio**: mostrar o que seria alterado sem alterar
-- nunca encostar na instalação do jogo. Se o mod opcional de 2.9 existir um dia,
-  vem separado, com aviso, e nunca embutido
+- a **visible log** of everything that was sent and every file that was written
+- a **dry-run mode**: show what would be changed without changing it
+- never touch the game's installation. If the optional mod of 2.9 ever exists,
+  it comes separately, with a warning, and never bundled
 
-### Franqueza sobre o que não dá para impedir
+### Candour about what cannot be prevented
 
-Dizer abertamente que o jogo roda na máquina do jogador, que dá para editar o
-save, e que por isso o desenho é cooperativo e o servidor confere em vez de
-adivinhar. Comunidade de modding respeita isso e desconfia do contrário — quem
-promete segurança absoluta é quem não pensou no assunto.
+Saying openly that the game runs on the player's machine, that the save can be
+edited, and that this is why the design is cooperative and the server checks
+instead of guessing. A modding community respects that and distrusts the
+opposite — anyone promising absolute security hasn't thought about it.
 
-## 2.12 Suposições ainda não testadas
+## 2.12 Assumptions not yet tested
 
-Marcadas para quem for implementar não tomar como fato:
+Marked so that whoever implements does not take them as fact:
 
-- **injeção mútua.** Testamos injetar uma nave num save. Não testamos dois
-  jogadores se vendo ao mesmo tempo, cada um no seu save
-- ~~**comércio conciliável.**~~ **RESPONDIDO** em 2026-07-31, ver
-  `trade-experiment.md`. O `<shipBank>` da vendedora registra a venda, e os
-  créditos batem exatamente nos dois lados. Não há log de transação: só estado
-  final, o que basta, porque o servidor monta o banco e sabe de onde partiu.
-  **Conciliação por delta líquido, e a fase 3 vale como está escrita.** Uma
-  ressalva nova: a carga viaja de ônibus e pode estar em voo na hora do save, e
-  quem somar só `inStorage` vê mercadoria sumir (`findings.md`, item 8)
-- **estabilidade com muitos vizinhos.** Testamos uma nave injetada. Dez podem
-  pesar, ou confundir a IA
-- **atualização do jogo.** Se a Bugbyte mudar o formato, tudo aqui precisa ser
-  reconferido. O `compare_galaxy.py` detecta mudança de geração; o resto é na
-  mão
-- **missões geradas em nave injetada.** O jogo criou uma. Não sabemos se ela se
-  resolve bem, nem o que acontece se a nave sumir no meio
+- **mutual injection.** We tested injecting one ship into one save. We did not
+  test two players seeing each other at the same time, each in their own save
+- ~~**reconcilable trading.**~~ **ANSWERED** on 2026-07-31, see
+  `trade-experiment.md`. The seller's `<shipBank>` records the sale, and the
+  credits match exactly on both sides. There is no transaction log: only final
+  state, which is enough, because the server assembles the bank and knows where
+  it started. **Reconciliation by net delta, and phase 3 stands as written.** One
+  new caveat: cargo travels by shuttle and can be in flight at save time, and
+  anyone adding up only `inStorage` will see goods disappear (`findings.md`,
+  item 8)
+- **stability with many neighbours.** We tested one injected ship. Ten might
+  weigh, or confuse the AI
+- **a game update.** If Bugbyte changes the format, everything here needs
+  rechecking. `compare_galaxy.py` detects a change in generation; the rest is by
+  hand
+- **missions generated on an injected ship.** The game created one. We do not
+  know whether it resolves properly, nor what happens if the ship disappears
+  midway
 
-## 2.13 Aviso legal
+## 2.13 Legal notice
 
-Space Haven é um jogo da Bugbyte Ltd. Este é um projeto independente, feito por
-fã, sem vínculo com ela. Nada aqui altera o código do jogo: tudo é leitura e
-escrita de savegame, que jogadores fazem na mão há anos.
+Space Haven is a game by Bugbyte Ltd. This is an independent, fan-made project,
+with no affiliation to them. Nothing here changes the game's code: everything is
+reading and writing savegames, which players have been doing by hand for years.
 
-O que **não** pode ser redistribuído é conteúdo do jogo. O editor de origem
-extrai a tabela de nomes do `spacehaven.jar` da instalação do próprio usuário,
-justamente para não redistribuir. O servidor deve seguir a mesma regra.
+What **cannot** be redistributed is game content. The origin editor extracts the
+name table from the `spacehaven.jar` of the user's own installation, precisely
+so as not to redistribute it. The server must follow the same rule.
 
-Se o projeto encontrar público, vale mostrar à Bugbyte — não como pedido de
-permissão, que não é necessário, mas como demonstração de que a demanda existe.
+If the project finds an audience, it is worth showing to Bugbyte — not as a
+request for permission, which is not needed, but as a demonstration that the
+demand exists.

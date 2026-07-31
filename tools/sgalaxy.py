@@ -200,8 +200,8 @@ def find_game() -> str | None:
     return None
 
 
-def game_day_of(folder: str) -> float:
-    """O dia de jogo de uma pasta de save, ou -1 se nao der para ler."""
+def age_of(folder: str) -> float:
+    """O idade de uma pasta de save, ou -1 se nao der para ler."""
     import xml.etree.ElementTree as ET
     caminho = os.path.join(folder, "info")
     try:
@@ -217,7 +217,7 @@ def most_advanced(room_folder: str) -> tuple:
 
     Quem sai do jogo sem salvar na mao deixa o avanco no autosave, e a secao
     2.4 e explicita: o cliente precisa conseguir devolver o ultimo autosave.
-    Comparar por dia de jogo, e nao por data de arquivo, e o que faz isso valer
+    Comparar por idade, e nao por data de arquivo, e o que faz isso valer
     tambem depois de uma queda — o relogio do sistema nao diz quanto se jogou.
     """
     room_folder = os.path.abspath(os.path.expanduser(room_folder))
@@ -225,7 +225,7 @@ def most_advanced(room_folder: str) -> tuple:
     for nome in sorted(os.listdir(room_folder)):
         caminho = os.path.join(room_folder, nome)
         if os.path.isfile(os.path.join(caminho, "game")):
-            candidatos.append((game_day_of(caminho), nome, caminho))
+            candidatos.append((age_of(caminho), nome, caminho))
     if not candidatos:
         raise ClientError(f"não achei nenhum savegame dentro de {room_folder}")
     candidatos.sort(reverse=True)
@@ -447,7 +447,7 @@ def cmd_entrar(args) -> int:
     print(f"entrou na sala {args.sala}")
     print(f"  galáxia:    {galaxia['digest']} "
           f"({galaxia['systems']} sistemas, {galaxia['bodies']} corpos)")
-    print(f"  dia de jogo: {dados['gameDay']}")
+    print(f"  idade: {dados['ageDays']}")
     print(f"  sua nave:    {dados['presence']['shipName']}")
     print()
     print("  O servidor é dono deste save agora. Use `retirar` para jogar.")
@@ -533,7 +533,7 @@ def cmd_devolver(args) -> int:
                           pack(pasta), {"Content-Type": "application/zip"})
     dados = json.loads(raw)
     print("devolvido")
-    print(f"  dia de jogo: {dados['gameDay']}")
+    print(f"  idade: {dados['ageDays']}")
     print(f"  versão:      {dados['versionId']}")
     if dados.get("pruned"):
         print(f"  {dados['pruned']} versão(ões) antiga(s) saíram da janela")
@@ -598,7 +598,7 @@ def cmd_jogar(args) -> int:
         print(f"  python3 tools/sgalaxy.py devolver {args.sala} --save {pasta}")
         return 1
     dados = json.loads(raw)
-    print(f"      dia {dados['gameDay']}, versão {dados['versionId']}")
+    print(f"      dia {dados['ageDays']}, versão {dados['versionId']}")
     print()
     print("sessão fechada. O save está no servidor.")
     return 0
@@ -624,7 +624,7 @@ def cmd_situacao(args) -> int:
         return 1
     print(f"sala {args.sala}")
     print(f"  sua nave:    {meu['shipName'] or '—'}")
-    print(f"  dia no servidor: {meu['gameDay'] or '—'}")
+    print(f"  dia no servidor: {meu['ageDays'] or '—'}")
     print(f"  empréstimo:  {'ABERTO' if meu['playing'] else 'fechado'}")
 
     pasta = _room_folder(args.sala)
@@ -639,7 +639,7 @@ def cmd_situacao(args) -> int:
     print(f"  pasta local: {pasta}")
     print(f"               mais avançado: {qual}, dia {dia:.2f}")
     if not meu["playing"]:
-        servidor = meu["gameDay"] or 0
+        servidor = meu["ageDays"] or 0
         if dia > servidor + 0.01:
             print()
             print("  AVISO: a pasta local está À FRENTE do servidor e não há")
@@ -660,7 +660,7 @@ def cmd_estado(args) -> int:
     for p in dados["players"]:
         print(f"{(p['name'] or '?'):<18}{(p['shipName'] or '—'):<24}"
               f"{(p['system'] or '—'):<10}{(p['celeid'] or '—'):<8}"
-              f"{str(p['gameDay'] or '—'):<8}"
+              f"{str(p['ageDays'] or '—'):<8}"
               f"{'jogando' if p['playing'] else 'fora'}")
     return 0
 
@@ -668,10 +668,10 @@ def cmd_estado(args) -> int:
 def cmd_apagar_conta(args) -> int:
     print("Isto apaga a sua conta e TODOS os seus saves neste servidor.")
     print("Não há como desfazer.")
-    if input("Digite 'apagar tudo' para confirmar: ").strip() != "apagar tudo":
+    if input("Type 'delete everything' to confirm: ").strip() != "delete everything":
         print("cancelado")
         return 1
-    dados = json_request("DELETE", "/api/v1/me?confirm=apagar%20tudo")
+    dados = json_request("DELETE", "/api/v1/me?confirm=delete%20everything")
     print(dados["message"])
     if os.path.isfile(CREDENTIALS):
         todos = json.load(open(CREDENTIALS, encoding="utf-8"))

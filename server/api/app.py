@@ -35,7 +35,7 @@ from server.api import db
 from server.domain import rules
 from server.galaxy import fingerprint, presence
 from server.storage import blobs
-from server.web import pages
+from server.web import i18n, pages
 from server.storage.blobs import BlobStore, StorageError
 
 # De quanto em quanto o servidor vence empréstimos por conta própria. Um prazo
@@ -185,11 +185,12 @@ def delete_me(confirm: str = "", player: dict = Depends(current_player)):
     de um seria destruir o save de quem nao pediu nada. A sala fica, sem dono
     ativo, e isso e dito na resposta.
     """
-    if confirm != "apagar tudo":
+    if confirm != "delete everything":
         raise HTTPException(400,
-                            'para confirmar, repita: ?confirm=apagar tudo. '
-                            'Isto apaga sua conta e todos os seus saves, e não '
-                            'há como desfazer')
+                            'to confirm, repeat it back: '
+                            '?confirm=delete everything. This deletes your '
+                            'account and every save you have, and there is no '
+                            'undo')
     with db.pool().connection() as conn:
         rooms = conn.execute(
             "SELECT count(*) AS n FROM room WHERE owner_id = %s",
@@ -376,7 +377,7 @@ def room_state(room_id: str, player: dict = Depends(current_player)):
     return {"roomId": room_id, "players": [
         {"playerId": r["player_id"], "name": r["display_name"],
          "shipName": r["ship_name"], "system": r["at_system"],
-         "celeid": r["at_celeid"], "gameDay": float(r["game_day"]) if r["game_day"] else None,
+         "celeid": r["at_celeid"], "ageDays": float(r["age_days"]) if r["age_days"] else None,
          "playing": r["playing"],
          "lastSeen": r["last_seen_at"].isoformat() if r["last_seen_at"] else None}
         for r in roster]}
@@ -414,7 +415,7 @@ async def join_room(room_id: str, request: Request,
             with blobs.with_unpacked(data) as folder:
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
-                day = here["gameDay"]
+                day = here["ageDays"]
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
@@ -428,7 +429,7 @@ async def join_room(room_id: str, request: Request,
         version = db.add_version(conn, {
             "room_id": room_id, "player_id": player["id"],
             "sha256": meta["sha256"], "bytes": meta["bytes"],
-            "kind": "canonical", "game_day": day,
+            "kind": "canonical", "age_days": day,
             "galaxy_digest": described["digest"]})
         if not room["galaxy_digest"]:
             with blobs.with_unpacked(data) as folder:
@@ -441,7 +442,7 @@ async def join_room(room_id: str, request: Request,
                         here["celeid"])
 
     return {"roomId": room_id, "versionId": version["id"],
-            "galaxy": described, "gameDay": day, "presence": here,
+            "galaxy": described, "ageDays": day, "presence": here,
             "message": "save adotado como canônico. A partir de agora o "
                        "servidor é dono dele."}
 
@@ -511,7 +512,7 @@ async def checkin(room_id: str, request: Request,
             with blobs.with_unpacked(data) as folder:
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
-                day = here["gameDay"]
+                day = here["ageDays"]
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
@@ -528,7 +529,7 @@ async def checkin(room_id: str, request: Request,
         version = db.add_version(conn, {
             "room_id": room_id, "player_id": player["id"],
             "sha256": meta["sha256"], "bytes": meta["bytes"],
-            "kind": "canonical", "game_day": day,
+            "kind": "canonical", "age_days": day,
             "galaxy_digest": described["digest"]})
         # Os nomes de sistema que o jogador descobriu jogando entram no mapa
         # da sala. A posicao ja estava la desde a primeira entrada.
@@ -541,7 +542,7 @@ async def checkin(room_id: str, request: Request,
                         here["celeid"])
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
-    return {"roomId": room_id, "versionId": version["id"], "gameDay": day,
+    return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
             "presence": here, "pruned": pruned,
             "message": "save recebido e guardado. Ele é o que os outros veem."}
 
@@ -575,97 +576,49 @@ def health():
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request, lang: str = ""):
     """As salas abertas. É a vitrine: ver antes de decidir se quer entrar."""
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
     with db.pool().connection() as conn:
         rooms = db.list_rooms(conn)
-    return pages.room_list([dict(r) for r in rooms])
+    return pages.room_list([dict(r) for r in rooms], idioma)
 
 
-@app.get("/sala/{room_id}", response_class=HTMLResponse)
-def room_web(room_id: str):
+@app.get("/room/{room_id}", response_class=HTMLResponse)
+def room_web(room_id: str, request: Request, lang: str = ""):
     """A sala como página. Sem conta, sem instalar nada — é o degrau 2 da 2.11."""
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
     with db.pool().connection() as conn:
         room = db.get_room(conn, room_id)
         if room is None:
-            raise HTTPException(404, f"não existe sala {room_id}")
+            raise HTTPException(404, f"no room {room_id}")
         roster = db.room_roster(conn, room_id)
         galaxy = db.galaxy_map(conn, room_id)
-    return pages.room_page(dict(room), [dict(r) for r in roster], galaxy)
+    return pages.room_page(dict(room), [dict(r) for r in roster], galaxy,
+                           idioma)
+
+
+# O caminho antigo, para links já compartilhados não morrerem.
+@app.get("/sala/{room_id}", response_class=HTMLResponse)
+def room_web_pt(room_id: str, request: Request):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(f"/room/{room_id}?lang=pt", status_code=308)
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy(request: Request, lang: str = ""):
+    """A política de dados, na língua de quem lê.
+
+    A seção 2.11 manda escrever isto antes de existir e onde a pessoa lê antes
+    de entrar. O editor de savegame promete que nada sai do computador; este
+    servidor quebra essa promessa, e fingir que não seria o pior erro possível.
+    """
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.privacy_page(idioma)
 
 
 @app.get("/privacidade", response_class=HTMLResponse)
-def privacy():
-    """A política de dados.
+def privacy_pt():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/privacy?lang=pt", status_code=308)
 
-    A seção 2.11 do projeto manda escrever isto **antes** de existir, e em
-    linguagem clara, onde a pessoa lê antes de instalar qualquer coisa. O
-    editor de savegame promete que nada sai do computador; este servidor quebra
-    essa promessa, e fingir que não seria o pior erro possível.
-    """
-    return _page("O que acontece com o seu save", """
-<h2>O que sobe</h2>
-<p><b>O savegame inteiro</b>, compactado: o arquivo <code>game</code>, as naves,
-os setores e os binários que o jogo grava junto. Não é um resumo — é a sua
-partida completa.</p>
-
-<h2>Para onde</h2>
-<p>Para este servidor, em <code>galaxy.bygianotto.com.br</code>, mantido por um
-particular. Não há empresa por trás, não há terceiro recebendo cópia, e nada é
-enviado para outro serviço.</p>
-
-<h2>Quem enxerga</h2>
-<p>Quem administra o servidor tem acesso técnico aos arquivos — não há
-criptografia que impeça isso, e dizer o contrário seria mentira. Outros jogadores
-da mesma sala verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
-uma loja com o nome que você escolher e só a mercadoria que você consignar. O seu
-porão de verdade não entra nessa cópia.</p>
-
-<h2>Por quanto tempo</h2>
-<p>As últimas 20 versões de cada save, por sala. As mais antigas são apagadas
-sozinhas. Se você sair, apaga na hora.</p>
-
-<h2>Que dado pessoal</h2>
-<p><b>Nenhum.</b> Não pedimos e-mail, nome real, senha ou login de Steam. A sua
-identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
-resumo criptográfico. A consequência é dura e é honesta: <b>quem perde o código
-perde a conta</b>, e não há como recuperar.</p>
-
-<h2>Como apagar tudo e sair</h2>
-<p>Uma chamada, e não há etapa de arrependimento:</p>
-<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=apagar%20tudo" \
-     -H "Authorization: Bearer SEU-TOKEN"</pre>
-<p>Apaga a sua conta e todos os seus saves. Salas que você criou e onde há outros
-jogadores continuam de pé — sumir com elas destruiria o save de quem não pediu
-nada —, mas saem da listagem e o seu token é invalidado.</p>
-
-<h2>O que não dá para prometer</h2>
-<p>O jogo roda na sua máquina, em arquivos que você consegue editar. Não há como
-impedir que alguém altere o próprio save, e o projeto não finge que há: o
-desenho é cooperativo, e o servidor <b>confere</b> em vez de adivinhar. Quem
-promete segurança absoluta é quem não pensou no assunto.</p>
-
-<p><a href="/">voltar</a></p>""")
-
-
-def _page(title: str, body: str) -> str:
-    tab = title if "Galáxia" in title else f"{title} — Galáxia Compartilhada"
-    return f"""<!doctype html><html lang="pt-BR"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{tab}</title>
-<style>
-  :root {{ color-scheme: light dark; }}
-  body {{ max-width: 40rem; margin: 3rem auto; padding: 0 1.2rem;
-         font: 16px/1.6 system-ui, sans-serif; }}
-  h1 {{ font-size: 1.5rem; }} h2 {{ font-size: 1.1rem; margin-top: 2rem; }}
-  pre {{ overflow-x: auto; padding: .8rem; border-radius: .4rem;
-        background: rgba(127,127,127,.12); font-size: .85rem; }}
-  footer {{ margin-top: 3rem; font-size: .85rem; opacity: .75; }}
-</style>
-<h1>{title}</h1>
-{body}
-<footer><p><b>Space Haven</b> é um jogo da
-<a href="https://bugbyte.fi/">Bugbyte Ltd.</a> Este é um projeto independente,
-feito por fã: não é oficial, não tem endosso e não tem vínculo com ela. Nada
-aqui altera o jogo — tudo é leitura e escrita de savegame, o que jogadores fazem
-à mão há anos.</p></footer></html>"""

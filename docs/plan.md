@@ -1,274 +1,281 @@
-# Plano de implementação
+# Implementation plan
 
-Documento de trabalho. Complementa `shared-galaxy-server.md`, que é o projeto, e
-`savegame-format.md`, que é o levantamento. Aqui está a ordem, as decisões
-tomadas e o que cada etapa precisa entregar para a seguinte começar.
+*[Leia em português](plan.pt-BR.md)*
 
-Escrito só em português por enquanto: o plano muda toda semana e manter tradução
-de documento que churna é desperdício. A versão em inglês entra quando o
-repositório for público, junto do README.
+Working document. It complements `shared-galaxy-server.md`, which is the design,
+and `savegame-format.md`, which is the survey. What is here is the order, the
+decisions taken and what each stage has to deliver for the next one to start.
+
+Written in Portuguese only for now: the plan changes every week and maintaining a
+translation of a document that churns is waste. The English version comes in when
+the repository goes public, together with the README.
 
 ---
 
-## Decisões tomadas
+## Decisions taken
 
-| Assunto | Decisão | Consequência |
+| Subject | Decision | Consequence |
 |---|---|---|
-| Escopo deste repo | servidor + mapa web da sala | o cliente é uma aba nova no `space_haven_editor`, não um app novo (2.11, degrau 3) |
-| Stack | Python, FastAPI, Postgres | fora da disciplina stdlib do editor; aceito porque o servidor não roda na máquina do jogador |
-| Persistência de save | arquivos comprimidos em volume, endereçados por sha256; Postgres só com metadado | backup trivial, auto-hospedagem sem drama, sem large objects |
-| Identidade | token opaco emitido pelo servidor, sem e-mail nem senha | zero dado pessoal; perder o token perde o jogador, então o cliente força código de recuperação |
-| Público | sala aberta e listável desde cedo | cota, limite de upload e rate limit entram na fase 0, não depois |
-| Histórico | últimas N versões por jogador, N por sala, padrão 20 | armazenamento previsível; a conferência de 2.7 tem alcance limitado e isso é aceito |
-| Prazo de retirada | 12 horas, configurável por sala | cobre sessão longa e uma noite de sono |
-| Deploy | `docker compose up`, e só | mesmo caminho para a sala pública e para quem auto-hospeda |
-| Idioma | código, API e rotas em inglês; documentação bilíngue | igual ao editor |
-| Primeiro trabalho | experimento de comércio (2.12) | decide a fase 3 antes de qualquer código de servidor |
+| Scope of this repo | server + web map of the room | the client is a new tab in `space_haven_editor`, not a new app (2.11, step 3) |
+| Stack | Python, FastAPI, Postgres | outside the editor's stdlib discipline; accepted because the server does not run on the player's machine |
+| Save persistence | compressed files on a volume, addressed by sha256; Postgres only for metadata | trivial backup, self-hosting without drama, no large objects |
+| Identity | opaque token issued by the server, no e-mail and no password | zero personal data; losing the token loses the player, so the client forces a recovery code |
+| Public | room open and listable from early on | quota, upload limit and rate limit go into phase 0, not later |
+| History | last N versions per player, N per room, default 20 | predictable storage; the check in 2.7 has limited reach and that is accepted |
+| Checkout term | 12 hours, configurable per room | covers a long session plus a night's sleep |
+| Deploy | `docker compose up`, and nothing else | the same path for the public room and for anyone self-hosting |
+| Language | code, API and routes in English; documentation bilingual | same as the editor |
+| First job | trade experiment (2.12) | decides phase 3 before any server code |
 
 ---
 
-## Etapa A — O experimento de comércio
+## Stage A — The trade experiment
 
-O documento diz que medir como uma transação de TRADE fica gravada no save é o
-próximo experimento a fazer, e que ele decide a fase 3. É barato, não precisa de
-servidor nenhum, e se der resultado ruim muda o desenho antes de existir código.
+The document says that measuring how a TRADE transaction ends up recorded in the
+save is the next experiment to run, and that it decides phase 3. It is cheap, it
+needs no server at all, and if the result is bad it changes the design before
+there is any code.
 
-Mora em `tools/` **deste** repositório. A primeira versão deste plano mandava
-para `space_haven_editor/tools/`, ao lado de `compare_galaxy.py`, por serem
-análise de save. Mudei: o resultado do experimento é documento deste projeto, o
-injetor vira o construtor de retratos da fase 2 — ou seja, vira código de
-servidor — e o editor tem uma promessa própria a manter ("nada sai do seu
-computador") que não combina com hospedar tooling de um projeto que sobe
-arquivos. O preço é vendorar `savefile.py`, registrado em `sgalaxy/VENDOR.md`.
+It lives in `tools/` in **this** repository. The first version of this plan sent
+it to `space_haven_editor/tools/`, next to `compare_galaxy.py`, on the grounds
+that both are save analysis. I changed it: the result of the experiment is a
+document belonging to this project, the injector becomes the phase 2 portrait
+builder — that is, it becomes server code — and the editor has a promise of its
+own to keep ("nothing leaves your computer") that does not sit well with hosting
+tooling for a project that uploads files. The price is vendoring `savefile.py`,
+recorded in `sgalaxy/VENDOR.md`.
 
-### A.1 — Instrumentação (eu escrevo)
+### A.1 — Instrumentation (I write it)
 
-**`tools/save_snapshot.py`** — copia uma pasta de save para um diretório de
-trabalho com rótulo e carimbo de tempo. Trivial, mas é o que torna o resto
-repetível.
+**`tools/save_snapshot.py`** — copies a save folder into a working directory with
+a label and a timestamp. Trivial, but it is what makes the rest repeatable.
 
-**`tools/save_diff.py`** — a peça central. Diff estrutural entre dois snapshots,
-por caminho XML, dizendo elementos criados, removidos e atributos alterados.
-Precisa de uma lista de ruído conhecido para ser legível: fase orbital dos
-corpos, temporizadores, `idCounter`, posição de tripulante. Sem isso o diff de
-uma transação vem afogado em milhares de linhas.
+**`tools/save_diff.py`** — the central piece. Structural diff between two
+snapshots, by XML path, reporting created elements, removed elements and changed
+attributes. It needs a known-noise list to be readable: orbital phase of bodies,
+timers, `idCounter`, crew position. Without that, the diff of a transaction comes
+drowned in thousands of lines.
 
-**`tools/inject_npc_ship.py`** — monta a nave de vizinho num save, seguindo a
-receita de 2.5: `sid` e `entId` novos do `masterData/@idCounter`, `settings/@of`
-e `@owner` da facção, `<asi>` copiado de NPC, `<shipBank>` com estoque
-controlado, `fg="0"`/`unex`/`forceRoof`, frota `<f>` no corpo celeste, permissões
-no `hostmap`. É experimento agora e vira o construtor de retratos da fase 2
-depois — vale escrever já com essa dupla vida em mente.
+**`tools/inject_npc_ship.py`** — assembles the neighbour ship in a save, following
+the recipe in 2.5: new `sid` and `entId` from `masterData/@idCounter`,
+`settings/@of` and `@owner` from the faction, `<asi>` copied from an NPC,
+`<shipBank>` with controlled stock, `fg="0"`/`unex`/`forceRoof`, `<f>` fleet on
+the celestial body, permissions in the `hostmap`. It is an experiment now and it
+becomes the phase 2 portrait builder later — worth writing with that double life
+in mind from the start.
 
-### A.2 — Roteiro (você joga)
+### A.2 — Script (you play)
 
-Na ordem, porque cada um depende do anterior:
+In order, because each one depends on the previous:
 
-**E1 — piso de ruído.** Carregar um save, não fazer nada, salvar. O que muda de
-qualquer jeito? Sem essa medida, nenhum diff posterior é interpretável. Alimenta
-a lista de ruído do `save_diff.py`.
+**E1 — noise floor.** Load a save, do nothing, save. What changes anyway? Without
+that measurement, no later diff is interpretable. It feeds the noise list for
+`save_diff.py`.
 
-**E2 — comércio com NPC nativo.** Uma compra só, de um item só, com uma nave que
-o próprio jogo colocou ali. Snapshot antes e depois. A pergunta: *a transação
-fica registrada como evento, ou só como estado final?*
+**E2 — trade with a native NPC.** One purchase only, of one item only, with a ship
+the game itself put there. Snapshot before and after. The question: *does the
+transaction get recorded as an event, or only as final state?*
 
-**E3 — comércio com nave injetada.** Mesma coisa, com o `<shipBank>` que nós
-montamos, estoque e `ca` conhecidos. As perguntas: o estoque da nave injetada
-diminui e isso persiste? os créditos entram no `playerBank`? o jogo respeita o
-`ca` como limite de compra?
+**E3 — trade with an injected ship.** Same thing, with the `<shipBank>` we built,
+known stock and known `ca`. The questions: does the injected ship's stock go down
+and does that persist? do the credits arrive in the `playerBank`? does the game
+respect `ca` as a purchase limit?
 
-**E4 — várias transações.** Três compras e uma venda na mesma sessão. Dá para
-distinguir três compras de uma compra grande? Isso decide se a conciliação é por
-transação ou por delta líquido.
+**E4 — several transactions.** Three purchases and one sale in the same session.
+Can you tell three purchases from one big purchase? That decides whether
+reconciliation is per transaction or by net delta.
 
-**E5 — procedência.** Duas naves injetadas no mesmo setor, cada uma com um
-recurso marcador que o jogador não possui. Ao ver a carga no fim, dá para dizer
-de quem veio? Se não der, a conciliação com vários vizinhos fica ambígua e o
-desenho precisa de marcador por consignação.
+**E5 — provenance.** Two injected ships in the same sector, each with a marker
+resource the player does not own. Looking at the cargo at the end, can you say
+who it came from? If you cannot, reconciliation with several neighbours becomes
+ambiguous and the design needs a marker per consignment.
 
-### A.3 — O que cada resultado implica
+### A.3 — What each result implies
 
-- **Só estado final, mas o `<shipBank>` persiste:** conciliação por delta
-  líquido. O servidor montou o `<shipBank>`, então sabe o estado inicial exato e
-  a diferença é a transação. **Fase 3 sai como está no documento.**
-- **O `<shipBank>` não persiste** (o jogo regenera o banco da nave ao carregar):
-  a venda não é reconstruível pelo lado da nave. Resta inferir pelo `playerBank`
-  e pela carga, o que só funciona com recursos marcadores — E5 vira obrigatório e
-  a consignação passa a ser de item único por vizinho.
-- **Nem estado final aproveitável:** fase 3 muda de natureza. O comércio nativo
-  vira sabor, não economia, e a troca real acontece por consignação fora do jogo
-  (o vizinho pede, o servidor entrega no porão na próxima retirada). Menos
-  elegante, mas funciona e não depende de nada disso.
+- **Only final state, but the `<shipBank>` persists:** reconciliation by net
+  delta. The server built the `<shipBank>`, so it knows the exact initial state
+  and the difference is the transaction. **Phase 3 ships as it stands in the
+  document.**
+- **The `<shipBank>` does not persist** (the game regenerates the ship's bank on
+  load): the sale is not reconstructible from the ship's side. All that is left is
+  inferring from the `playerBank` and from the cargo, which only works with marker
+  resources — E5 becomes mandatory and consignment becomes single-item per
+  neighbour.
+- **Not even usable final state:** phase 3 changes in nature. Native trade becomes
+  flavour, not economy, and the real exchange happens through consignment outside
+  the game (the neighbour asks, the server delivers into the hold at the next
+  checkout). Less elegant, but it works and it depends on none of this.
 
-**Entregável da etapa A:** um documento `trade-experiment.md` com o protocolo, os
-diffs medidos e a implicação escolhida. É o que destrava a fase 3 e o que muda
-(ou confirma) a seção 2.12.
+**Stage A deliverable:** a `trade-experiment.md` document with the protocol, the
+measured diffs and the implication chosen. It is what unblocks phase 3 and what
+changes (or confirms) section 2.12.
 
 ---
 
-## Etapa B — Fase 0, a custódia
+## Stage B — Phase 0, custody
 
-Começa em paralelo à etapa A assim que E1 e E2 estiverem medidos: nada na fase 0
-depende do resultado do comércio.
+Starts in parallel with stage A as soon as E1 and E2 are measured: nothing in
+phase 0 depends on the trade result.
 
-### B.1 — Esqueleto do repositório
+### B.1 — Repository skeleton
 
 ```
 Shared-Galaxy/
   server/
-    api/            rotas FastAPI
-    domain/         sala, jogador, empréstimo, versão de save
-    storage/        blobs em volume, endereçados por sha256
-    galaxy/         impressão digital, vendorada do editor
-    web/            páginas do mapa (Jinja2, sem build de frontend)
+    api/            FastAPI routes
+    domain/         room, player, lease, save version
+    storage/        blobs on a volume, addressed by sha256
+    galaxy/         fingerprint, vendored from the editor
+    web/            map pages (Jinja2, no frontend build)
   migrations/
   compose.yml
   tests/
 ```
 
-`git init`, licença e NOTICE iguais aos do editor, aviso legal de 2.13 no README
-desde o primeiro commit.
+`git init`, licence and NOTICE the same as the editor's, the legal notice from
+2.13 in the README from the first commit.
 
-### B.2 — Impressão digital da galáxia
+### B.2 — Galaxy fingerprint
 
-O servidor precisa da lógica de `tools/compare_galaxy.py` para conferir o save de
-entrada (2.3). Ela vive no editor e não vou criar dependência de pacote entre os
-dois repositórios agora. **Vendorar** em `server/galaxy/fingerprint.py`, com um
-teste que roda a mesma função dos dois lados sobre os mesmos saves e exige
-resultado idêntico. Se divergirem um dia, o teste avisa.
+The server needs the logic in `tools/compare_galaxy.py` to check the incoming save
+(2.3). It lives in the editor and I am not going to create a package dependency
+between the two repositories now. **Vendor** it into
+`server/galaxy/fingerprint.py`, with a test that runs the same function from both
+sides over the same saves and requires an identical result. If they ever diverge,
+the test says so.
 
-### B.3 — Modelo de dados
+### B.3 — Data model
 
-- `player` — hash do token, apelido, criação
-- `room` — id curto, seed, opções de criação, hash da senha (opcional),
-  `lease_hours`, `retention_n`, dono
-- `membership` — sala, jogador, versão canônica atual
-- `save_version` — sala, jogador, sha256, tamanho, dia de jogo, tipo
-  (`canonical` ou `checkpoint`), criação
-- `lease` — sala, jogador, emitido em, expira em, versão entregue, estado
+- `player` — token hash, nickname, creation
+- `room` — short id, seed, creation options, password hash (optional),
+  `lease_hours`, `retention_n`, owner
+- `membership` — room, player, current canonical version
+- `save_version` — room, player, sha256, size, game day, type
+  (`canonical` or `checkpoint`), creation
+- `lease` — room, player, issued at, expires at, version delivered, state
 
-Poda: ao gravar uma versão nova, apaga as que passarem de `retention_n`, nunca a
-canônica atual nem a emprestada.
+Pruning: when a new version is written, delete anything beyond `retention_n`,
+never the current canonical one and never the one lent out.
 
 ### B.4 — API
 
-**Feito em 2026-07-31.** Sete rotas, mais `/me` e `/health`. Exercitadas por 25
-testes de integração contra Postgres de verdade — nunca contra dublê, porque a
-garantia que mais importa nesta fase é um índice único do banco. O ciclo inteiro
-foi rodado por HTTP com um savegame real de 340 KB: token, sala, entrada com
-conferência de galáxia, retirada com prazo, segunda retirada recusada, devolução
-e estado da sala.
+**Done on 2026-07-31.** Seven routes, plus `/me` and `/health`. Exercised by 25
+integration tests against a real Postgres — never against a test double, because
+the guarantee that matters most at this phase is a unique index in the database.
+The whole cycle was run over HTTP with a real 340 KB savegame: token, room, join
+with galaxy check, checkout with a term, second checkout refused, check-in and
+room state.
 
-Quatro defeitos que só apareceram por testar contra banco de verdade:
+Four defects that only showed up by testing against a real database:
 
-- o `delivered_id` do empréstimo travava a poda de retenção com `ON DELETE
-  RESTRICT`. Virou anulável com `SET NULL`: empréstimo fechado é histórico, e
-  travar a poda é pior que perder a referência de uma sessão já conciliada
-- o molde sintético mudava `starmap/@pa` para simular "outra galáxia", e não
-  funcionava — `pa` é referência, não parâmetro de geração, e fica fora da
-  impressão digital de propósito
-- o volume de blobs não era limpo entre testes, e um teste de "lixo não custa
-  disco" contava blobs de testes anteriores
-- a presença (nome da nave e posição) não era lida do save, então o mapa da sala
-  nasceria vazio
+- the lease's `delivered_id` blocked retention pruning with `ON DELETE RESTRICT`.
+  It became nullable with `SET NULL`: a closed lease is history, and blocking
+  pruning is worse than losing the reference to an already reconciled session
+- the synthetic fixture changed `starmap/@pa` to simulate "another galaxy", and it
+  did not work — `pa` is a reference, not a generation parameter, and it is left
+  out of the fingerprint on purpose
+- the blob volume was not cleaned between tests, and a "junk costs no disk" test
+  was counting blobs from previous tests
+- presence (ship name and position) was not read from the save, so the room map
+  would have been born empty
 
 
-Todas sob `/api/v1`, com o token no header.
+All under `/api/v1`, with the token in the header.
 
-| Rota | O que faz |
+| Route | What it does |
 |---|---|
-| `POST /players` | emite token novo, devolve código de recuperação |
-| `GET /rooms` | listagem pública: nome, jogadores, tem senha |
-| `POST /rooms` | cria sala com seed e opções |
-| `POST /rooms/{id}/join` | sobe o save inicial; confere impressão digital; adota como canônico |
-| `POST /rooms/{id}/checkout` | abre empréstimo de 12h e entrega o save montado |
-| `POST /rooms/{id}/checkin` | recebe o save final, valida, guarda, fecha o empréstimo |
-| `GET /rooms/{id}/state` | estado da sala em JSON, para o cliente |
+| `POST /players` | issues a new token, returns a recovery code |
+| `GET /rooms` | public listing: name, players, has password |
+| `POST /rooms` | creates a room with a seed and options |
+| `POST /rooms/{id}/join` | uploads the initial save; checks the fingerprint; adopts it as canonical |
+| `POST /rooms/{id}/checkout` | opens a 12h lease and delivers the assembled save |
+| `POST /rooms/{id}/checkin` | receives the final save, validates it, stores it, closes the lease |
+| `GET /rooms/{id}/state` | room state as JSON, for the client |
 
-Recusa de `join` explica o motivo — quase sempre opção de criação diferente
-(2.3).
+A refused `join` explains why — almost always a different creation option (2.3).
 
-### B.5 — Sala aberta, portanto
+### B.5 — Open room, therefore
 
-- limite de tamanho de upload (32 MB cobre um save de 124 dias com folga)
-- cota de salas criadas por token, e de jogadores por sala
-- rate limit em `checkout` e `checkin`
-- a conferência de impressão digital acontece **antes** de gravar blob, para lixo
-  não custar disco
-- `POST /players` com custo (proof-of-work leve ou captcha) só se aparecer abuso;
-  não antecipar
+- upload size limit (32 MB covers a 124-day save with room to spare)
+- quota on rooms created per token, and on players per room
+- rate limit on `checkout` and `checkin`
+- the fingerprint check happens **before** writing a blob, so junk costs no disk
+- `POST /players` with a cost (light proof-of-work or captcha) only if abuse shows
+  up; do not anticipate
 
-### B.6 — Mapa web
+### B.6 — Web map
 
-Páginas server-rendered no mesmo FastAPI, sem build de frontend: listagem de
-salas, página da sala com quem está onde, e o histórico de entradas e saídas. É
-a vitrine do degrau 2 de 2.11 — alguém vê o mundo vivo e decide se quer entrar,
-sem instalar nada.
+Server-rendered pages in the same FastAPI, no frontend build: room listing, room
+page with who is where, and the history of check-outs and check-ins. It is the
+shop window for step 2 of 2.11 — someone sees a living world and decides whether
+they want in, without installing anything.
 
-### B.7 — Empréstimo e queda
+### B.7 — Lease and crashes
 
-- prazo de 12h; vencido, o estado volta ao de quando foi retirado
-- `checkin` fora de empréstimo válido é recusado com explicação
-- devolver um autosave depois de queda do jogo é o caminho normal, não exceção
+- 12h term; once expired, the state goes back to what it was at checkout
+- a `checkin` outside a valid lease is refused with an explanation
+- returning an autosave after a game crash is the normal path, not an exception
 
-**Entregável da etapa B:** save na nuvem, com histórico e sem save scumming.
-Produto sozinho, como o documento diz, e é a etapa que ensina mais — sessão
-abandonada, cliente travado, jogo que fecha sozinho.
+**Stage B deliverable:** saves in the cloud, with history and without save
+scumming. A product on its own, as the document says, and the stage that teaches
+the most — abandoned session, stuck client, game that closes by itself.
 
 ---
 
-## Etapa C — O cliente
+## Stage C — The client
 
-Track paralela, no repositório do editor, como aba nova. Não bloqueia B: dá para
-exercitar a API com `curl` e com o próprio navegador.
+Parallel track, in the editor's repository, as a new tab. It does not block B: you
+can exercise the API with `curl` and with the browser itself.
 
-- autenticar, listar salas, entrar
-- pasta de savegame dedicada por sala
-- **lançar o jogo ele mesmo e esperar o processo terminar** — é o que garante
-  nunca escrever com o jogo aberto (2.9)
-- registro visível de tudo que subiu e de todo arquivo escrito (2.11)
-- modo de ensaio: mostrar o que seria alterado sem alterar
-- forçar o jogador a guardar o código de recuperação do token
-
----
-
-## Etapa D — Fases 1 a 3
-
-**Fase 1 — batimento.** O cliente observa os autosaves e manda um estado
-reduzido: sistema, corpo celeste, dia de jogo, frota, manifesto consignado. Save
-inteiro só na devolução — mandar 4,5 MB a cada autosave é desperdício. A sala
-fica viva entre sessões e o mapa de B.6 passa a se mexer.
-
-**Fase 2 — injeção de vizinho, sem comércio.** O `inject_npc_ship.py` da etapa A
-vira construtor de retratos no servidor, e a montagem passa a acontecer no
-`checkout`. Prova o momento que vende o projeto: você abre o jogo e a loja de
-alguém está lá.
-
-O retrato é uma **vitrine sobre casco de NPC do próprio save de destino**
-(`--hull`), não uma cópia da nave do vizinho. Decidido depois do E3b: a névoa só
-se sustenta se a nave de origem nunca foi explorada, e nave de jogador é sempre
-explorada. Ver `findings.md` item 10 e a seção 2.5 do projeto. De quebra o casco
-sai da instalação do próprio jogador, o que mantém a regra da seção 2.13, e o
-retrato cabe em 166 KB em vez de 460.
-
-**Fase 3 — consignação e conciliação.** Depende do resultado da etapa A. Banca de
-feira, não porão: só o consignado entra no retrato, o `ca` limita o quanto a nave
-compra, e a conciliação desconta do consignado e credita o vendedor.
-
-Fora da fila, sem bloquear nada: o mod mínimo de 2.9 e a injeção ao vivo.
+- authenticate, list rooms, join
+- a dedicated savegame folder per room
+- **launch the game itself and wait for the process to end** — that is what
+  guarantees never writing with the game open (2.9)
+- a visible log of everything uploaded and every file written (2.11)
+- dry-run mode: show what would be changed without changing it
+- force the player to save the token's recovery code
 
 ---
 
-## Riscos que este plano assume
+## Stage D — Phases 1 to 3
 
-- **Perder o token perde o jogador.** Preço de não guardar dado pessoal. Mitigado
-  só por insistência do cliente no código de recuperação.
-- **Sala aberta sem contas convida a jogador descartável.** Criar token é grátis;
-  se virar problema, a resposta é custo na criação, não cadastro.
-- **Histórico de N versões limita a auditoria de 2.7.** Uma divergência antiga
-  pode já ter saído da janela quando alguém for olhar.
-- **Vendorar a impressão digital cria duas cópias da mesma lógica.** O teste
-  cruzado é o que impede a deriva silenciosa.
-- **Atualização do jogo reconfere tudo.** Vale ancorar a versão do jogo por sala
-  desde a fase 0, para o servidor recusar save de versão diferente em vez de
-  aceitar e corromper.
+**Phase 1 — heartbeat.** The client watches the autosaves and sends a reduced
+state: system, celestial body, game day, fleet, consigned manifest. Full save only
+at check-in — sending 4.5 MB on every autosave is waste. The room stays alive
+between sessions and the map from B.6 starts to move.
+
+**Phase 2 — neighbour injection, without trade.** The `inject_npc_ship.py` from
+stage A becomes the portrait builder on the server, and assembly moves into
+`checkout`. It proves the moment that sells the project: you open the game and
+someone's shop is there.
+
+The portrait is a **storefront built on an NPC hull from the destination save
+itself** (`--hull`), not a copy of the neighbour's ship. Decided after E3b: fog
+only holds if the source ship was never explored, and a player ship is always
+explored. See `findings.md` item 10 and section 2.5 of the design. As a bonus the
+hull comes from the player's own installation, which keeps the rule in section
+2.13, and the portrait fits in 166 KB instead of 460.
+
+**Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
+Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`
+limits how much the ship buys, and reconciliation debits the consignment and
+credits the seller.
+
+Out of the queue, blocking nothing: the minimal mod from 2.9 and live injection.
+
+---
+
+## Risks this plan accepts
+
+- **Losing the token loses the player.** The price of not keeping personal data.
+  Mitigated only by the client insisting on the recovery code.
+- **An open room with no accounts invites throwaway players.** Creating a token is
+  free; if it becomes a problem, the answer is a cost at creation, not
+  registration.
+- **A history of N versions limits the audit in 2.7.** An old divergence may
+  already have left the window by the time someone looks.
+- **Vendoring the fingerprint creates two copies of the same logic.** The
+  cross-test is what stops silent drift.
+- **A game update puts everything up for re-verification.** Worth anchoring the
+  game version per room from phase 0, so the server refuses a save from a
+  different version instead of accepting it and corrupting it.

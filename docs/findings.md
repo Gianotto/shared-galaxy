@@ -1,70 +1,75 @@
-# Medições novas
+# New measurements
 
-O que foi medido depois que `savegame-format.md` e `shared-galaxy-server.md`
-foram escritos, ao construir as ferramentas e rodá-las contra save real do jogo
-1.0.4. Cada item diz de onde veio a evidência.
+*[Leia em português](findings.pt-BR.md)*
 
-Duas destas correções mudam código de quem for implementar o servidor. Elas
-foram aplicadas nos documentos originais; o resto está aqui porque não cabia lá.
+What was measured after `savegame-format.md` and `shared-galaxy-server.md` were
+written, while building the tools and running them against real saves from game
+1.0.4. Every item says where the evidence came from.
 
-Os saves usados: `ship17 sem visao` (o teste de névoa, 3 naves) e `Beyond Space`
-(9 naves), mais `New haven-1`.
+Two of these corrections change code for whoever implements the server. They
+have been applied to the original documents; the rest is here because it did not
+fit there.
+
+The saves used: `ship17 sem visao` (the fog test, 3 ships) and `Beyond Space`
+(9 ships), plus `New haven-1`.
 
 ---
 
-## 1. Um corpo celeste tem dois ids, e só um serve para a sala
+## 1. A celestial body has two ids, and only one works for the room
 
-**É a correção mais cara deste documento.** Todo corpo celeste tem:
+**This is the most expensive correction in this document.** Every celestial body
+has:
 
-| Atributo | O que é | Escopo |
+| Attribute | What it is | Scope |
 |---|---|---|
-| `id` | id de objeto do mapa estelar, tirado de `starmap/@objectIdCounter` | **local ao save** |
-| `celeid` | id do corpo celeste, derivado da seed | **igual em toda a sala** |
+| `id` | starmap object id, taken from `starmap/@objectIdCounter` | **local to the save** |
+| `celeid` | celestial body id, derived from the seed | **the same across the whole room** |
 
-E **`starmap/@pa` aponta para o `id`, não para o `celeid`.**
+And **`starmap/@pa` points at the `id`, not at the `celeid`.**
 
-Medido em `ship17`: `@pa=226` casa com `<l type="Asteroid" id="226" celeid="1689">`,
-e não existe nenhum corpo com `celeid=226` no save. Em `Beyond Space`: `@pa=231`
-casa com `<l id="231" celeid="0">`. Nos dois casos o corpo apontado é onde a
-frota `<f isPlayer="true">` realmente está.
+Measured in `ship17`: `@pa=226` matches `<l type="Asteroid" id="226" celeid="1689">`,
+and there is no body with `celeid=226` anywhere in the save. In `Beyond Space`:
+`@pa=231` matches `<l id="231" celeid="0">`. In both cases the body pointed at is
+where the `<f isPlayer="true">` fleet actually is.
 
-Consequência de projeto, e ela é séria: a seção 1.4 diz que "uma coordenada e um
-id de corpo celeste significam a mesma coisa para todos os jogadores da sala".
-Isso vale para `celeid` e **não** vale para `id`. O servidor tem que falar
-`celeid` ao dizer onde um jogador está, e traduzir para o `id` local na hora de
-escrever `@pa` no save de cada um. Trocar os dois coloca o vizinho no setor
-errado, e o erro é silencioso.
+The design consequence, and it is a serious one: section 1.4 says that "a
+coordinate and a celestial body id mean the same thing to every player in the
+room". That holds for `celeid` and does **not** hold for `id`. The server has to
+speak `celeid` when saying where a player is, and translate to the local `id`
+when writing `@pa` into each player's save. Swapping the two puts the neighbour
+in the wrong sector, and the error is silent.
 
-`starmap/@sys`, esse sim, é o `systemId` direto — conferido nos três saves.
+`starmap/@sys`, that one is the `systemId` directly — checked in all three saves.
 
-Isso corrige também um comentário do `compare_galaxy.py` no repositório do
-editor, que registra `sys` e `pa` como "contadores internos — não batem com a
-quantidade de sistemas nem de corpos". Não batem mesmo com contagem nenhuma,
-porque não são índices: são referências.
+This also corrects a comment in `compare_galaxy.py` in the editor repository,
+which records `sys` and `pa` as "internal counters — they do not match the number
+of systems or of bodies". They do not match any count at all, because they are
+not indices: they are references.
 
-## 2. `<ship fog="true">` — faltava na receita
+## 2. `<ship fog="true">` — missing from the recipe
 
-A seção 2.5 manda `fg="0"` em cada célula, `unex="1"` e `forceRoof="1"`. Há um
-quarto atributo, na raiz `<ship>`.
+Section 2.5 calls for `fg="0"` on every cell, `unex="1"` and `forceRoof="1"`.
+There is a fourth attribute, on the `<ship>` root.
 
-Medido em 12 naves de dois saves:
+Measured across 12 ships from two saves:
 
-| Dono | `fog` | `unex` | `forceRoof` |
+| Owner | `fog` | `unex` | `forceRoof` |
 |---|---|---|---|
-| Player (2 naves) | `false` | ausente | ausente |
-| NPC (9 naves) | `true` | `1` | `1` na maioria |
+| Player (2 ships) | `false` | absent | absent |
+| NPC (9 ships) | `true` | `1` | `1` on most |
 
-A única exceção é uma nave Mercante com `fog="false"`, provavelmente já abordada
-— o que confirma a leitura de que o atributo marca "esta nave já foi explorada".
+The only exception is one Merchant ship with `fog="false"`, probably already
+boarded — which confirms the reading that the attribute marks "this ship has
+already been explored".
 
-Importa porque a nave de origem de um retrato é sempre a nave do dono, que é
-sempre `fog="false"`. Sem corrigir, o retrato nasce diferente de todo NPC
-autêntico do save.
+It matters because the source ship for a portrait is always the owner's ship,
+which is always `fog="false"`. Left uncorrected, the portrait is born different
+from every authentic NPC in the save.
 
-## 3. A carga negociável não mora no `<shipBank>`
+## 3. Tradable cargo does not live in the `<shipBank>`
 
-O `<shipBank>` guarda **crédito** (`ca`) e **regra de preço** (`<markup>`,
-`<discount>`). A carga fica em pilhas dentro dos `<inv>` de armazém:
+The `<shipBank>` holds **credits** (`ca`) and pricing rules (`<markup>`,
+`<discount>`). Cargo sits in stacks inside the storage `<inv>` nodes:
 
 ```xml
 <inv>
@@ -72,15 +77,15 @@ O `<shipBank>` guarda **crédito** (`ca`) e **regra de preço** (`<markup>`,
 </inv>
 ```
 
-O atributo é `elementaryId`, não `elementId`. Existem também `<cinv>`, `<pinv>`,
-`<stored>` e `<items>`, ainda não separados.
+The attribute is `elementaryId`, not `elementId`. There are also `<cinv>`,
+`<pinv>`, `<stored>` and `<items>`, not yet told apart.
 
-Isso é exatamente o que o E3 do experimento de comércio vai medir: qual dos dois
-o jogo lê e escreve numa transação.
+This is exactly what E3 of the trade experiment will measure: which of the two
+the game reads and writes in a transaction.
 
-## 4. O `hostmap` é indexado por nome de facção
+## 4. The `hostmap` is indexed by faction name
 
-92 linhas em `ship17`, cada uma um par, e **sem id nenhum**:
+92 rows in `ship17`, each one a pair, and **with no id at all**:
 
 ```xml
 <l s1="Player" s2="Civilian" stance="Friendly" relationship="74" patience="100"
@@ -89,299 +94,305 @@ o jogo lê e escreve numa transação.
    playerOwesSettlement="0" settlementArrivedTurn="0" awareOfCrew="false"/>
 ```
 
-`s1` e `s2` são **nomes** ("Player", "Civilian", "Merchant", "Military"), não os
-ids numéricos de facção. Há mais permissões do que a seção 1.8 lista:
-`accessServices`, e os campos `stance`, `patience`, `s1SusOfS2`, `s2SusOfS1`,
+`s1` and `s2` are **names** ("Player", "Civilian", "Merchant", "Military"), not
+the numeric faction ids. There are more permissions than section 1.8 lists:
+`accessServices`, and the fields `stance`, `patience`, `s1SusOfS2`, `s2SusOfS1`,
 `awareOfCrew`.
 
-O estado do `ship17` é precisamente o desenho da seção 2.5 item 8:
-`accessTrade="true"` com `accessVision="false"` e `accessShip="false"`.
+The state of `ship17` is precisely the design of section 2.5 item 8:
+`accessTrade="true"` with `accessVision="false"` and `accessShip="false"`.
 
-## 5. `id="-1"` quer dizer "sem id"
+## 5. `id="-1"` means "no id"
 
-Todo elemento `<e>` dentro de uma nave — as centenas de peças de que ela é feita
-— vem com `id="-1"`. Não é identidade, é sentinela.
+Every `<e>` element inside a ship — the hundreds of pieces it is made of — comes
+with `id="-1"`. It is not identity, it is a sentinel.
 
-Custou um defeito real: a primeira versão do `save_diff.py` tratava como
-identidade, e dois saves que diferiam em 6 atributos produziram 366 diferenças,
-358 delas fantasma. Quem for escrever qualquer coisa que case elementos entre
-dois saves precisa saber disso.
+It cost a real defect: the first version of `save_diff.py` treated it as
+identity, and two saves that differed in 6 attributes produced 366 differences,
+358 of them phantom. Anyone writing anything that matches elements between two
+saves needs to know this.
 
-Também vale a regra geral que saiu dali: uma identidade só serve se for única
-entre os irmãos.
+The general rule that came out of it holds too: an identity is only useful if it
+is unique among siblings.
 
-## 6. `hdsid` é referência à nave
+## 6. `hdsid` is a reference to the ship
 
-No `<ai>` de cada tripulante, colado no `hsid` já conhecido, existe `hdsid`. Nas
-duas naves onde aparece, o valor é sempre o `sid` da própria nave (6 ocorrências
-numa, 1 na outra).
+In the `<ai>` of each crew member, right next to the already known `hsid`, there
+is `hdsid`. In the two ships where it appears, the value is always the `sid` of
+the ship itself (6 occurrences in one, 1 in the other).
 
-Quem copiar uma nave precisa renumerar `sid`, `homeSid`, `hsid` **e** `hdsid`.
+Anyone copying a ship has to renumber `sid`, `homeSid`, `hsid` **and** `hdsid`.
 
-## 7. O jogo recria os objetos de dentro das células ao carregar
+## 7. The game recreates the objects inside cells on load
 
-Medido no E1a: dois ciclos de carregar e salvar `Beyond Space`, **com o jogo
-pausado**, sem uma ordem dada, produzem **11.434 diferenças**.
+Measured in E1a: two load-and-save cycles of `Beyond Space`, **with the game
+paused**, without a single order given, produce **11,434 differences**.
 
-Elas não são simulação. São realocação: o `idCnt` de cada nave avança milhares
-de unidades por load (a nave 2 foi de 20.417 para 22.913), 676 `<l>` de dentro
-de `<e>` somem e 676 aparecem, e 625 trocam de `id`. Por atributo: `hf` (3.676),
-`atm`/`atm2` (1.685), `x`/`y` (1.559), `rot`, `m`, `invw`, `fg`.
+They are not simulation. They are reallocation: each ship's `idCnt` advances by
+thousands of units per load (ship 2 went from 20,417 to 22,913), 676 `<l>` nodes
+inside `<e>` disappear and 676 appear, and 625 change `id`. By attribute: `hf`
+(3,676), `atm`/`atm2` (1,685), `x`/`y` (1,559), `rot`, `m`, `invw`, `fg`.
 
-Fora das naves, só sete formas mudam sozinhas, entre elas `masterData/@idCounter`,
-`space/@idCnt` e `hostmap/map/l @relationship` — a relação entre facções decai
-sozinha, o que confirma a seção 1.8 pelo lado da medição.
+Outside the ships, only seven shapes change on their own, among them
+`masterData/@idCounter`, `space/@idCnt` and `hostmap/map/l @relationship` — the
+relationship between factions decays by itself, which confirms section 1.8 from
+the measurement side.
 
-**Consequência para o servidor:** nenhum id de objeto de dentro de uma nave
-sobrevive a um ciclo de sessão. O que o servidor guardar sobre o conteúdo de uma
-nave tem que ser descrito por forma e conteúdo — que recurso, quanto, em que
-tipo de módulo — nunca por id. Vale para a conciliação da seção 2.7 e para
-qualquer ideia futura de rastrear objeto.
+**Consequence for the server:** no object id from inside a ship survives a
+session cycle. Whatever the server stores about a ship's contents has to be
+described by shape and content — which resource, how much, in what kind of
+module — never by id. This applies to the reconciliation in section 2.7 and to
+any future idea of tracking an object.
 
-**Consequência para ferramenta:** um perfil de ruído baseado em caminho exato é
-inútil, porque os caminhos aprendidos não existem na rodada seguinte. As 11.434
-diferenças reduzem a **103 formas** quando os ids saem do caminho, e aí o perfil
-transfere. É como o `save_diff.py` faz.
+**Consequence for tooling:** a noise profile based on exact paths is useless,
+because the learned paths do not exist on the next run. The 11,434 differences
+reduce to **103 shapes** once the ids are taken out of the path, and then the
+profile transfers. That is how `save_diff.py` does it.
 
-## 8. Uma transação é assíncrona: a carga viaja de ônibus
+## 8. A transaction is asynchronous: the cargo travels by shuttle
 
-Medido no E2. O jogador comprou 1 Hyperium por 386 créditos de uma nave
-Mercante. Os créditos se movem na hora e batem exatamente nos dois lados
-(`playerBank` −386, `shipBank` da vendedora +386), e o estoque da vendedora já
-sai debitado (3 → 2).
+Measured in E2. The player bought 1 Hyperium for 386 credits from a Merchant
+ship. The credits move immediately and match exactly on both sides
+(`playerBank` −386, the seller's `shipBank` +386), and the seller's stock is
+already debited (3 → 2).
 
-**A carga, não.** No momento do save ela estava em trânsito:
+**The cargo is not.** At the moment of the save it was in transit:
 
-- a pilha de destino no armazém do comprador tinha `onTheWayIn="1"` e
-  `inStorage` **inalterado**
-- havia um `<i eid="172" mo="BeingMoved" dstId="...">` no `<items>` da nave
-- os ônibus (`<crafts>`) carregavam manifestos `<o a="QUANTO" e="RECURSO"
-  sid="NAVE_DESTINO">`
+- the destination stack in the buyer's storage had `onTheWayIn="1"` and
+  `inStorage` **unchanged**
+- there was an `<i eid="172" mo="BeingMoved" dstId="...">` in the ship's `<items>`
+- the shuttles (`<crafts>`) carried manifests `<o a="HOW_MUCH" e="RESOURCE"
+  sid="DESTINATION_SHIP">`
 
-O jogo não teleporta mercadoria: um ônibus vai buscar. Entre fechar o negócio e
-a carga encostar no armazém passa tempo de jogo, e um save tirado nesse meio —
-que é o caso normal, porque autosave não espera — pega o estado partido.
+The game does not teleport goods: a shuttle goes and fetches them. Game time
+passes between closing the deal and the cargo reaching storage, and a save taken
+in that gap — which is the normal case, because autosave does not wait — catches
+the state split in half.
 
-**E a entrega tem duas etapas, não uma.** O ônibus larga a mercadoria **em
-caixas no chão da nave**. Só depois um tripulante, um robô ou o jogador leva
-para o depósito — *e só se houver espaço*. Sem espaço, a caixa fica no chão.
+**And delivery has two stages, not one.** The shuttle drops the goods **in crates
+on the ship's floor**. Only afterwards does a crew member, a robot or the player
+carry them to storage — *and only if there is room*. With no room, the crate stays
+on the floor.
 
-Confere com a estrutura: `<items>/<i>` tem `x`, `y` e **`grndTime`** — tempo de
-chão. Na nave do jogador havia 7 caixas paradas, agrupadas na mesma coordenada,
-com `grndTime` perto de 480 e nenhuma com `mo="BeingMoved"`. Não estavam
-viajando: estavam largadas.
+It matches the structure: `<items>/<i>` has `x`, `y` and **`grndTime`** — ground
+time. In the player's ship there were 7 crates sitting still, grouped at the same
+coordinate, with `grndTime` near 480 and none of them with `mo="BeingMoved"`.
+They were not travelling: they were dumped.
 
-**Consequência para a conciliação (seção 2.7):** somar `inStorage` é errado, e
-não é um erro transitório que se resolve sozinho. O servidor precisa contar
-**três lugares** — `inStorage`, `onTheWayIn` e as caixas em `<items>` — porque
-com o depósito cheio a mercadoria pode morar no chão pelo resto da partida.
-Quem somar só a prateleira acusa de perda o que está a três metros dela.
+**Consequence for reconciliation (section 2.7):** summing `inStorage` is wrong,
+and it is not a transient error that resolves itself. The server has to count
+**three places** — `inStorage`, `onTheWayIn` and the crates in `<items>` —
+because with storage full the goods can live on the floor for the rest of the
+game. Anyone summing only the shelf will report as lost what is sitting three
+metres from it.
 
-Vale também para a devolução: uma sessão pode terminar com mercadoria comprada,
-entregue e nunca guardada.
+The same applies to check-in: a session can end with goods bought, delivered and
+never stored.
 
-**Medido de forma limpa no E6.** A vitrine vendeu 5 Produtos químicos. No save
-do comprador: **+1 em `inStorage` e +4 em caixas no `<items>`**. Os cinco estão
-lá, em dois lugares. Contar só a prateleira erra por 80% nessa transação.
+**Measured cleanly in E6.** The storefront sold 5 Chemicals. In the buyer's save:
+**+1 in `inStorage` and +4 in crates in `<items>`**. All five are there, in two
+places. Counting only the shelf is off by 80% on that transaction.
 
-## 8b. A conciliação é por delta líquido, e o E4 sai por tabela
+## 8b. Reconciliation is by net delta, and E4 falls out for free
 
-A sessão do E6 teve várias transações — o painel permite até quatro por
-negociação — e o save guardou **só o estado final**. Nenhum log, nenhuma ordem,
-nenhum recibo, nenhum vestígio de quantas foram ou em que ordem.
+The E6 session had several transactions — the panel allows up to four per
+negotiation — and the save kept **only the final state**. No log, no order, no
+receipt, no trace of how many there were or in what order.
 
-É exatamente o que a fase 3 supõe e o que o E4 do roteiro ia perguntar. O
-servidor monta o `<shipBank>` e os armazéns do retrato, então conhece o estado
-inicial ao número; a diferença na devolução é a transação, sem precisar
-reconstruir passo a passo.
+That is exactly what phase 3 assumes and what E4 of the script was going to ask.
+The server builds the portrait's `<shipBank>` and storages, so it knows the
+initial state down to the number; the difference at check-in is the transaction,
+with no need to reconstruct it step by step.
 
-## 9. `<markers>` não é necessário para comerciar
+## 9. `<markers>` is not required for trading
 
-A seção 1.7 lista `<markers>` (pontos de atracagem) como um dos três nós que
-naves de NPC costumam ter e a do jogador não. Depois do item 8 — a carga viaja
-de ônibus — a pergunta virou séria: sem ponto de atracagem, o ônibus entrega?
+Section 1.7 lists `<markers>` (docking points) as one of the three nodes NPC
+ships usually have and the player's does not. After item 8 — cargo travels by
+shuttle — the question became serious: with no docking point, does the shuttle
+deliver?
 
-Entrega. A `MFB STRONGHOLD`, a nave que vendeu o Hyperium do E2, **não tem
-`<markers>`**, e a transação foi executada e entregue. Medido em 9 naves:
+It does. The `MFB STRONGHOLD`, the ship that sold the Hyperium in E2, **has no
+`<markers>`**, and the transaction was executed and delivered. Measured across 9
+ships:
 
-| Nave | markers | shipBank |
+| Ship | markers | shipBank |
 |---|---|---|
-| MFB STRONGHOLD (Mercante) | não | **sim** |
-| CS DASHERS SCRAPPER (Civil) | sim (8) | sim |
-| ACS ZAHKUL (Android) | sim (6) | sim |
-| CB DUDDE (Civil) | sim (4) | sim |
-| MAS MARGIN CALL (Militar) | sim (4) | sim |
-| CNHS MORNING STAR (Cultista) | sim (4) | não |
+| MFB STRONGHOLD (Merchant) | no | **yes** |
+| CS DASHERS SCRAPPER (Civilian) | yes (8) | yes |
+| ACS ZAHKUL (Android) | yes (6) | yes |
+| CB DUDDE (Civilian) | yes (4) | yes |
+| MAS MARGIN CALL (Military) | yes (4) | yes |
+| CNHS MORNING STAR (Cultist) | yes (4) | no |
 
-Não há correlação com `<shipBank>` nos dois sentidos: existe nave com banca e
-sem markers, e nave com markers e sem banca. O que manda para comércio é a
-banca.
+There is no correlation with `<shipBank>` in either direction: there are ships
+with a bank and no markers, and ships with markers and no bank. What governs
+trade is the bank.
 
-O formato, quando existe, é `<m m="8" x="11" y="11"/>` — coordenada dentro da
-nave. Por isso clonar de um doador não serviria: os pontos são do casco de
-quem os tem.
+The format, where it exists, is `<m m="8" x="11" y="11"/>` — a coordinate inside
+the ship. Which is why cloning from a donor would not work: the points belong to
+the hull that has them.
 
-**Para o construtor de retratos:** não copiar `<markers>` é seguro.
+**For the portrait builder:** not copying `<markers>` is safe.
 
-## 10. A névoa vem da nave de origem, e o `hostmap` não fecha o interior
+## 10. Fog comes from the source ship, and the `hostmap` does not close the interior
 
-Duas rodadas no jogo, mudando **uma** variável — a nave que serve de origem para
-o retrato. Mesmo destino, mesma facção, mesma linha do `hostmap`, tudo mais
-igual.
+Two runs in the game, changing **one** variable — the ship used as the source for
+the portrait. Same destination, same faction, same `hostmap` row, everything else
+equal.
 
-| Origem | Gravado pela ferramenta | Depois do load | Na tela |
+| Source | Written by the tool | After load | On screen |
 |---|---|---|---|
-| `HSS PERSEUS`, nave **de jogador** (`fg=191`, explorada) | `fog=true unex=1 forceRoof=1`, 616 células em `fg=0` | `fog=false`, `unex` e `forceRoof` **apagados**, 616 células de volta em `fg=191` | teto aberto, tripulação à mostra |
-| `CS DASHERS SCRAPPER`, **NPC autêntico** (`fg=0`, nunca explorada) | `fog=true unex=1 forceRoof=1`, 1536 células em `fg=0` | **idêntico** | `State: Normal (Unexplored)`, silhueta cinza |
+| `HSS PERSEUS`, a **player** ship (`fg=191`, explored) | `fog=true unex=1 forceRoof=1`, 616 cells at `fg=0` | `fog=false`, `unex` and `forceRoof` **erased**, 616 cells back at `fg=191` | roof open, crew in plain sight |
+| `CS DASHERS SCRAPPER`, an **authentic NPC** (`fg=0`, never explored) | `fog=true unex=1 forceRoof=1`, 1536 cells at `fg=0` | **identical** | `State: Normal (Unexplored)`, grey silhouette |
 
-**A névoa é falsificável quando a origem já é não explorada, e não é quando a
-origem é explorada.** O jogo tem outra fonte de verdade e reconstrói a partir
-dela — restaurando, no caso do jogador, exatamente os `fg=191` de origem.
+**Fog is forgeable when the source is already unexplored, and is not when the
+source is explored.** The game has another source of truth and rebuilds from it —
+restoring, in the player's case, exactly the original `fg=191` values.
 
-**Onde a fonte não está:** não é `fog`, `unex`, `forceRoof` nem o `fg` das
-células, porque escrevemos os quatro nos dois casos. Não é o `hostmap`:
-`accessVision="false"` atravessou o load intacto nas duas rodadas. Não é a
-relação entre facções — no mesmo save, uma Civil autêntica sob a mesma linha
-continua escondida enquanto o Escravagista em `Enemies` a −82 está revelado. E
-não é nenhum atributo da raiz `<ship>`: os dois retratos têm exatamente o mesmo
-conjunto de atributos. As únicas diferenças estruturais são `gasWarnings` de um
-lado e `markers` do outro, nenhuma com cara de marca de exploração.
+**Where the source is not:** it is not `fog`, `unex`, `forceRoof`, nor the cells'
+`fg`, because we wrote all four in both cases. It is not the `hostmap`:
+`accessVision="false"` came through the load intact in both runs. It is not the
+relationship between factions — in the same save, an authentic Civilian under
+that same row stays hidden while the Slaver in `Enemies` at −82 is revealed. And
+it is not any attribute of the `<ship>` root: the two portraits have exactly the
+same set of attributes. The only structural differences are `gasWarnings` on one
+side and `markers` on the other, neither of which looks like an exploration mark.
 
-**A consequência de projeto é séria, e não é técnica.** O retrato de um vizinho
-seria a nave *dele* — e a nave de um jogador é, por definição, explorada. Pela
-regra medida, ela nasce revelada e não há como esconder. Restam dois caminhos, e
-a escolha é de desenho:
+**The design consequence is serious, and it is not technical.** A neighbour's
+portrait would be *their* ship — and a player's ship is, by definition, explored.
+By the measured rule, it is born revealed and there is no way to hide it. Two
+paths remain, and the choice is a design one:
 
-1. **Aceitar a exposição visual.** O vizinho vê a planta e a tripulação do
-   retrato. A proteção econômica continua inteira (só o consignado está lá) e a
-   mecânica de guerra do item 11 protege contra roubo. Perde-se privacidade,
-   ganha-se a graça de ver a nave do outro de verdade.
-2. **O retrato deixa de ser a nave dele.** O servidor monta uma vitrine a partir
-   de um casco de NPC — que nasce não explorado e portanto fica escondido — e
-   transplanta só o que importa: o nome do dono, o estoque consignado e a banca.
-   Resolve a névoa de graça, é mais barato de montar, e some com a questão da
-   planta alheia. O custo é que a sala perde "aquela é a nave do Fulano".
+1. **Accept the visual exposure.** The neighbour sees the portrait's layout and
+   crew. The economic protection stays intact (only the consigned goods are
+   there) and the war mechanic of item 11 protects against theft. Privacy is
+   lost, and what is gained is the charm of really seeing the other player's
+   ship.
+2. **The portrait stops being their ship.** The server builds a storefront out of
+   an NPC hull — which is born unexplored and therefore stays hidden — and
+   transplants only what matters: the owner's name, the consigned stock and the
+   bank. It solves fog for free, it is cheaper to assemble, and it makes the
+   question of showing someone else's layout go away. The cost is that the room
+   loses "that one is So-and-so's ship".
 
-A primeira mantém a promessa do projeto; a segunda mantém a privacidade. Não dá
-para ter as duas com o que se sabe hoje.
+The first keeps the project's promise; the second keeps privacy. There is no way
+to have both with what is known today.
 
-## 11. O `hostmap` é por facção, não por vizinho — e isso limita a sala
+## 11. The `hostmap` is per faction, not per neighbour — and that limits the room
 
-Consequência da mecânica de guerra acima, e não está no documento de projeto.
+A consequence of the war mechanic above, and it is not in the design document.
 
-O retrato de um vizinho recebe uma facção do conjunto fixo do jogo. Neste save
-existem dez lados: `Pirate`, `Slaver`, `Android`, `Civilian`, `Cultist`,
-`Merchant`, `Military`, `HavenFoundation`, `FlamingSwords`, `NotSet`. A tabela de
-relações é indexada por **par de lados** (item 4), nunca por nave.
+A neighbour's portrait gets a faction from the game's fixed set. In this save
+there are ten sides: `Pirate`, `Slaver`, `Android`, `Civilian`, `Cultist`,
+`Merchant`, `Military`, `HavenFoundation`, `FlamingSwords`, `NotSet`. The
+relationship table is indexed by **pair of sides** (item 4), never by ship.
 
-Então:
+So:
 
-- abordar o retrato de um vizinho declara guerra ao **lado inteiro** — a todos os
-  NPCs autênticos daquele lado, e a **qualquer outro vizinho** que tenha caído na
-  mesma facção
-- o caminho inverso também vaza: um jogador que entre em guerra com os Civis por
-  motivo normal de jogo passa a estar em guerra com o vizinho que representamos
-  como Civil
-- as permissões que o servidor liga na retirada (`accessTrade` etc.) valem para o
-  lado inteiro, não só para o retrato
+- boarding a neighbour's portrait declares war on the **whole side** — on every
+  authentic NPC of that side, and on **any other neighbour** who landed in the
+  same faction
+- the reverse path leaks too: a player who goes to war with the Civilians for
+  ordinary in-game reasons ends up at war with the neighbour we represent as
+  Civilian
+- the permissions the server turns on at checkout (`accessTrade` and so on) apply
+  to the whole side, not just to the portrait
 
-A seção 1.8 chama a tabela de "painel de controle do servidor sobre o que um
-jogador pode fazer com o retrato do outro". É verdade **na granularidade de
-facção**, e só.
+Section 1.8 calls the table "the server's control panel over what one player can
+do with another's portrait". That is true **at faction granularity**, and only
+there.
 
-**Limite prático de sala.** A seção 1.3 conclui, pelos contadores de id, que "não
-há limite prático de jogadores por sala". Continua valendo para o save. Mas para
-**vizinhos visíveis no mesmo setor** o limite é o número de facções distintas —
-cerca de nove — porque a partir daí dois vizinhos compartilham lado e deixam de
-ser distinguíveis pelo `hostmap`. Vizinhos em setores diferentes não competem por
-isso.
+**Practical room limit.** Section 1.3 concludes, from the id counters, that
+"there is no practical limit on players per room". That still holds for the save.
+But for **neighbours visible in the same sector** the limit is the number of
+distinct factions — around nine — because past that two neighbours share a side
+and stop being distinguishable through the `hostmap`. Neighbours in different
+sectors do not compete for this.
 
-A identidade visual continua vindo do `sname` (seção 1.10). O que colide é o
-controle de permissão e a propagação de guerra, não o nome.
+Visual identity still comes from `sname` (section 1.10). What collides is
+permission control and war propagation, not the name.
 
-## 12. O painel de comércio tem teto por recurso, não por estoque
+## 12. The trade panel has a cap per resource, not per stock
 
-Três rodadas para chegar aqui, e as três primeiras hipóteses morreram no caminho.
+Three runs to get here, and the first three hypotheses died along the way.
 
-| Consignado | Ofertado | Casco |
+| Consigned | Offered | Hull |
 |---|---|---|
-| 40 Produtos químicos | **40** | nave de jogador |
-| 30 Placas de aço | **26** | nave de jogador |
-| 30 Placas de aço, sozinhas num armazém | **26** | outra nave de jogador |
-| 10 Produtos químicos | **10** | casco de NPC |
-| 30 Placas de aço | **26** | casco de NPC |
+| 40 Chemicals | **40** | player ship |
+| 30 Steel Plates | **26** | player ship |
+| 30 Steel Plates, alone in a storage | **26** | another player ship |
+| 10 Chemicals | **10** | NPC hull |
+| 30 Steel Plates | **26** | NPC hull |
 
-**É teto, não deslocamento.** Quantidade pequena sai inteira; as Placas param em
-26 em três cascos diferentes, com e sem outro recurso junto.
+**It is a cap, not an offset.** A small quantity comes out whole; the Plates stop
+at 26 across three different hulls, with and without another resource alongside.
 
-**O que já foi descartado:**
+**What has already been ruled out:**
 
-- *capacidade de armazém* — armazéns autênticos guardam 1.530, 514, 278 unidades
-- *teto por pilha* — Placas chegam a 47 numa pilha real, Infrabloco a 65
-- *concentração num armazém só* — o mesmo 26 com o recurso sozinho
-- *consumo pela tripulação* — nada de obra pendente, e nada sumiu do arquivo:
-  o save seguiu com 30 e o `playerBank` intacto
+- *storage capacity* — authentic storages hold 1,530, 514, 278 units
+- *per-stack cap* — Plates reach 47 in a real stack, Infrablock 65
+- *concentration in a single storage* — the same 26 with the resource alone
+- *crew consumption* — no pending construction, and nothing vanished from the
+  file: the save carried on with 30 and the `playerBank` untouched
 
-**A explicação que sobra, e ela encaixa com o item 8:** o teto é de **transporte**,
-não de estoque. A carga é entregue de ônibus, em caixas, e o painel oferta o que
-cabe numa viagem. Placas de aço são volumosas e param em 26; Produtos químicos
-são compactos e passam de 40. Nada some — o excesso simplesmente não está à
-venda naquele momento.
+**The explanation that remains, and it fits with item 8:** the cap is on
+**transport**, not on stock. Cargo is delivered by shuttle, in crates, and the
+panel offers what fits in one trip. Steel Plates are bulky and stop at 26;
+Chemicals are compact and go past 40. Nothing disappears — the excess simply is
+not for sale at that moment.
 
-**Como confirmar:** consignar 100 Produtos químicos. Se pararem num número
-próprio deles — e não em 26 — o teto é por volume de recurso e a explicação
-fecha.
+**How to confirm:** consign 100 Chemicals. If they stop at a number of their own
+— and not at 26 — the cap is by resource volume and the explanation closes.
 
-**Para a consignação:** o dono precisa saber que consignar 100 de algo volumoso
-não expõe 100. O servidor deve calcular e mostrar o que de fato fica à venda, em
-vez de prometer o número cheio.
+**For consignment:** the owner needs to know that consigning 100 of something
+bulky does not expose 100. The server should compute and show what actually goes
+on sale, instead of promising the full number.
 
-## 13. O Steam Cloud sincroniza o zip, não a pasta do save
+## 13. Steam Cloud syncs the zip, not the save folder
 
-Medido no `remotecache.vdf` do jogo (app 979110): o Steam rastreia **uma
-entrada por partida**, e ela é sempre `savegames/<Nome>/cloudZipFile.zip`. A
-pasta `save/`, onde moram o `game` e as naves, **não** é sincronizada.
+Measured in the game's `remotecache.vdf` (app 979110): Steam tracks **one entry
+per game**, and it is always `savegames/<Name>/cloudZipFile.zip`. The `save/`
+folder, where `game` and the ships live, is **not** synced.
 
-Ou seja: o `save/` é o estado local, e o zip é a cópia da nuvem, refeita pelo
-jogo ao gravar.
+In other words: `save/` is the local state, and the zip is the cloud copy,
+rebuilt by the game when it writes.
 
-**Por que isso importa para o cliente.** Um `cloudZipFile.zip` velho ao lado de
-um save recém-retirado é a combinação perigosa: se o Steam resolver restaurar —
-outra máquina, um conflito de sincronia —, ele sobrescreve a sessão que o
-servidor emprestou com uma partida antiga, e o jogador perde o progresso sem
-entender por quê. O cliente passa a apagar o zip anterior ao escrever uma
-retirada.
+**Why this matters for the client.** An old `cloudZipFile.zip` sitting next to a
+freshly checked-out save is the dangerous combination: if Steam decides to
+restore — another machine, a sync conflict — it overwrites the session the server
+lent out with an old game, and the player loses progress without understanding
+why. The client now deletes the previous zip when it writes a checkout.
 
-**Efeito colateral que o servidor detecta.** Se acontecer mesmo assim, o save
-devolvido volta com dia de jogo **menor** do que o emprestado. A galáxia bate, o
-jogador não fez nada de errado, e a conferência da seção 2.7 tem aí um sinal com
-causa conhecida — vale distinguir esse caso de trapaça antes de sinalizar
-alguém.
+**A side effect the server can detect.** If it happens anyway, the returned save
+comes back with a **lower** game day than the one lent out. The galaxy matches,
+the player did nothing wrong, and the check in section 2.7 has here a signal with
+a known cause — worth telling this case apart from cheating before flagging
+anyone.
 
-**O que o jogo precisa para listar um save.** A classe `GameData$SaveGame` tem
-`scanForSaves`, `gameFile`, `infoFile` e `metaFile`: ele varre a pasta
-procurando arquivos, não lê um índice. `cloud.xml` e `cloudZipFile.zip`
-aparecem só no caminho de sincronia. Um save escrito sem eles deve aparecer
-normalmente — a confirmar na primeira retirada.
+**What the game needs in order to list a save.** The `GameData$SaveGame` class has
+`scanForSaves`, `gameFile`, `infoFile` and `metaFile`: it scans the folder looking
+for files, it does not read an index. `cloud.xml` and `cloudZipFile.zip` appear
+only in the sync path. A save written without them should show up normally — to
+be confirmed on the first checkout.
 
-## 14. O jogo tem mod loader nativo, e ele já traz o AspectJ
+## 14. The game has a native mod loader, and it already ships AspectJ
 
-**Corrige a seção 2.9**, que diz: "da comunidade, não da Bugbyte. Não há API
-oficial nem hooks providos pelo jogo."
+**Corrects section 2.9**, which says: "from the community, not from Bugbyte. There
+is no official API and no hooks provided by the game."
 
-`fi.bugbyte.spacehaven.steam.SpacehavenSteam` tem um método
-`tryToLaunchModLoader`, e as strings da classe apontam para itens de Steam
-Workshop:
+`fi.bugbyte.spacehaven.steam.SpacehavenSteam` has a `tryToLaunchModLoader` method,
+and the class's strings point at Steam Workshop items:
 
 ```
 /workshop/content/979110/3703674043/spacehaven-modloader.exe
 /workshop/content/979110/3715831202/spacehaven-modloader
 ```
 
-Ou seja: **o próprio jogo procura e lança um mod loader** distribuído pela
-Workshop. Não é gambiarra de fora; é caminho que o executável conhece.
+In other words: **the game itself looks for and launches a mod loader**
+distributed through the Workshop. It is not an outside hack; it is a path the
+executable knows about.
 
-E o conteúdo do item 3703674043, já instalado nesta máquina, traz:
+And the contents of item 3703674043, already installed on this machine, include:
 
 ```
 aspectj-1.9.19.jar
@@ -389,39 +400,39 @@ aspectjweaver-1.9.19.jar
 spacehaven-modloader.exe
 ```
 
-**O AspectJ vem junto.** A seção 2.9 estima o custo do mod como "o jogador
-precisa instalar AspectJ, editar o `config.json` e ter Java 17". Os dois
-primeiros somem: quem assina o mod loader na Workshop já recebe o weaver, e o
-jogo o chama sozinho.
+**AspectJ comes with it.** Section 2.9 estimates the cost of the mod as "the
+player has to install AspectJ, edit `config.json` and have Java 17". The first
+two go away: whoever subscribes to the mod loader on the Workshop already
+receives the weaver, and the game calls it on its own.
 
-Isso derruba quase todo o argumento de fricção que fez o mod ser adiado. A
-decisão de 2.9 — "o mod é opcional e não bloqueia fase nenhuma" — foi tomada
-sobre um custo que não é o real.
+That knocks down almost the whole friction argument that got the mod postponed.
+The decision in 2.9 — "the mod is optional and does not block any phase" — was
+taken over a cost that is not the real one.
 
-**O que continua verdade da 2.9:** a simulação segue local e não determinística,
-e cada atualização do jogo pode quebrar pointcuts, porque eles apontam para
-assinaturas de método que ninguém prometeu manter.
+**What stays true from 2.9:** the simulation is still local and non-deterministic,
+and every game update can break pointcuts, because they point at method
+signatures nobody promised to keep.
 
-**Não verificado:** como se registra um aspecto próprio no loader, e se ele
-aceita qualquer weaving ou só o que os mods de dados usam. O outro item
-instalado (3731405861) é mod de dados puro — `info.xml` mais `patches/*.xml` —
-então o caminho de dados está confirmado e o de código, só inferido pela
-presença do weaver.
+**Not verified:** how you register your own aspect with the loader, and whether it
+accepts any weaving or only what the data mods use. The other installed item
+(3731405861) is a pure data mod — `info.xml` plus `patches/*.xml` — so the data
+path is confirmed and the code path is only inferred from the presence of the
+weaver.
 
-## 15. Miudezas
+## 15. Odds and ends
 
-- **`balanced.bin`** existe na pasta do save e não está documentado. Os
-  documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
-  nenhum dos saves examinados.
-- **`info/@version` é `21`**, a versão do formato do save — não a versão do jogo.
-  Um save de 1.0.4 traz `<info version="21" date="3289920"
-  realTimeDate="1785467969073"/>`. Se o servidor for ancorar versão por sala,
-  como o plano recomenda, é este número que ele tem para trabalhar.
-- **`fg` só existe em parte dos `<e>`.** Em `ship17`, 392 de 737 numa nave, 1536
-  de 3501 noutra. Névoa é por célula de piso, não por elemento.
-- **`playerBank`** tem a mesma forma do `<shipBank>`: `<playerBank s="Player"
+- **`balanced.bin`** exists in the save folder and is not documented. The
+  documents mention `stats.bin` and `timeline.xml`; `timeline.xml` did not appear
+  in any of the saves examined.
+- **`info/@version` is `21`**, the save format version — not the game version. A
+  save from 1.0.4 carries `<info version="21" date="3289920"
+  realTimeDate="1785467969073"/>`. If the server is going to anchor a version per
+  room, as the plan recommends, this is the number it has to work with.
+- **`fg` only exists on some of the `<e>` elements.** In `ship17`, 392 out of 737
+  in one ship, 1536 out of 3501 in another. Fog is per floor cell, not per
+  element.
+- **`playerBank`** has the same shape as `<shipBank>`: `<playerBank s="Player"
   ca="0" cr="0" slp="10064" blp="9856"/>`.
-- **Um mesmo `sid` pode aparecer duas vezes** na varredura de naves de um save
-  (`sid=1459` em `Beyond Space`, uma vez com 0 tripulantes e outra com 6). Não
-  investigado; provavelmente a mesma nave listada no setor e num arquivo de
-  `ships/`.
+- **The same `sid` can appear twice** in a scan of a save's ships (`sid=1459` in
+  `Beyond Space`, once with 0 crew and once with 6). Not investigated; probably
+  the same ship listed both in the sector and in a file under `ships/`.

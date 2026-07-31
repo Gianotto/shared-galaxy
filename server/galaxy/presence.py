@@ -13,8 +13,8 @@ errado, em silencio (`docs/findings.md`, item 1).
 jogador e 461 em toda partida do mundo. Quem distingue um jogador do outro na
 tela e o `sname` (secao 1.10), entao e ele que o mapa mostra.
 
-**O dia de jogo.** Serve a conferencia da secao 2.7 — um save que volta com
-menos dias do que saiu e sinal, nao acidente.
+**A idade da colonia**, em dias. Serve a conferencia da secao 2.7 — um save que
+volta mais novo do que saiu e sinal, nao acidente.
 
 Somente leitura, e tolerante: um save estranho devolve campo nulo em vez de
 explodir. Recusar a devolucao de alguem porque o mapa nao conseguiu ler a
@@ -35,19 +35,20 @@ PLAYER_FACTION = "461"
 def read(folder: str) -> dict:
     """O que o servidor guarda sobre a presenca de um jogador."""
     out = {"shipName": None, "system": None, "celeid": None,
-           "gameDay": None, "ships": 0, "crew": 0}
+           "ageDays": None, "ships": 0, "crew": 0}
     try:
         sf = SaveFile(folder)
     except SaveError:
         return out
 
-    out["gameDay"] = _game_day(folder)
+    out["ageDays"] = _age_days(folder)
     out.update(_position(sf))
     out.update(_player_ship(sf))
     return out
 
 
-def _game_day(folder: str) -> float | None:
+def _age_days(folder: str) -> float | None:
+    """A idade da colonia em dias, lida do `info`."""
     path = os.path.join(folder, "info")
     if not os.path.isfile(path):
         return None
