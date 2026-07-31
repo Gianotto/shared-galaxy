@@ -1,0 +1,64 @@
+name: Testes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.10 é o piso declarado no README; 3.13 pega o que quebrou desde então.
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Testes
+        run: python3 -m unittest discover -s tests -t . -v
+
+      - name: As ferramentas rodam
+        # Sem save real no CI, o que dá para garantir é que os scripts importam
+        # e respondem ao --help. Já pega erro de sintaxe e import quebrado.
+        run: |
+          for tool in tools/*.py; do
+            echo "== $tool"
+            python3 "$tool" --help > /dev/null
+          done
+
+      - name: Sem dependências externas
+        # A promessa do projeto é biblioteca padrão pura. Se alguém importar
+        # algo de fora, é aqui que aparece.
+        run: |
+          python3 - <<'PY'
+          import ast, pathlib, sys
+          allowed = {"sgalaxy", "tools", "tests"}
+          bad = []
+          for path in pathlib.Path(".").rglob("*.py"):
+              if ".github" in path.parts:
+                  continue
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Import):
+                      names = [a.name.split(".")[0] for a in node.names]
+                  elif isinstance(node, ast.ImportFrom):
+                      names = [(node.module or "").split(".")[0]]
+                  else:
+                      continue
+                  for name in names:
+                      if not name or name in allowed:
+                          continue
+                      if name in sys.stdlib_module_names:
+                          continue
+                      bad.append(f"{path}: {name}")
+          if bad:
+              print("dependência fora da biblioteca padrão:")
+              print("\n".join(bad))
+              raise SystemExit(1)
+          print("só biblioteca padrão, como prometido")
+          PY

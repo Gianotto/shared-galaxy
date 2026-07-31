@@ -8,6 +8,7 @@ venv/
 # O roteiro em docs/trade-experiment.md fica; o que sai dele, não.
 experiments/snapshots/
 experiments/*.json
+!experiments/README.md
 
 # Backups que as ferramentas criam ao gravar um save
 *.bak-*
