@@ -67,6 +67,11 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
         overflow-x:auto; font-size:.85rem; }}
   .map {{ width:100%; height:auto; background:#070b17;
          border:1px solid var(--line); border-radius:.5rem; }}
+  /* Caixa de informação no hover, como a do jogo. CSS puro: sem JavaScript,
+     porque a página inteira se sustenta em ser legível no código-fonte. */
+  .sys .tip {{ opacity:0; pointer-events:none; transition:opacity .12s; }}
+  .sys:hover .tip {{ opacity:1; }}
+  .sys:hover .dot {{ r:4; }}
   .cards {{ display:grid; gap:.8rem;
            grid-template-columns:repeat(auto-fill,minmax(15rem,1fr)); }}
   .card {{ border:1px solid var(--line); border-radius:.5rem; padding:.9rem; }}
@@ -107,6 +112,60 @@ def room_list(rooms: list, lang: str) -> str:
     return layout(t("site", lang), body, lang, t("tagline", lang), "/")
 
 
+# Tooltip geometry. Everything is drawn, not styled by a layout engine, so the
+# numbers live here instead of being scattered through the f-strings.
+TIP_LINE = 13
+TIP_PAD = 7
+TIP_CHAR = 5.6          # average glyph width at 10px in the UI font
+TIP_MAX_SHIPS = 8       # beyond this the box stops being readable
+
+
+def _system_group(x: float, y: float, title: str, people: list,
+                  seen: dict | None, map_h: float, lang: str) -> str:
+    """One system: its hover target and the box that appears over it.
+
+    The box is the game's own idiom — system name, then who is there. Pure
+    SVG and CSS, no JavaScript: the whole page rests on being readable from
+    view-source, and a tooltip is not worth breaking that for.
+    """
+    lines = [title]
+    if seen and seen.get("first_by"):
+        lines.append(f'{t("first_here", lang)}: {seen["first_by"]}')
+    # A box with sixty-four names is as unreadable as an inline list of them.
+    # Everyone starts on the same rock (findings 16), so this is the normal
+    # opening state of a full room, not an edge case.
+    for p in people[:TIP_MAX_SHIPS]:
+        ship = p["ship_name"] or p["display_name"]
+        mark = " ●" if p["playing"] else ""
+        lines.append(f"{ship}{mark}")
+    if len(people) > TIP_MAX_SHIPS:
+        lines.append(t("and_more", lang).format(n=len(people) - TIP_MAX_SHIPS))
+    if not people and not seen:
+        lines.append(t("never_reached", lang))
+
+    w = max(len(l) for l in lines) * TIP_CHAR + 2 * TIP_PAD
+    h = len(lines) * TIP_LINE + 2 * TIP_PAD - 3
+
+    # Flip the box so it never leaves the drawing. A tooltip clipped by the
+    # edge is a tooltip that fails exactly where the map is most crowded.
+    bx = x + 12 if x + 12 + w < MAP_W else x - 12 - w
+    by = y - h / 2
+    by = max(4.0, min(by, map_h - h - 4))
+
+    rows = "".join(
+        f'<text x="{bx + TIP_PAD:.1f}" y="{by + TIP_PAD + 10 + i * TIP_LINE:.1f}" '
+        f'fill="{"#e8ecf8" if i == 0 else "#a9b4d0"}" font-size="10" '
+        f'{"font-weight=\"600\"" if i == 0 else ""}>{_esc(line)}</text>'
+        for i, line in enumerate(lines))
+
+    return (f'<g class="sys">'
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="10" fill="transparent"/>'
+            f'<g class="tip">'
+            f'<rect x="{bx:.1f}" y="{by:.1f}" width="{w:.1f}" height="{h:.1f}" '
+            f'rx="4" fill="#111a35" stroke="#3d4a72" opacity=".97"/>'
+            f'{rows}</g></g>')
+
+
 def starmap_svg(galaxy: dict, roster: list, lang: str,
                 visits: dict | None = None) -> str:
     """The room map, drawn on the server.
@@ -134,64 +193,47 @@ def starmap_svg(galaxy: dict, roster: list, lang: str,
         if p["at_system"]:
             here.setdefault(str(p["at_system"]), []).append(p)
 
-    dots, marks, hits = [], [], []
-    for s in systems:
-        x, y = px(s)
-        people = here.get(str(s["systemId"]))
-        named = bool(s["name"])
-        title = _esc(s["name"] or f'system {s["systemId"]}')
+    # Ordem de desenho importa: SVG nao tem z-index, entao o que vem depois
+    # cobre o que veio antes. Os pontos vao primeiro e os grupos com caixa
+    # depois, senao a caixa de um sistema fica atras do vizinho.
+    dots, groups = [], []
+    for s_ in systems:
+        x, y = px(s_)
+        people = here.get(str(s_["systemId"]), [])
+        seen = visits.get(str(s_["systemId"]))
+        title = s_["name"] or f'system {s_["systemId"]}'
+
         if people:
-            # Everyone starts on the same rock — the seed reproduces the
-            # starting point — so on day one a room of 64 has 64 names on one
-            # dot. Show a few and count the rest (findings item 16).
-            shown = [_esc(p["ship_name"] or p["display_name"])
-                     for p in people[:3]]
-            names = ", ".join(shown)
-            if len(people) > 3:
-                names += f" +{len(people) - 3}"
             playing = any(p["playing"] for p in people)
             colour = "var(--on)" if playing else "var(--me)"
-            # The system name goes under the marker, not only in the tooltip.
-            # A map that hides every name behind a hover is a map that reads as
-            # empty — and on a phone there is no hover at all.
-            label = (f'<text x="{x:.1f}" y="{y + 18:.1f}" fill="var(--dim)" '
-                     f'font-size="8" text-anchor="middle">{title}</text>'
-                     if named else "")
-            marks.append(
+            # One name reads; a list does not. More than one becomes a count,
+            # and the box on hover has the detail.
+            if len(people) == 1:
+                label = _esc(people[0]["ship_name"]
+                             or people[0]["display_name"])
+            else:
+                label = f'{len(people)} {t("players", lang)}'
+            dots.append(
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="7" fill="none" '
-                f'stroke="{colour}" stroke-width="1.5" opacity=".9">'
-                f'<title>{title} — {names}</title></circle>'
+                f'stroke="{colour}" stroke-width="1.5" opacity=".9"/>'
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.5" fill="{colour}"/>'
                 f'<text x="{x:.1f}" y="{y - 11:.1f}" fill="{colour}" '
-                f'font-size="10" text-anchor="middle">{names}</text>{label}')
+                f'font-size="10" text-anchor="middle">{label}</text>')
+        elif seen:
+            dots.append(
+                f'<circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="3" '
+                f'fill="#a8c0f0" opacity=".9"/>')
         else:
-            # Visited means the server RECORDED somebody there — a position read
-            # from a save on join or check-in. Not inferred from the system
-            # having a name: the game names all of them at once, early, so that
-            # would light up the whole map (findings item 15).
-            seen = visits.get(str(s["systemId"]))
-            if seen:
-                tip = (f'{title} — first: {_esc(seen["first_by"] or "?")}'
-                       if seen.get("first_by") else title)
-                dots.append(
-                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="#a8c0f0" '
-                    f'opacity=".9"><title>{tip}</title></circle>')
-            else:
-                dots.append(
-                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.8" fill="#5a6ba0" '
-                    f'opacity=".55"><title>{title}</title></circle>')
-        # A 1.8px dot is almost impossible to hover. An invisible disc over each
-        # system carries the tooltip, so the name appears near the dot instead
-        # of only dead on it.
-        hits.append(
-            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="9" fill="transparent">'
-            f'<title>{title}</title></circle>')
+            dots.append(
+                f'<circle class="dot" cx="{x:.1f}" cy="{y:.1f}" r="1.8" '
+                f'fill="#5a6ba0" opacity=".55"/>')
 
+        groups.append(_system_group(x, y, title, people, seen, height, lang))
     legend = (f'<p class="sub" style="margin:.5rem 0 0;font-size:.85rem">'
               f'{t("map_legend", lang)}</p>')
     return (f'<svg class="map" viewBox="0 0 {MAP_W} {height:.0f}" '
             f'role="img" aria-label="galaxy map">'
-            f'{"".join(dots)}{"".join(marks)}{"".join(hits)}</svg>{legend}')
+            f'{"".join(dots)}{"".join(groups)}</svg>{legend}')
 
 
 def room_page(room: dict, roster: list, galaxy: dict, lang: str,

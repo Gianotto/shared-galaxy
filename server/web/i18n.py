@@ -75,14 +75,16 @@ STRINGS: dict = {
     "th_age": {"pt": "idade", "en": "age"},
     "days": {"pt": "dias", "en": "days"},
     "playing": {"pt": "jogando", "en": "playing"},
+    "and_more": {"pt": "e mais {n}", "en": "and {n} more"},
+    "first_here": {"pt": "primeiro aqui", "en": "first here"},
+    "never_reached": {"pt": "ninguém chegou aqui ainda",
+                      "en": "nobody has reached this yet"},
     "map_legend": {
-        "pt": "Cada ponto é um sistema, na posição da estrela dele. Os pontos "
-              "claros são sistemas por onde a sala já passou; os apagados, "
-              "ninguém alcançou ainda. Passe o mouse para ver o nome e quem "
-              "chegou primeiro.",
-        "en": "Each dot is a system, at its star's position. Bright dots are "
-              "systems the room has been to; dim ones nobody has reached yet. "
-              "Hover for the name and who got there first.",
+        "pt": "Cada ponto é um sistema, na posição da estrela dele. Os claros "
+              "são por onde a sala já passou. Passe o mouse para ver o nome e "
+              "quem está lá.",
+        "en": "Each dot is a system, at its star's position. Bright ones are "
+              "where the room has been. Hover for the name and who is there.",
     },
 
     # -- how to join

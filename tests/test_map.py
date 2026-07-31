@@ -46,7 +46,7 @@ class MapTestCase(unittest.TestCase):
         out = starmap_svg(GALAXY, [], "en", visits)
         self.assertIn('r="3"', out, "o sistema visitado não foi destacado")
         self.assertIn("#a8c0f0", out)
-        self.assertIn("first: Ana", out, "não diz quem chegou primeiro")
+        self.assertIn("first here: Ana", out, "não diz quem chegou primeiro")
 
     def test_a_name_alone_does_not_count_as_visited(self):
         """O erro que o item 15 registra: nomeado não é visitado."""
@@ -60,25 +60,29 @@ class MapTestCase(unittest.TestCase):
         out = starmap_svg(GALAXY, [], "en")
         self.assertEqual(out.count('fill="transparent"'), 3)
 
-    def test_unnamed_system_still_has_a_tooltip(self):
+    def test_every_system_gets_a_box(self):
         out = starmap_svg(GALAXY, [], "en")
-        self.assertIn("<title>system 3</title>", out)
+        self.assertEqual(out.count('class="tip"'), 3)
 
-    def test_player_marker_carries_ship_and_system_name(self):
+    def test_unnamed_system_says_so_in_the_box(self):
+        out = starmap_svg(GALAXY, [], "en")
+        self.assertIn(">system 3<", out)
+
+    def test_an_untouched_system_says_nobody_has_been(self):
+        out = starmap_svg(GALAXY, [], "en")
+        self.assertIn("nobody has reached this yet", out)
+
+    def test_player_marker_carries_ship_and_box_carries_system(self):
         out = starmap_svg(GALAXY, [_player("1")], "en")
-        self.assertIn(">HSS TEST</text>", out)
-        self.assertIn(">Alpha</text>", out, "o nome do sistema não apareceu")
+        self.assertIn(">HSS TEST</text>", out, "a nave não aparece no mapa")
+        self.assertIn(">Alpha</text>", out, "o sistema não aparece na caixa")
 
-    def test_playing_uses_a_different_colour(self):
+    def test_playing_uses_a_different_colour_and_a_mark(self):
         away = starmap_svg(GALAXY, [_player("1", playing=False)], "en")
         live = starmap_svg(GALAXY, [_player("1", playing=True)], "en")
         self.assertIn("var(--me)", away)
         self.assertIn("var(--on)", live)
-
-    def test_two_players_in_one_system_are_listed_together(self):
-        out = starmap_svg(GALAXY, [_player("2", "Alpha One"),
-                                   _player("2", "Beta Two")], "en")
-        self.assertIn("Alpha One, Beta Two", out)
+        self.assertIn("●", live, "não marca quem está jogando agora")
 
     def test_ship_names_are_escaped(self):
         """O `sname` é texto livre do jogador, e a página é pública."""
@@ -90,25 +94,39 @@ class MapTestCase(unittest.TestCase):
         galaxy = {"systems": GALAXY["systems"]}
         self.assertIn("<svg", starmap_svg(galaxy, [], "en"))
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_boxes_are_drawn_after_every_dot(self):
+        """SVG não tem z-index: caixa desenhada antes fica atrás do vizinho."""
+        out = starmap_svg(GALAXY, [], "en")
+        primeira_caixa = out.index('class="tip"')
+        ultimo_ponto = out.rindex('class="dot"')
+        self.assertLess(ultimo_ponto, primeira_caixa,
+                        "uma caixa seria coberta pelo ponto de outro sistema")
 
 
 class CrowdedSystemTestCase(unittest.TestCase):
     """Todos nascem no mesmo corpo celeste (findings 16).
 
-    Numa sala de 64, o dia um tem 64 nomes num ponto só. O mapa é a vitrine —
-    ilegível ali é caro.
+    Numa sala de 64, o dia um tem 64 jogadores num ponto só. O mapa é a
+    vitrine — ilegível ali é caro.
     """
 
-    def test_a_crowd_is_summarised_not_listed(self):
+    def test_a_crowd_becomes_a_count_on_the_map(self):
         crowd = [_player("1", f"SHIP {i}") for i in range(20)]
         out = starmap_svg(GALAXY, crowd, "en")
-        self.assertIn("SHIP 0, SHIP 1, SHIP 2 +17", out)
-        self.assertNotIn("SHIP 9", out, "listou a multidão inteira")
+        self.assertIn(">20 players</text>", out)
+        self.assertNotIn(">SHIP 0, SHIP 1", out, "listou a multidão no mapa")
 
-    def test_a_small_group_is_listed_in_full(self):
-        out = starmap_svg(GALAXY, [_player("1", "A"), _player("1", "B")], "en")
-        self.assertIn(">A, B</text>", out)
-        self.assertNotIn("+", out.split("</text>")[0])
+    def test_the_box_lists_a_few_and_counts_the_rest(self):
+        crowd = [_player("1", f"SHIP {i}") for i in range(20)]
+        out = starmap_svg(GALAXY, crowd, "en")
+        self.assertIn("SHIP 0", out)
+        self.assertIn("and 12 more", out)
+        self.assertNotIn("SHIP 15", out, "a caixa ficaria alta demais")
+
+    def test_a_single_player_keeps_their_name_on_the_map(self):
+        out = starmap_svg(GALAXY, [_player("1", "HSS YANNI")], "en")
+        self.assertIn(">HSS YANNI</text>", out)
+
+
+if __name__ == "__main__":
+    unittest.main()
