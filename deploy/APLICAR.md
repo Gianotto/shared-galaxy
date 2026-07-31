@@ -65,3 +65,29 @@ sudo systemctl reload nginx
 sudo cp /etc/cloudflared/config.yml.bak-galaxy /etc/cloudflared/config.yml
 sudo systemctl restart cloudflared
 ```
+
+---
+
+## Validar antes de aplicar
+
+A configuração deste diretório é conferida contra um nginx de verdade antes de
+sair daqui. Para repetir em qualquer máquina com docker:
+
+```bash
+docker run --rm -v "$PWD/deploy:/t:ro" nginx:alpine sh -c '
+  cp /t/sgalaxy_limits.conf /etc/nginx/conf.d/
+  cp /t/proxy_sgalaxy.conf  /etc/nginx/
+  mkdir -p /etc/nginx/sites-enabled
+  cp /t/nginx-galaxy.conf /etc/nginx/sites-enabled/galaxy
+  sed -i "s|include /etc/nginx/conf.d/\*.conf;|include /etc/nginx/conf.d/*.conf;\n    include /etc/nginx/sites-enabled/*;|" /etc/nginx/nginx.conf
+  nginx -t'
+```
+
+Duas coisas que o nginx recusa e não são óbvias:
+
+- **não existe rate por hora.** `limit_req_zone` só entende `r/s` e `r/m`, com
+  valor inteiro. O piso é `1r/m`.
+- **diretiva de proxy não se sobrepõe.** Se `proxy_send_timeout` está num
+  arquivo incluído, um `location` não pode declarar outro valor — o nginx
+  reclama de duplicata em vez de usar o mais específico. Por isso os tempos
+  ficam em cada `location`, e não no `proxy_sgalaxy.conf`.
