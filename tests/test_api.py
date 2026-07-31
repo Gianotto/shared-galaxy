@@ -566,3 +566,46 @@ class WebPagesTestCase(unittest.TestCase):
         r = self.client.get(f"/room/{room['id']}")
         self.assertNotIn("<script>alert(1)</script>", r.text)
         self.assertIn("&lt;script&gt;", r.text)
+
+    def test_map_marks_only_systems_the_room_actually_visited(self):
+        """Visitado é o que o servidor registrou, não o que tem nome.
+
+        A versão anterior usava 'sistema nomeado' como proxy de visitado, e o
+        jogo nomeia todos de uma vez — o mapa inteiro acendia (findings 15).
+        """
+        player = self._player()
+        room = self.client.post("/api/v1/rooms", json={"seed": "1"},
+                                headers=self._auth(player)).json()
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(player))
+        with db.pool().connection() as conn:
+            visitas = conn.execute(
+                "SELECT system_id, celeid FROM room_visit WHERE room_id = %s",
+                (room["id"],)).fetchall()
+        self.assertEqual(len(visitas), 1, "registrou visita a mais de um sistema")
+        self.assertEqual(visitas[0]["system_id"], "6")
+        self.assertEqual(visitas[0]["celeid"], "102")
+
+        # O molde tem um sistema só, e o jogador está nele — vira marcador de
+        # jogador, não ponto visitado. O destaque em si é testado à parte, em
+        # tests/test_map.py, sem precisar de banco.
+
+    def test_every_system_has_a_hover_target(self):
+        """Um ponto de 1,8px é quase impossível de acertar com o mouse."""
+        player = self._player()
+        room = self.client.post("/api/v1/rooms", json={"seed": "1"},
+                                headers=self._auth(player)).json()
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(player))
+        page = self.client.get(f"/room/{room['id']}").text
+        self.assertIn('fill="transparent"', page,
+                      "não há área de captura para o hover")
+
+    def test_room_cap_can_go_well_past_eight(self):
+        """O limite de 8 era arbitrário; o real é por setor, não por sala."""
+        player = self._player()
+        r = self.client.post("/api/v1/rooms",
+                             json={"seed": "1", "maxPlayers": 200},
+                             headers=self._auth(player))
+        self.assertEqual(r.status_code, 201, r.text)
+        self.assertEqual(r.json()["maxPlayers"], 200)

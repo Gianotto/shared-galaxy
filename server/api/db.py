@@ -301,3 +301,34 @@ def galaxy_map(conn: psycopg.Connection, room_id: str) -> dict:
     return {"w": (room or {}).get("galaxy_w") or 0,
             "h": (room or {}).get("galaxy_h") or 0,
             "systems": [dict(s) for s in sistemas]}
+
+
+def record_visit(conn: psycopg.Connection, room_id: str, player_id: int,
+                 system: str | None, celeid: str | None) -> None:
+    """Marca que a sala esteve aqui.
+
+    Acumula, nunca apaga: o mapa mostra onde a sala ja chegou, e quem chegou
+    primeiro fica registrado. E o dado honesto que substituiu a inferencia
+    errada de tratar sistema nomeado como sistema visitado (findings item 15).
+    """
+    if not system:
+        return
+    conn.execute(
+        """INSERT INTO room_visit (room_id, system_id, celeid, first_by)
+           VALUES (%s, %s, %s, %s)
+           ON CONFLICT (room_id, system_id, celeid) DO UPDATE
+               SET visits = room_visit.visits + 1""",
+        (room_id, system, celeid or "", player_id))
+
+
+def room_visits(conn: psycopg.Connection, room_id: str) -> dict:
+    """Sistemas por onde a sala passou, com quem chegou primeiro."""
+    rows = conn.execute(
+        """SELECT v.system_id, min(v.first_at) AS first_at,
+                  sum(v.visits) AS visits,
+                  (array_agg(p.display_name ORDER BY v.first_at))[1] AS first_by
+             FROM room_visit v
+             LEFT JOIN player p ON p.id = v.first_by
+            WHERE v.room_id = %s
+            GROUP BY v.system_id""", (room_id,)).fetchall()
+    return {r["system_id"]: dict(r) for r in rows}

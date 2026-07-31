@@ -440,6 +440,8 @@ async def join_room(room_id: str, request: Request,
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
                         here["celeid"])
+        db.record_visit(conn, room_id, player["id"], here["system"],
+                        here["celeid"])
 
     return {"roomId": room_id, "versionId": version["id"],
             "galaxy": described, "ageDays": day, "presence": here,
@@ -540,6 +542,8 @@ async def checkin(room_id: str, request: Request,
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
                         here["celeid"])
+        db.record_visit(conn, room_id, player["id"], here["system"],
+                        here["celeid"])
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
@@ -594,8 +598,9 @@ def room_web(room_id: str, request: Request, lang: str = ""):
             raise HTTPException(404, f"no room {room_id}")
         roster = db.room_roster(conn, room_id)
         galaxy = db.galaxy_map(conn, room_id)
+        visits = db.room_visits(conn, room_id)
     return pages.room_page(dict(room), [dict(r) for r in roster], galaxy,
-                           idioma)
+                           idioma, visits)
 
 
 # O caminho antigo, para links já compartilhados não morrerem.

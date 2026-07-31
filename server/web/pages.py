@@ -107,7 +107,8 @@ def room_list(rooms: list, lang: str) -> str:
     return layout(t("site", lang), body, lang, t("tagline", lang), "/")
 
 
-def starmap_svg(galaxy: dict, roster: list, lang: str) -> str:
+def starmap_svg(galaxy: dict, roster: list, lang: str,
+                visits: dict | None = None) -> str:
     """The room map, drawn on the server.
 
     Each system is a dot at its star's position. Where there are players, the
@@ -127,12 +128,13 @@ def starmap_svg(galaxy: dict, roster: list, lang: str) -> str:
     def px(s):
         return MAP_PAD + s["x"] * scale, MAP_PAD + s["y"] * scale
 
+    visits = visits or {}
     here: dict = {}
     for p in roster:
         if p["at_system"]:
             here.setdefault(str(p["at_system"]), []).append(p)
 
-    dots, marks = [], []
+    dots, marks, hits = [], [], []
     for s in systems:
         x, y = px(s)
         people = here.get(str(s["systemId"]))
@@ -157,26 +159,38 @@ def starmap_svg(galaxy: dict, roster: list, lang: str) -> str:
                 f'<text x="{x:.1f}" y="{y - 11:.1f}" fill="{colour}" '
                 f'font-size="10" text-anchor="middle">{names}</text>{label}')
         else:
-            # All systems look the same on purpose. An earlier version drew
-            # named ones brighter, on the assumption that the game names a
-            # system when a player gets close — so the map would show the
-            # room's exploration. Measured and false: a save at age 1.29 had
-            # 0 of 64 named and the same game at 2.79 had 64 of 64. The names
-            # arrive all at once, not by proximity, so the distinction shows
-            # nothing (findings.md).
-            dots.append(
-                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.8" fill="#5a6ba0" '
-                f'opacity=".6"><title>{title}</title></circle>')
+            # Visited means the server RECORDED somebody there — a position read
+            # from a save on join or check-in. Not inferred from the system
+            # having a name: the game names all of them at once, early, so that
+            # would light up the whole map (findings item 15).
+            seen = visits.get(str(s["systemId"]))
+            if seen:
+                tip = (f'{title} — first: {_esc(seen["first_by"] or "?")}'
+                       if seen.get("first_by") else title)
+                dots.append(
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="#a8c0f0" '
+                    f'opacity=".9"><title>{tip}</title></circle>')
+            else:
+                dots.append(
+                    f'<circle cx="{x:.1f}" cy="{y:.1f}" r="1.8" fill="#5a6ba0" '
+                    f'opacity=".55"><title>{title}</title></circle>')
+        # A 1.8px dot is almost impossible to hover. An invisible disc over each
+        # system carries the tooltip, so the name appears near the dot instead
+        # of only dead on it.
+        hits.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="9" fill="transparent">'
+            f'<title>{title}</title></circle>')
 
     legend = (f'<p class="sub" style="margin:.5rem 0 0;font-size:.85rem">'
               f'{t("map_legend", lang)}</p>')
     return (f'<svg class="map" viewBox="0 0 {MAP_W} {height:.0f}" '
             f'role="img" aria-label="galaxy map">'
-            f'{"".join(dots)}{"".join(marks)}</svg>{legend}')
+            f'{"".join(dots)}{"".join(marks)}{"".join(hits)}</svg>{legend}')
 
 
-def room_page(room: dict, roster: list, galaxy: dict, lang: str) -> str:
-    map_svg = starmap_svg(galaxy, roster, lang)
+def room_page(room: dict, roster: list, galaxy: dict, lang: str,
+              visits: dict | None = None) -> str:
+    map_svg = starmap_svg(galaxy, roster, lang, visits)
 
     if roster:
         rows = "".join(f"""
