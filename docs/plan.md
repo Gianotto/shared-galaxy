@@ -268,6 +268,33 @@ server has to be the one that writes it into the portrait — reading the player
 current `sname` from their save would hand the same route back, inside the game
 where it costs more.
 
+**Shared discovery.** What one player uncovers becomes visible to the others,
+including people who join later. It is the co-op the room is missing: today
+everyone explores the same galaxy alone, and the only thing the room shares is
+where people are standing.
+
+`findings.md` item 23 measured what "uncovered" is made of, and it is two
+things. There are the `visited` and `isVisible` flags on each body's `<info>`,
+and there is whether the body or empty sector is in the `<starmap>` at all —
+item 19 established the galaxy materialises lazily, on arrival. A fresh save
+carried 123 bodies for 64 systems; one played 178 days carried 233 for 77. So
+sharing discovery is a **union of both**: merge in the subtrees other members
+have materialised, and OR the flags. Mechanically it is the graft from item 17,
+merged instead of wholesale, and it belongs in the same `checkout` assembly step
+as the neighbour portraits.
+
+It is only possible because the fingerprint counts stars. The digest that
+counted bodies would refuse the very divergence this feature creates.
+
+Two things to decide before building it, neither of them technical:
+
+- **`isVisible` and `visited` are not the same gift.** Sharing visibility fills
+  the collective map in while leaving each player their own "I have been there".
+  Sharing both hands newcomers a solved galaxy. The first is probably the game.
+- **Saves converge upward.** Everyone ends up carrying the union, so the room's
+  saves grow toward the most-travelled member's. Worth measuring against the
+  32 MB upload ceiling before a room of 64 people finds it for us.
+
 **Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
 Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`
 limits how much the ship buys, and reconciliation debits the consignment and
