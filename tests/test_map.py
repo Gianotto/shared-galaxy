@@ -72,10 +72,28 @@ class MapTestCase(unittest.TestCase):
         out = starmap_svg(GALAXY, [], "en")
         self.assertIn("nobody has reached this yet", out)
 
-    def test_player_marker_carries_ship_and_box_carries_system(self):
+    def test_the_marker_names_the_account_not_the_ship(self):
+        """`sname` é texto livre e mutável: não pode carregar identidade.
+
+        Sem isso, quem renomeasse a nave para o nome do vizinho viraria o
+        vizinho neste mapa.
+        """
+        out = starmap_svg(GALAXY, [_player("1", "HSS TEST")], "en")
+        self.assertIn(">Ana</text>", out, "o mapa não nomeia a conta")
+        self.assertIn("Ana (HSS TEST)", out, "a nave sumiu da caixa")
+
+    def test_the_box_carries_the_system_name(self):
         out = starmap_svg(GALAXY, [_player("1")], "en")
-        self.assertIn(">HSS TEST</text>", out, "a nave não aparece no mapa")
         self.assertIn(">Alpha</text>", out, "o sistema não aparece na caixa")
+
+    def test_renaming_a_ship_cannot_impersonate_a_neighbour(self):
+        vizinho = _player("1", "HSS REAL")
+        vizinho["display_name"] = "Bruno"
+        impostor = _player("1", "Bruno")
+        out = starmap_svg(GALAXY, [vizinho, impostor], "en")
+        self.assertIn("Bruno (HSS REAL)", out)
+        self.assertIn("Ana (Bruno)", out,
+                      "o impostor apareceu como se fosse o vizinho")
 
     def test_playing_uses_a_different_colour_and_a_mark(self):
         away = starmap_svg(GALAXY, [_player("1", playing=False)], "en")
@@ -114,15 +132,20 @@ class CrowdedSystemTestCase(unittest.TestCase):
         crowd = [_player("1", f"SHIP {i}") for i in range(20)]
         out = starmap_svg(GALAXY, crowd, "en")
         self.assertIn(">20 players</text>", out)
-        self.assertNotIn(">SHIP 0, SHIP 1", out, "listou a multidão no mapa")
+        self.assertNotIn(">Ana, Ana", out, "listou a multidão no mapa")
 
     def test_the_box_lists_the_oldest_and_counts_the_rest(self):
         """Numa multidão, o que interessa é quem está aqui há mais tempo."""
-        crowd = [_player("1", f"SHIP {i}", age=i) for i in range(20)]
+        crowd = []
+        for i in range(20):
+            p = _player("1", f"SHIP {i}", age=i)
+            p["display_name"] = f"P{i}"
+            crowd.append(p)
         out = starmap_svg(GALAXY, crowd, "en")
-        self.assertIn("SHIP 19", out, "não mostrou a colônia mais antiga")
-        self.assertIn("SHIP 15", out)
-        self.assertNotIn("SHIP 0 ", out, "mostrou a mais nova em vez da antiga")
+        self.assertIn("P19 (SHIP 19)", out, "não mostrou a colônia mais antiga")
+        self.assertIn("P15 (SHIP 15)", out)
+        self.assertNotIn("P0 (SHIP 0)", out,
+                         "mostrou a mais nova em vez da antiga")
         self.assertIn("+15 ships on this system", out)
 
     def test_the_box_shows_age_next_to_each_ship(self):
@@ -131,7 +154,7 @@ class CrowdedSystemTestCase(unittest.TestCase):
 
     def test_a_single_player_keeps_their_name_on_the_map(self):
         out = starmap_svg(GALAXY, [_player("1", "HSS YANNI")], "en")
-        self.assertIn(">HSS YANNI</text>", out)
+        self.assertIn(">Ana</text>", out)
 
 
 if __name__ == "__main__":

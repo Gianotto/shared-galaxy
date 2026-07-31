@@ -419,6 +419,31 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 20. The ship name is free text the player can change, so it cannot be identity
+
+Section 1.10 concludes that since a save holds no player identity — the player's
+faction is 461 in every game in the world — **the ship name is what tells one
+player from another on screen**. That is true of what the game shows, and it is
+the wrong thing to build identity on: `sname` is free text, and the player can
+rename the ship in-game whenever they like.
+
+With strangers in a room that is an impersonation route. Rename your ship to a
+neighbour's and, on the room map and later inside other people's games, you look
+like them.
+
+**Nothing breaks technically.** No id depends on the name, and the server re-reads
+it on every check-in, so a rename simply propagates.
+
+**What changed.** The room map led with the ship name and fell back to the
+account. Now the account name leads and the ship follows in brackets — `Ana (HSS
+YANNI)`. The account name is the server's; nobody can edit it into someone
+else's.
+
+**Open for phase 2.** The storefront a neighbour sees carries a name the server
+chooses, so it is safe today. But if that name is ever derived from the player's
+current `sname` rather than from their account, the same route opens inside the
+game, where it matters far more than on a web page.
+
 ## 19. The galaxy is materialised lazily, and that broke the fingerprint
 
 **A live defect, found by a hyperspace jump.** It would have refused the check-in

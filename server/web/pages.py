@@ -143,11 +143,18 @@ def _system_group(x: float, y: float, title: str, people: list,
     # happened to return first.
     by_age = sorted(people, key=lambda p: -(p.get("age_days") or 0))
     for p in by_age[:TIP_MAX_SHIPS]:
-        ship = p["ship_name"] or p["display_name"]
+        # The ACCOUNT name leads, the ship name follows in brackets. `sname` is
+        # free text the player can change in-game, so it cannot carry identity:
+        # someone renaming their ship to a neighbour's would otherwise become
+        # that neighbour on this map. The account name is the server's, and
+        # nobody can edit it into someone else's.
+        who = p["display_name"]
+        ship = p["ship_name"]
         age = p.get("age_days")
         mark = " ●" if p["playing"] else ""
         suffix = f'  {float(age):.0f}d' if age else ""
-        lines.append(f"{ship}{suffix}{mark}")
+        label = f"{who} ({ship})" if ship and ship != who else who
+        lines.append(f"{label}{suffix}{mark}")
     if len(people) > TIP_MAX_SHIPS:
         lines.append(t("and_more", lang).format(n=len(people) - TIP_MAX_SHIPS))
     if not people and not seen:
@@ -219,8 +226,7 @@ def starmap_svg(galaxy: dict, roster: list, lang: str,
             # One name reads; a list does not. More than one becomes a count,
             # and the box on hover has the detail.
             if len(people) == 1:
-                label = _esc(people[0]["ship_name"]
-                             or people[0]["display_name"])
+                label = _esc(people[0]["display_name"])
             else:
                 label = f'{len(people)} {t("players", lang)}'
             dots.append(
