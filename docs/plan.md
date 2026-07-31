@@ -286,14 +286,29 @@ as the neighbour portraits.
 It is only possible because the fingerprint counts stars. The digest that
 counted bodies would refuse the very divergence this feature creates.
 
-Two things to decide before building it, neither of them technical:
+**The rule, decided:** share `visited`. Do not share `isVisible` on its own —
+it comes along only where a visit came with it.
 
-- **`isVisible` and `visited` are not the same gift.** Sharing visibility fills
-  the collective map in while leaving each player their own "I have been there".
-  Sharing both hands newcomers a solved galaxy. The first is probably the game.
-- **Saves converge upward.** Everyone ends up carrying the union, so the room's
-  saves grow toward the most-travelled member's. Worth measuring against the
-  32 MB upload ceiling before a room of 64 people finds it for us.
+So the room pools the places somebody actually went to, and those arrive
+properly charted. What a member merely glimpsed from a distance, and never
+entered, stays theirs. A newcomer inherits the room's travels, not its
+telescope.
+
+`findings.md` item 23 measured that `visited` is always a subset of
+`isVisible` — the game never marks a place visited without also marking it
+visible. So setting a shared `visited` obliges setting `isVisible` on that same
+body, to avoid handing the game a combination it never produces itself. That is
+not a second decision; it is the first one being applied correctly.
+
+Bodies are matched between players by `(systemId, x, y)`. Not `celeid`, which
+names a kind of place rather than a place, and not the local `id`, which is
+allocated from a global counter as people explore and therefore collides
+between two players who explored different systems. Both measured in item 24.
+
+One consequence to watch, not a decision: **saves converge upward.** Everyone
+ends up carrying the union, so the room's saves grow toward the most-travelled
+member's. Worth measuring against the 32 MB upload ceiling before a room of 64
+people finds it for us.
 
 **Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
 Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`

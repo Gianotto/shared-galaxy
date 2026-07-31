@@ -419,6 +419,50 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 24. `celeid` names a KIND of place, not a place
+
+Counted in real saves, and it corrects what item 1 left implied:
+
+| save | bodies | distinct `celeid` |
+|---|---|---|
+| SeedTest | 123 | 11 |
+| New haven-1 | 233 | 21 |
+
+All 57 asteroid fields in SeedTest are `celeid="0"`. The 64 stars share 11
+values between them. `celeid` is a catalogue id — which sort of star, which
+sort of field — so it is stable across everybody's save, which is what item 1
+was right about, and it identifies nothing, which item 1 did not say.
+
+It is not unique within a system either: system 1 of SeedTest holds two
+asteroid fields, both `celeid="0"`.
+
+**So what does identify a place across two players in the same galaxy?**
+
+| candidate | unique in a save | same for everyone | verdict |
+|---|---|---|---|
+| `celeid` | no — 123 bodies, 11 values | yes | names the kind |
+| local `id` | yes | **only until someone explores** | see below |
+| `(systemId, x, y)` | yes — 123 of 123 | yes | **this one** |
+
+The local `id` looked ideal: SeedTest and Fronteira are two games created
+separately from the same seed, and all 123 bodies carry identical `id`s in
+both. But the ids of bodies materialised later come from `starmap/@objectIdCounter`,
+which is a single global counter — it went 228 → 251 when a hyperspace jump
+materialised 14 new bodies (item 19). Two players who explore *different*
+systems both allocate from the same place and end up with the same ids on
+different bodies. Fine within one save, useless between two.
+
+`(systemId, x, y)` is generated from the seed, does not move, and gave 123
+distinct keys for 123 bodies in every save checked.
+
+**What this affects.** `membership.at_celeid` and `room_visit(room_id,
+system_id, celeid)` both store a position as `celeid`. Nothing visible is wrong
+today — the map draws per system, and the starting asteroid happens to be the
+only body of its kind — but the precision below system level is false, and two
+different asteroid fields in one system are recorded as the same visit. Any
+merge of discovery between players (plan, shared discovery) has to key on
+`(systemId, x, y)`.
+
 ## 23. Exploration is recorded in two places, and both are shareable
 
 Counted across real saves, at the same format version 21:
@@ -442,7 +486,12 @@ So "how much of the galaxy exists" is two different things:
 
 Sharing discovery between players is therefore a **union of both**: copy in the
 subtrees other members have materialised, and OR the flags. It is the same
-operation as the graft in item 17, merged instead of wholesale.
+operation as the graft in item 17, merged instead of wholesale — matching
+bodies by `(systemId, x, y)`, for the reason in item 24.
+
+Measured in all three saves: `visited` is always a subset of `isVisible`.
+Nothing is ever marked visited without also being visible, which constrains
+what combinations are safe to hand the game.
 
 This only works because the fingerprint counts stars (item 19). The digest that
 counted bodies would have made every explorer a stranger to their own room —
