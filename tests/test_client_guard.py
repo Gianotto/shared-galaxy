@@ -10,6 +10,7 @@ brincadeira, falso negativo destrói a partida dele.
 
 from __future__ import annotations
 
+import builtins
 import importlib.util
 import json
 import os
@@ -223,3 +224,58 @@ class AutoLoadTestCase(unittest.TestCase):
         with open(os.path.join(self.tmp.name, client.AUTOLOAD_MARKER),
                   encoding="utf-8") as fh:
             self.assertEqual(fh.read().strip(), "Sala-6359GV")
+
+
+class FirstJoinTestCase(unittest.TestCase):
+    """A primeira entrada, dentro do `play`.
+
+    O enxerto é o que tornou isto possível: antes, um save qualquer não servia
+    para entrar numa sala, então não havia como o `play` resolver sozinho.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.jogo = os.path.join(self.tmp.name, "SpaceHaven")
+        os.makedirs(os.path.join(self.jogo, "savegames"))
+        self._exe = client.find_game
+        client.find_game = lambda: os.path.join(self.jogo, "spacehaven")
+        self.addCleanup(lambda: setattr(client, "find_game", self._exe))
+
+    def _save(self, nome: str, idade_dias: float) -> None:
+        pasta = os.path.join(self.jogo, "savegames", nome, "save")
+        os.makedirs(pasta)
+        with open(os.path.join(pasta, "game"), "w", encoding="utf-8") as fh:
+            fh.write("<game/>")
+        with open(os.path.join(pasta, "info"), "w", encoding="utf-8") as fh:
+            fh.write(f'<info version="21" date="{int(idade_dias * 86400)}"/>')
+
+    def test_room_folders_are_not_offered(self):
+        """Entrar numa sala com a pasta da própria sala é um laço.
+
+        As `Sala-*` são escritas por este cliente. Oferecer uma delas devolveria
+        a sala para dentro dela mesma, e a pessoa não teria como perceber.
+        """
+        self._save("Minha Partida", 10.0)
+        self._save("Sala-6359GV", 99.0)
+        nomes = [n for _idade, n, _p in client.other_saves()]
+        self.assertEqual(nomes, ["Minha Partida"])
+
+    def test_the_most_advanced_comes_first(self):
+        self._save("nova", 3.0)
+        self._save("velha", 120.0)
+        self._save("meio", 40.0)
+        nomes = [n for _idade, n, _p in client.other_saves()]
+        self.assertEqual(nomes, ["velha", "meio", "nova"])
+
+    def test_no_savegames_is_not_a_crash(self):
+        self.assertEqual(client.other_saves(), [])
+
+    def test_refuses_to_upload_without_confirmation(self):
+        """Subir a partida de alguém é a coisa mais consequente que isto faz."""
+        self._save("Minha Partida", 10.0)
+        real_input = builtins.input
+        builtins.input = lambda _prompt="": "n"
+        self.addCleanup(lambda: setattr(builtins, "input", real_input))
+        self.assertFalse(client.first_join("XXXXXX", None, False, ""),
+                         "subiu o save mesmo com a pessoa dizendo não")

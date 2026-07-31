@@ -564,6 +564,107 @@ def cmd_return_save(args) -> int:
     return 0
 
 
+def is_member(room: str) -> bool:
+    """Já entrei nesta sala?
+
+    Pela lista de quem está na sala, e não por tentar e ver o erro: um 403 de
+    `checkout` pode ser outra coisa, e tratar todo 403 como "ainda não entrou"
+    faria o cliente subir um save por causa de um erro qualquer.
+    """
+    try:
+        data = json_request("GET", f"/api/v1/rooms/{room}/state")
+    except ClientError:
+        return False
+    eu = load_credentials().get("playerId")
+    return any(p["playerId"] == eu for p in data.get("players", []))
+
+
+def other_saves() -> list:
+    """Os saves de jogo normal, sem as pastas de sala.
+
+    Ordenados do mais avançado para o mais novo. As pastas `Sala-*` são as que
+    este próprio cliente escreve, e oferecer uma delas para entrar numa sala
+    seria devolver a sala para dentro dela mesma.
+    """
+    exe = find_game()
+    if not exe:
+        return []
+    raiz = os.path.join(os.path.dirname(exe), "savegames")
+    if not os.path.isdir(raiz):
+        return []
+    achados = []
+    for nome in sorted(os.listdir(raiz)):
+        if nome.startswith("Sala-") or nome.startswith("_"):
+            continue
+        pasta = os.path.join(raiz, nome, "save")
+        if os.path.isfile(os.path.join(pasta, "game")):
+            achados.append((age_of(pasta), nome, pasta))
+    achados.sort(reverse=True)
+    return achados
+
+
+def first_join(room: str, escolhido: str | None, sim: bool,
+               senha: str) -> bool:
+    """A primeira entrada de alguém numa sala, dentro do `play`.
+
+    Sobe um save que já existe; o servidor enxerta a galáxia da sala nele e
+    devolve o resultado. Nave, tripulação, banco e pesquisa continuam sendo da
+    pessoa — só a galáxia muda.
+
+    Isto pede confirmação de propósito. Subir a partida de alguém para um
+    servidor é a coisa mais consequente que este cliente faz, e fazê-la em
+    silêncio porque o comando é "play" seria uma surpresa cara.
+    """
+    if escolhido:
+        pasta = resolve_save(escolhido)
+        nome, idade = os.path.basename(escolhido), age_of(pasta)
+    else:
+        candidatos = other_saves()
+        if not candidatos:
+            print(f"you are not in room {room} yet, and I found no savegame to "
+                  f"join with.")
+            print("Create a game in Space Haven, then run this again — or pass")
+            print(f"  python3 tools/sgalaxy.py play {room} --join-with PATH")
+            return False
+        idade, nome, pasta = candidatos[0]
+
+    print(f"you are not in room {room} yet.")
+    print()
+    print(f"  joining with: {nome} (age {idade:.2f})")
+    print(f"  {pasta}")
+    print()
+    print("  The server will graft the room's galaxy into it and keep the")
+    print("  result. Your ship, crew, bank and research are untouched — only")
+    print("  the galaxy changes. Your original folder is not modified.")
+    if len(other_saves()) > 1 and not escolhido:
+        print()
+        print("  Other saves you could use instead:")
+        for idade_, nome_, _p in other_saves()[1:4]:
+            print(f"    --join-with '{nome_}'   (age {idade_:.2f})")
+
+    if not sim:
+        print()
+        try:
+            resposta = input("  join with this save? [y/N] ").strip().lower()
+        except EOFError:
+            resposta = ""
+        if resposta not in ("y", "yes", "s", "sim"):
+            print("  nothing was uploaded.")
+            return False
+
+    print()
+    print(f"[0/4] joining room {room} …")
+    _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/join", pack(pasta),
+                          {"Content-Type": "application/zip",
+                           "X-Room-Password": senha})
+    data = json.loads(raw)
+    if data.get("grafted"):
+        print("      the room's galaxy was grafted into your save")
+    print(f"      you are in. Ship {data['presence']['shipName']}, "
+          f"age {data['ageDays']} days")
+    return True
+
+
 def cmd_play(args) -> int:
     """Retira, abre o jogo, espera, e devolve. Um comando para a sessao inteira.
 
@@ -584,6 +685,16 @@ def cmd_play(args) -> int:
             "set SPACEHAVEN_BIN")
 
     target = args.into or _room_folder(args.room)
+
+    # -- 0. entrar, se ainda nao entrou
+    #
+    # Antes do enxerto isto nao daria: a galaxia tinha que bater, e um save
+    # qualquer nao batia. Agora o servidor conserta, entao a primeira sessao de
+    # alguem cabe no mesmo comando que todas as outras.
+    if not is_member(args.room):
+        if not first_join(args.room, args.join_with, args.yes,
+                          args.password or ""):
+            return 1
 
     # -- 1. retirar
     print(f"[1/4] checking out the save from room {args.room} …")
@@ -825,6 +936,12 @@ def main() -> int:
     p.add_argument("room")
     p.add_argument("--into", help="room folder (default: next to the game)")
     p.add_argument("--game", help="path to the Space Haven executable")
+    p.add_argument("--join-with",
+                   help="save to join with, the first time (default: your most "
+                        "advanced one, with confirmation)")
+    p.add_argument("--password", help="room password, if it has one")
+    p.add_argument("--yes", action="store_true",
+                   help="do not ask before uploading the save to join")
     p.set_defaults(func=cmd_play)
 
     p = sub.add_parser("status",
