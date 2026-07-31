@@ -497,14 +497,38 @@ def _tamanho(n: int) -> str:
     return f"{n / 1000:.0f} KB" if n < 1_000_000 else f"{n / 1_000_000:.1f} MB"
 
 
+def _melhor_estado(caminho: str) -> tuple:
+    """A pasta a devolver: o estado mais avancado, nao o mais obvio.
+
+    Apontar para `save/` parece certo e e a armadilha: quem sai do jogo sem
+    salvar na mao deixa o avanco no autosave, e `save/` fica no estado de
+    quando a sessao comecou. Devolver isso manda o servidor para tras e apaga
+    horas de jogo — visto acontecendo, com `save/` no dia 1,29 e `autosave3` no
+    2,79.
+
+    Se o caminho apontar direto para uma pasta de save, respeita: quem foi
+    especifico sabe o que quer.
+    """
+    caminho = os.path.abspath(os.path.expanduser(caminho))
+    if os.path.isfile(os.path.join(caminho, "game")):
+        return caminho, None, -1.0
+    try:
+        return most_advanced(caminho)
+    except ClientError:
+        return resolve_save(caminho), None, -1.0
+
+
 def cmd_devolver(args) -> int:
     aberto = game_is_running()
     if aberto:
         raise ClientError(
             f"o Space Haven está aberto ({aberto}). Feche o jogo antes de "
             f"devolver: o save pode não estar gravado por completo")
-    pasta = resolve_save(args.save)
-    print(f"devolvendo {pasta} …")
+    pasta, qual, dia = _melhor_estado(args.save)
+    if qual:
+        print(f"devolvendo {qual} (dia {dia:.2f}) de {args.save} …")
+    else:
+        print(f"devolvendo {pasta} …")
     _s, raw, _h = request("POST", f"/api/v1/rooms/{args.sala}/checkin",
                           pack(pasta), {"Content-Type": "application/zip"})
     dados = json.loads(raw)
