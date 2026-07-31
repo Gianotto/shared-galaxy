@@ -346,3 +346,79 @@ class ApiTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAS_DB, "defina DATABASE_URL para rodar os testes da API")
+class PrivacyTestCase(unittest.TestCase):
+    """A política de dados promete coisas; estes testes cobram."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        with db.pool().connection() as conn:
+            conn.execute("TRUNCATE lease, membership, save_version, room, "
+                         "player RESTART IDENTITY CASCADE")
+        import shutil
+        from server.api.app import store
+        shutil.rmtree(store().root, ignore_errors=True)
+        os.makedirs(store().root, exist_ok=True)
+
+    def _player(self):
+        return self.client.post("/api/v1/players", json={"name": "Some"}).json()
+
+    def _auth(self, p):
+        return {"Authorization": f"Bearer {p['token']}"}
+
+    def test_policy_page_is_served_and_says_the_hard_parts(self):
+        r = self.client.get("/privacidade")
+        self.assertEqual(r.status_code, 200)
+        for trecho in ("savegame inteiro", "perde a conta", "apagar tudo",
+                       "não finge", "Bugbyte"):
+            self.assertIn(trecho, r.text, f"a política não diz {trecho!r}")
+
+    def test_delete_requires_explicit_confirmation(self):
+        player = self._player()
+        r = self.client.delete("/api/v1/me", headers=self._auth(player))
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("apagar tudo", r.json()["detail"])
+
+    def test_delete_removes_account_saves_and_blobs(self):
+        """A promessa de 'apagar tudo e sair' vale se o disco esvaziar."""
+        player = self._player()
+        room = self.client.post("/api/v1/rooms", json={"seed": "1"},
+                                headers=self._auth(player)).json()
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(player))
+        self.assertEqual(self.client.get("/api/v1/health").json()["storage"]["blobs"], 1)
+
+        r = self.client.delete("/api/v1/me?confirm=apagar tudo",
+                               headers=self._auth(player))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertTrue(r.json()["deleted"])
+        self.assertEqual(self.client.get("/api/v1/health").json()["storage"]["blobs"], 0,
+                         "o save continuou no disco depois de 'apagar tudo'")
+        # E o token para de funcionar.
+        self.assertEqual(
+            self.client.get("/api/v1/me", headers=self._auth(player)).status_code, 401)
+
+    def test_delete_does_not_destroy_other_players_saves(self):
+        """Sumir com a sala de terceiros para atender ao pedido de um seria
+        destruir o save de quem não pediu nada."""
+        dono, vizinho = self._player(), self._player()
+        room = self.client.post("/api/v1/rooms", json={"seed": "1"},
+                                headers=self._auth(dono)).json()
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(dono))
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(vizinho))
+
+        r = self.client.delete("/api/v1/me?confirm=apagar tudo",
+                               headers=self._auth(dono))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["roomsKept"], 1)
+        # O vizinho continua com o save dele e consegue retirar.
+        out = self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
+                               headers=self._auth(vizinho))
+        self.assertEqual(out.status_code, 200, out.text)

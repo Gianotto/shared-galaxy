@@ -132,6 +132,60 @@ def whoami(player: dict = Depends(current_player)):
             "roomsCreated": player["rooms_created"]}
 
 
+@app.delete("/api/v1/me")
+def delete_me(confirm: str = "", player: dict = Depends(current_player)):
+    """Apaga a conta e todo save dela. Sem etapa de arrependimento.
+
+    A politica de dados promete "como apagar tudo e sair", e uma promessa
+    dessas so vale se a rota existir. Apaga participacao, versoes e, em
+    seguida, os blobs que ficaram sem dono.
+
+    Sala criada por esta conta NAO e apagada junto: outros jogadores podem
+    estar dentro dela, e sumir com a sala de terceiros para atender ao pedido
+    de um seria destruir o save de quem nao pediu nada. A sala fica, sem dono
+    ativo, e isso e dito na resposta.
+    """
+    if confirm != "apagar tudo":
+        raise HTTPException(400,
+                            'para confirmar, repita: ?confirm=apagar tudo. '
+                            'Isto apaga sua conta e todos os seus saves, e não '
+                            'há como desfazer')
+    with db.pool().connection() as conn:
+        rooms = conn.execute(
+            "SELECT count(*) AS n FROM room WHERE owner_id = %s",
+            (player["id"],)).fetchone()["n"]
+        versions = conn.execute(
+            "SELECT count(*) AS n FROM save_version WHERE player_id = %s",
+            (player["id"],)).fetchone()["n"]
+        # As tabelas dependentes caem por ON DELETE CASCADE; a sala tem
+        # RESTRICT, entao o dono e desligado dela antes.
+        conn.execute("UPDATE room SET listed = false WHERE owner_id = %s",
+                     (player["id"],))
+        conn.execute("DELETE FROM save_version WHERE player_id = %s",
+                     (player["id"],))
+        conn.execute("DELETE FROM membership WHERE player_id = %s",
+                     (player["id"],))
+        if rooms == 0:
+            conn.execute("DELETE FROM player WHERE id = %s", (player["id"],))
+        else:
+            # Nao da para apagar o registro sem apagar as salas dele. O que da
+            # e esvaziar tudo que e dado dele e bloquear o token.
+            conn.execute(
+                """UPDATE player SET display_name = 'conta apagada',
+                                     token_hash = %s, blocked = true
+                    WHERE id = %s""",
+                (rules.hash_token(rules.new_token()), player["id"]))
+        live = db.all_live_hashes(conn)
+    freed = store().delete_unreferenced(live)
+    return {"deleted": True, "versions": versions, "blobs": freed,
+            "roomsKept": rooms,
+            "message": ("conta e saves apagados." if rooms == 0 else
+                        f"seus saves foram apagados e o token foi invalidado. "
+                        f"{rooms} sala(s) criada(s) por você continuam de pé "
+                        f"porque há outros jogadores dentro; elas saíram da "
+                        f"listagem pública.")}
+
+
 # ---------------------------------------------------------------------------
 # Salas
 # ---------------------------------------------------------------------------
@@ -418,12 +472,90 @@ def health():
 @app.get("/", response_class=HTMLResponse)
 def index():
     """Vitrine mínima. O mapa da sala entra aqui na próxima etapa."""
-    return """<!doctype html><meta charset="utf-8">
-<title>Galáxia Compartilhada</title>
-<h1>Galáxia Compartilhada</h1>
-<p>Servidor de custódia de savegames de Space Haven.</p>
-<p>Projeto independente, feito por fã. <b>Space Haven</b> é um jogo da
-Bugbyte Ltd.; este projeto não é oficial, não tem endosso e não tem vínculo
-com ela. Nada aqui altera o jogo.</p>
-<p><a href="/api/v1/rooms">salas abertas</a> ·
-   <a href="/docs">a API</a></p>"""
+    return _page("Galáxia Compartilhada", """
+<p>Servidor de custódia de savegames de <b>Space Haven</b>. Ele guarda o save de
+cada jogador de uma sala, empresta a cada sessão e recebe de volta — o que
+permite a várias pessoas dividirem a mesma galáxia, cada uma rodando o próprio
+jogo.</p>
+<p><b>Em construção.</b> Hoje existe a custódia; a aparição de vizinhos dentro do
+jogo é a próxima etapa.</p>
+<p><a href="/privacidade">o que acontece com o seu save</a> ·
+   <a href="/api/v1/rooms">salas abertas</a> ·
+   <a href="/docs">a API</a> ·
+   <a href="https://github.com/Gianotto/shared-galaxy">o código</a></p>""")
+
+
+@app.get("/privacidade", response_class=HTMLResponse)
+def privacy():
+    """A política de dados.
+
+    A seção 2.11 do projeto manda escrever isto **antes** de existir, e em
+    linguagem clara, onde a pessoa lê antes de instalar qualquer coisa. O
+    editor de savegame promete que nada sai do computador; este servidor quebra
+    essa promessa, e fingir que não seria o pior erro possível.
+    """
+    return _page("O que acontece com o seu save", """
+<h2>O que sobe</h2>
+<p><b>O savegame inteiro</b>, compactado: o arquivo <code>game</code>, as naves,
+os setores e os binários que o jogo grava junto. Não é um resumo — é a sua
+partida completa.</p>
+
+<h2>Para onde</h2>
+<p>Para este servidor, em <code>galaxy.bygianotto.com.br</code>, mantido por um
+particular. Não há empresa por trás, não há terceiro recebendo cópia, e nada é
+enviado para outro serviço.</p>
+
+<h2>Quem enxerga</h2>
+<p>Quem administra o servidor tem acesso técnico aos arquivos — não há
+criptografia que impeça isso, e dizer o contrário seria mentira. Outros jogadores
+da mesma sala verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
+uma loja com o nome que você escolher e só a mercadoria que você consignar. O seu
+porão de verdade não entra nessa cópia.</p>
+
+<h2>Por quanto tempo</h2>
+<p>As últimas 20 versões de cada save, por sala. As mais antigas são apagadas
+sozinhas. Se você sair, apaga na hora.</p>
+
+<h2>Que dado pessoal</h2>
+<p><b>Nenhum.</b> Não pedimos e-mail, nome real, senha ou login de Steam. A sua
+identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
+resumo criptográfico. A consequência é dura e é honesta: <b>quem perde o código
+perde a conta</b>, e não há como recuperar.</p>
+
+<h2>Como apagar tudo e sair</h2>
+<p>Uma chamada, e não há etapa de arrependimento:</p>
+<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=apagar%20tudo" \
+     -H "Authorization: Bearer SEU-TOKEN"</pre>
+<p>Apaga a sua conta e todos os seus saves. Salas que você criou e onde há outros
+jogadores continuam de pé — sumir com elas destruiria o save de quem não pediu
+nada —, mas saem da listagem e o seu token é invalidado.</p>
+
+<h2>O que não dá para prometer</h2>
+<p>O jogo roda na sua máquina, em arquivos que você consegue editar. Não há como
+impedir que alguém altere o próprio save, e o projeto não finge que há: o
+desenho é cooperativo, e o servidor <b>confere</b> em vez de adivinhar. Quem
+promete segurança absoluta é quem não pensou no assunto.</p>
+
+<p><a href="/">voltar</a></p>""")
+
+
+def _page(title: str, body: str) -> str:
+    return f"""<!doctype html><html lang="pt-BR"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} — Galáxia Compartilhada</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{ max-width: 40rem; margin: 3rem auto; padding: 0 1.2rem;
+         font: 16px/1.6 system-ui, sans-serif; }}
+  h1 {{ font-size: 1.5rem; }} h2 {{ font-size: 1.1rem; margin-top: 2rem; }}
+  pre {{ overflow-x: auto; padding: .8rem; border-radius: .4rem;
+        background: rgba(127,127,127,.12); font-size: .85rem; }}
+  footer {{ margin-top: 3rem; font-size: .85rem; opacity: .75; }}
+</style>
+<h1>{title}</h1>
+{body}
+<footer><p><b>Space Haven</b> é um jogo da
+<a href="https://bugbyte.fi/">Bugbyte Ltd.</a> Este é um projeto independente,
+feito por fã: não é oficial, não tem endosso e não tem vínculo com ela. Nada
+aqui altera o jogo — tudo é leitura e escrita de savegame, o que jogadores fazem
+à mão há anos.</p></footer></html>"""
