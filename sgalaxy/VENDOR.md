@@ -22,10 +22,10 @@ de existir da cópia: um serializador próprio que reproduz o estilo do jogo
 (sem espaço antes de `/>`, ordem de atributos preservada, escapes mínimos, sem
 declaração XML) mais um trailer de bytes crus recuperado por diferença.
 
-Enquanto este repositório só lê saves, uma divergência com o upstream é
-inofensiva. A partir do momento em que ele **escreve** — o injetor de nave, e
-depois o construtor de retratos da fase 2 — uma divergência corrompe partida de
-jogador. Por isso o teste cruzado é obrigatório antes da fase 2.
+Enquanto este repositório só lia saves, uma divergência com o upstream era
+inofensiva. Ele **escreve** desde o enxerto de galáxia, e o construtor de
+retratos da fase 2 vai escrever mais. Uma divergência aqui não dá erro: dá o
+save de um jogador corrompido, descoberto quando ele for carregar.
 
 ### Teste cruzado
 
@@ -70,3 +70,26 @@ O teste acima cobre leitura. Falta o de **escrita byte-idêntica** — carregar 
 mesmo save com as duas cópias, serializar, e exigir bytes iguais entre si e com
 o original. É o que protege o injetor, que é a única ferramenta daqui que
 escreve, e continua obrigatório antes da fase 2 ir para as mãos de jogador.
+
+### Teste de escrita
+
+`tests/test_savefile_write.py`. É a dívida que o parágrafo acima cobrava, e ela
+está paga. Quatro garantias:
+
+| garantia | o que exige |
+|---|---|
+| round-trip | abrir um save real e gravá-lo sem mexer em nada devolve os mesmos bytes, em todo arquivo do save |
+| cirurgia | depois de mudar um atributo, só o intervalo dele muda; prefixo e sufixo intactos |
+| trailer | os bytes crus depois do XML, recuperados por diferença, continuam no fim |
+| paridade | as duas cópias serializam o mesmo save nos mesmos bytes |
+
+Medido em 2026-07-31 contra cinco saves reais, de 0.4 MB a 4.6 MB, incluindo um
+de 178 dias de jogo: todos byte-idênticos. A edição de um atributo mudou
+exatamente os 5 bytes esperados, no lugar esperado.
+
+O round-trip é a garantia forte. Se ela vale, o serializador reproduz tudo que o
+jogo escreveu — inclusive o que ninguém documentou, que é justamente o que um
+teste escrito a partir da documentação não cobriria.
+
+O estilo do serializador (sem declaração XML, sem espaço antes de `/>`, ordem de
+atributos, escapes mínimos) roda sem save nenhum, e portanto no CI.
