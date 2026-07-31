@@ -49,9 +49,19 @@ CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
 CREDENTIALS = os.path.join(CONFIG_DIR, "credenciais.json")
 DEFAULT_URL = "http://127.0.0.1:8714"
 
-# Nomes de processo do jogo. A lista e curta de proposito: um falso positivo
-# so atrapalha, e um falso negativo destroi save.
-GAME_PROCESSES = ("spacehaven", "SpaceHaven", "spacehaven.jar")
+# Como o jogo aparece na tabela de processos. Duas formas:
+#
+# `spacehaven` e o launcher nativo, e o nome do EXECUTAVEL — casado com `-x`,
+# que compara so o nome do programa. `spacehaven.jar` e a JVM que ele levanta, e
+# so aparece na linha de comando, entao esse precisa de `-f`.
+#
+# A primeira versao usava `-f` com "SpaceHaven" solto, e casava demais: qualquer
+# processo do Steam que mencionasse o caminho da instalacao — e ate o proprio
+# shell que rodou o comando — virava "o jogo esta aberto". O erro e caro nos
+# dois sentidos: falso positivo trava o jogador de brincadeira, falso negativo
+# destroi a partida dele.
+GAME_EXECUTABLES = ("spacehaven",)
+GAME_COMMANDLINES = ("spacehaven.jar",)
 
 
 class ClientError(Exception):
@@ -141,14 +151,26 @@ def game_is_running() -> str | None:
     """
     if shutil.which("pgrep") is None:
         return None
-    for nome in GAME_PROCESSES:
+
+    proprio = {str(os.getpid()), str(os.getppid())}
+
+    def encontrou(args: list) -> bool:
         try:
-            out = subprocess.run(["pgrep", "-f", nome], capture_output=True,
-                                 timeout=5)
-            if out.returncode == 0 and out.stdout.strip():
-                return nome
+            out = subprocess.run(["pgrep", *args], capture_output=True,
+                                 timeout=5, text=True)
         except (subprocess.SubprocessError, OSError):
-            continue
+            return False
+        if out.returncode != 0:
+            return False
+        pids = {p for p in out.stdout.split() if p and p not in proprio}
+        return bool(pids)
+
+    for nome in GAME_EXECUTABLES:
+        if encontrou(["-x", nome]):
+            return nome
+    for padrao in GAME_COMMANDLINES:
+        if encontrou(["-f", padrao]):
+            return padrao
     return None
 
 
