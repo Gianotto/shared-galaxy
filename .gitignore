@@ -16,3 +16,7 @@ experiments/*.json
 # Segredos e configuração local do servidor
 .env
 *.local.yml
+
+# Build do mod: sai de mod/build.sh, e o jar carrega bytecode do jogo no
+# classpath de compilação. Fonte e receita ficam versionados; o binário não.
+mod/build/

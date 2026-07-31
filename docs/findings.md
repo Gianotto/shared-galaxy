@@ -419,6 +419,78 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 25. The mod loader is three lines of config, and its Workshop build is Windows-only
+
+The game's launcher is a native ELF that reads `config.json` beside it. Vanilla:
+
+```json
+{"classPath": ["spacehaven.jar"],
+ "mainClass": "fi.bugbyte.spacehaven.steam.SpacehavenSteam",
+ "vmArgs": ["-Xmx4G"]}
+```
+
+Installing a code mod is, in full:
+
+1. put `aspectjweaver-<version>.jar` beside the game
+2. append `-javaagent:./aspectjweaver-<version>.jar` to `vmArgs`
+3. append the mod jar to `classPath`
+
+The agent then reads `META-INF/aop.xml` out of every jar on the classpath and
+weaves the declared aspects into game classes as they load. That is the whole
+mechanism — confirmed by reading the strings in the launcher (`config.json`,
+`mainClass`, `classPath`, `vmArgs`) and in the loader's own `ui/database.pyc`
+(`-javaagent:./{}`, `aspectjweaver-{}.jar`, `reconcile_jarmod_classpath`).
+
+**The Workshop item is a Windows build.** Item 3703674043 ships
+`spacehaven-modloader.exe`, `python311.dll` and `.pyd` modules. Someone playing
+on Linux has the aspectj jars — Steam downloads the item — but cannot run the
+loader that uses them. Hence `tools/install_mod.py`, which does those three
+steps and can undo them.
+
+**Two Java versions, and both matter.**
+
+| | version | why |
+|---|---|---|
+| game classes | 51 (Java 7) | what Bugbyte ships |
+| bundled JRE | 8 (Zulu 1.8.0_472) | what runs it |
+| published mods | 52 (Java 8) | measured in ClaimAllDerelicts and ColoredLamps |
+| ajc 1.9.19 | needs 11+ to *run* | so build on a modern JDK, `-target 8` |
+
+A mod compiled for anything above 8 installs fine and fails to load.
+
+## 24b. Loading a save from a mod means driving the game's own menu
+
+Measured in `GameMenu$SaveGameSlot$LoadClickHandler`, a click does:
+
+```java
+boolean slave = save.isSlaveWorldActive(autosave, slot);
+loadGameMenu.load(folderName, autosave, slot, slave);
+```
+
+and `GameMenu$LoadGameMenu.load(String, boolean, int, boolean)` builds the
+`AsyncLoader`, opens the loading popup and registers the closed-callback.
+Calling that one method inherits all of it, including whatever a future version
+adds there.
+
+Two things that are not obvious and cost a crash each if missed:
+
+- **The menu has to be switched to `MenuType.Load` first.** `load` dereferences
+  the menu's `onScreen` field to open the popup, and `onScreen` is only set when
+  the menu is activated. `setMenu` calls `setActive` synchronously, so switching
+  is enough.
+- **The last argument is not a guess.** It comes from
+  `SaveGame.isSlaveWorldActive(autosave, slot)`; the game asks before every load.
+
+`LoadGameMenu` and its superclass are package-private, so nothing outside
+`fi.bugbyte.spacehaven.gui.menu` can name the type — the call has to go through
+reflection, or the mod has to declare itself into the game's package, which
+works on Java 8 and breaks quietly the day the game is repackaged.
+
+Reflection has no compiler, so `mod/verify/VerifyTargets.java` names every
+target against the real `spacehaven.jar`. It is what should run after a game
+update: a renamed method produces no build error, just a mod that fails at the
+one moment it is needed.
+
 ## 24. `celeid` names a KIND of place, not a place
 
 Counted in real saves, and it corrects what item 1 left implied:

@@ -1,0 +1,12 @@
+<aspectj>
+    <aspects>
+        <aspect name="com.sharedgalaxy.AutoLoadAspect"/>
+    </aspects>
+
+    <!-- Weaving costs startup time on every class named here, so this names
+         exactly one. The aspect only ever needs the main menu's update loop. -->
+    <weaver options="-Xlint:ignore">
+        <include within="fi.bugbyte.spacehaven.gui.menu.GameMenu"/>
+        <include within="com.sharedgalaxy.*"/>
+    </weaver>
+</aspectj>

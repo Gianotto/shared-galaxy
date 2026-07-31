@@ -1,0 +1,23 @@
+<mod>
+    <name>Shared Galaxy</name>
+    <description>
+        Opens the game straight into your Shared Galaxy room's save, so a
+        session is one command instead of finding the right folder in the load
+        menu.
+
+        Does nothing on its own. It reads a file the Shared Galaxy client
+        writes just before launching the game, and deletes it after reading —
+        every other launch behaves exactly like an unmodded game.
+
+        Changes nothing in your savegames.
+
+        Requires: SpaceHaven Mod Loader
+        (steamcommunity.com/sharedfiles/filedetails/?id=3703674043)
+    </description>
+    <minimumLoaderVersion>0.12.1</minimumLoaderVersion>
+    <version>0.1.0</version>
+    <modid>9902</modid>
+    <dependencies>
+        <dependency workshopId="3703674043"/>
+    </dependencies>
+</mod>

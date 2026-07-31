@@ -595,7 +595,15 @@ def cmd_play(args) -> int:
 
     # -- 2. jogar
     folder_name = os.path.basename(target.rstrip("/"))
-    print(f"[2/4] launching the game. Load the save named '{folder_name}'.")
+    game_dir = os.path.dirname(exe)
+    armed = arm_autoload(game_dir, folder_name) and mod_is_installed(game_dir)
+
+    if armed:
+        print(f"[2/4] launching the game straight into '{folder_name}'.")
+    else:
+        print(f"[2/4] launching the game. Load the save named '{folder_name}'.")
+        print("      (install mod/ to skip this step: "
+              "python3 tools/install_mod.py)")
     print("      When you close the game, I return it for you.")
     try:
         proc = subprocess.Popen([exe], cwd=os.path.dirname(exe))
@@ -626,6 +634,44 @@ def cmd_play(args) -> int:
     print()
     print("session closed. The save is on the server.")
     return 0
+
+
+AUTOLOAD_MARKER = "sharedgalaxy.autoload"
+
+
+def mod_is_installed(game_dir: str) -> bool:
+    """O mod está armado nesta instalação?
+
+    Lê o `config.json` que o lançador do jogo consome. Não é adivinhação: o mod
+    só roda se houver um `-javaagent` do aspectjweaver e o jar no `classPath`,
+    que é exatamente o que `tools/install_mod.py` escreve.
+    """
+    caminho = os.path.join(game_dir, "config.json")
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            config = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    tem_agente = any(str(a).startswith("-javaagent:./aspectjweaver")
+                     for a in (config.get("vmArgs") or []))
+    tem_mod = any(os.path.basename(str(c)) == "SharedGalaxy.jar"
+                  for c in (config.get("classPath") or []))
+    return tem_agente and tem_mod
+
+
+def arm_autoload(game_dir: str, folder_name: str) -> bool:
+    """Deixa o bilhete que diz ao mod qual save abrir.
+
+    O mod lê e apaga. Se ele não estiver instalado o arquivo fica lá sem efeito,
+    então isto é escrito sempre — não custa nada e evita um estado a mais.
+    """
+    try:
+        with open(os.path.join(game_dir, AUTOLOAD_MARKER), "w",
+                  encoding="utf-8") as fh:
+            fh.write(folder_name + "\n")
+        return True
+    except OSError:
+        return False
 
 
 def _room_folder(room: str) -> str:

@@ -11,9 +11,11 @@ brincadeira, falso negativo destrói a partida dele.
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -172,3 +174,52 @@ class MostAdvancedTestCase(unittest.TestCase):
     def test_refuses_a_folder_with_no_save_inside(self):
         with self.assertRaises(client.ClientError):
             client.most_advanced(self.tmp.name)
+
+
+class AutoLoadTestCase(unittest.TestCase):
+    """O bilhete que abre o jogo já no save da sala.
+
+    O mod só age se o cliente deixar o marcador, e o cliente só promete a
+    abertura direta se o mod estiver de fato armado no `config.json`. Prometer
+    sem conferir é pior que não prometer: a pessoa espera o jogo abrir sozinho,
+    ele para no menu, e ela conclui que quebrou.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _config(self, **campos) -> None:
+        with open(os.path.join(self.tmp.name, "config.json"), "w",
+                  encoding="utf-8") as fh:
+            json.dump(campos, fh)
+
+    def test_a_vanilla_game_is_not_modded(self):
+        self._config(classPath=["spacehaven.jar"], vmArgs=["-Xmx4G"])
+        self.assertFalse(client.mod_is_installed(self.tmp.name))
+
+    def test_both_halves_are_required(self):
+        """O jar sem o agente não é tecido, e o agente sem o jar não faz nada."""
+        self._config(classPath=["spacehaven.jar", "SharedGalaxy.jar"],
+                     vmArgs=["-Xmx4G"])
+        self.assertFalse(client.mod_is_installed(self.tmp.name),
+                         "jar no classPath sem -javaagent não roda")
+        self._config(classPath=["spacehaven.jar"],
+                     vmArgs=["-Xmx4G", "-javaagent:./aspectjweaver-1.9.19.jar"])
+        self.assertFalse(client.mod_is_installed(self.tmp.name),
+                         "agente sem o nosso jar não carrega o aspecto")
+
+    def test_a_modded_game_is_recognised(self):
+        self._config(classPath=["spacehaven.jar", "SharedGalaxy.jar"],
+                     vmArgs=["-Xmx4G", "-javaagent:./aspectjweaver-1.9.19.jar"])
+        self.assertTrue(client.mod_is_installed(self.tmp.name))
+
+    def test_a_missing_config_is_not_a_crash(self):
+        """Instalação estranha não pode derrubar a sessão inteira."""
+        self.assertFalse(client.mod_is_installed(self.tmp.name))
+
+    def test_the_marker_names_the_folder_to_open(self):
+        self.assertTrue(client.arm_autoload(self.tmp.name, "Sala-6359GV"))
+        with open(os.path.join(self.tmp.name, client.AUTOLOAD_MARKER),
+                  encoding="utf-8") as fh:
+            self.assertEqual(fh.read().strip(), "Sala-6359GV")
