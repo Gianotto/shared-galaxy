@@ -206,6 +206,32 @@ vira aproximação e o desenho precisa admitir isso.
 
 ---
 
+## E6 — A vitrine
+
+Não estava no roteiro original. Apareceu quando o E3b mostrou que a névoa não se
+falsifica numa nave de jogador, e o projeto decidiu que o retrato passa a ser uma
+loja montada sobre casco de NPC (seção 2.5).
+
+Monta-se com `--hull`, que escolhe um casco não explorado do próprio save:
+
+```bash
+python3 tools/inject_npc_ship.py --into SAVE --out SAIDA \
+    --hull --name "LOJA DO FULANO" --faction Civilian \
+    --credits 500 --stock 1922:30,176:10
+```
+
+**O que responder:**
+
+- a vitrine aparece com `State: Normal (Unexplored)`, teto fechado?
+- oferece TRADE?
+- **quanto de cada recurso o painel oferta?** É o desenho que ataca o mistério do
+  item 12 de `findings.md`. Consignando 30 de um e 10 de outro:
+  - 30 vira 26 **e** 10 vira 10 → a perda tem teto, não é deslocamento
+  - 30 vira 26 **e** 10 vira 6 → é um −4 constante
+  - os dois cheios → o problema era do casco anterior, não da mecânica
+
+---
+
 ## O que cada resultado implica
 
 | Resultado do E2/E3 | Implicação |
