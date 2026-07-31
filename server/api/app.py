@@ -540,9 +540,10 @@ promete segurança absoluta é quem não pensou no assunto.</p>
 
 
 def _page(title: str, body: str) -> str:
+    tab = title if "Galáxia" in title else f"{title} — Galáxia Compartilhada"
     return f"""<!doctype html><html lang="pt-BR"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title} — Galáxia Compartilhada</title>
+<title>{tab}</title>
 <style>
   :root {{ color-scheme: light dark; }}
   body {{ max-width: 40rem; margin: 3rem auto; padding: 0 1.2rem;

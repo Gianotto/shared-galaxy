@@ -1,0 +1,7 @@
+Acrescentar ao /etc/cloudflared/config.yml, no bloco `ingress:`, ANTES do
+catch-all `- service: http_status:404` (a ordem importa: o cloudflared casa a
+primeira regra que bater).
+
+  # nginx :80 — Galáxia Compartilhada
+  - hostname: galaxy.bygianotto.com.br
+    service: http://localhost:80
