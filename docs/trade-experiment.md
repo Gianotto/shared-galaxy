@@ -217,12 +217,36 @@ vira aproximação e o desenho precisa admitir isso.
 *A preencher conforme os experimentos forem rodando. Registre o que mediu, não o
 que concluiu — a conclusão muda, a medida fica.*
 
-### E1 — piso de ruído
+### E1a — piso puro (medido em 2026-07-31, save `Beyond Space`)
 
-- versão do jogo:
-- mudanças brutas entre dois saves sem ação:
-- áreas mais barulhentas:
-- assinaturas no perfil:
+Dois ciclos de carregar e salvar, **com o jogo pausado**, sem nenhuma ordem.
+
+- **11.434 mudanças brutas**, que viram **103 assinaturas** de forma
+- 11.432 delas carregam um id no caminho
+- o jogo **recria os objetos de dentro das células ao carregar**: o `idCnt` de
+  cada nave avança milhares (a nave 2 foi de 20.417 para 22.913), 676 `<l>`
+  somem e 676 aparecem, 625 trocam de `id`
+- áreas: `game/ships/ship/e/l` domina; por atributo, `hf` (3.676), `atm`/`atm2`
+  (1.685), `x`/`y` (1.559), depois `id`, `rot`, `m`, `invw`, `fg`
+- fora das naves, só sete formas mudam sozinhas, entre elas
+  `masterData/@idCounter`, `space/@idCnt` e `hostmap/map/l @relationship` — a
+  relação entre facções decai sozinha, como a seção 1.8 diz
+
+**Pausado não quer dizer parado.** Ninguém estava simulando; o jogo estava
+realocando ao carregar. É o que torna inútil qualquer identidade de objeto
+dentro de `<e>` entre uma sessão e outra — inclusive para o servidor.
+
+**Cuidado ao usar este perfil.** Sete das 103 assinaturas tocam a economia,
+entre elas `feat/prod/inv/s @inStorage` (o buffer de uma máquina produzindo) e
+`<inv>` inteiros aparecendo e sumindo. Isso significa que **o perfil pode
+silenciar parte de uma transação de verdade.** No E2, rode o diff **duas vezes,
+com e sem `--noise`**, e compare.
+
+### E1b — piso realista
+
+- mudanças brutas:
+- assinaturas novas que o E1a não tinha:
+- quanto "o tempo passar" custa (a diferença entre os dois):
 
 ### E2 — comércio com NPC nativo
 

@@ -118,7 +118,32 @@ numa, 1 na outra).
 
 Quem copiar uma nave precisa renumerar `sid`, `homeSid`, `hsid` **e** `hdsid`.
 
-## 7. Miudezas
+## 7. O jogo recria os objetos de dentro das células ao carregar
+
+Medido no E1a: dois ciclos de carregar e salvar `Beyond Space`, **com o jogo
+pausado**, sem uma ordem dada, produzem **11.434 diferenças**.
+
+Elas não são simulação. São realocação: o `idCnt` de cada nave avança milhares
+de unidades por load (a nave 2 foi de 20.417 para 22.913), 676 `<l>` de dentro
+de `<e>` somem e 676 aparecem, e 625 trocam de `id`. Por atributo: `hf` (3.676),
+`atm`/`atm2` (1.685), `x`/`y` (1.559), `rot`, `m`, `invw`, `fg`.
+
+Fora das naves, só sete formas mudam sozinhas, entre elas `masterData/@idCounter`,
+`space/@idCnt` e `hostmap/map/l @relationship` — a relação entre facções decai
+sozinha, o que confirma a seção 1.8 pelo lado da medição.
+
+**Consequência para o servidor:** nenhum id de objeto de dentro de uma nave
+sobrevive a um ciclo de sessão. O que o servidor guardar sobre o conteúdo de uma
+nave tem que ser descrito por forma e conteúdo — que recurso, quanto, em que
+tipo de módulo — nunca por id. Vale para a conciliação da seção 2.7 e para
+qualquer ideia futura de rastrear objeto.
+
+**Consequência para ferramenta:** um perfil de ruído baseado em caminho exato é
+inútil, porque os caminhos aprendidos não existem na rodada seguinte. As 11.434
+diferenças reduzem a **103 formas** quando os ids saem do caminho, e aí o perfil
+transfere. É como o `save_diff.py` faz.
+
+## 8. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em

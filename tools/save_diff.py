@@ -47,6 +47,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -82,6 +83,9 @@ CONTENT_KEYS = ("elementaryId", "elementId", "element", "eid", "id")
 # viram o mesmo elemento, um so casa e o resto vira remocao fantasma.
 # `0` fica de fora da lista de proposito: e id legitimo, o da frota do jogador.
 SENTINEL_IDS = {"-1", ""}
+
+# Tira os `[id=...]` de um caminho, deixando so a forma. Ver Change.noise_key.
+_STRIP_IDENT = re.compile(r"\[[^\]]*\]")
 
 
 def _identity(el: ET.Element) -> str | None:
@@ -172,12 +176,29 @@ class Change:
 
     @property
     def signature(self) -> str:
-        """Identidade da mudanca para efeito de ruido.
-
-        Sem o valor: o que se aprende no E1 e "este atributo neste caminho muda
-        sozinho", nao "ele muda de 3 para 4".
-        """
+        """Identidade exata da mudanca. Serve para relatorio, nao para ruido."""
         return f"{self.path}|{self.kind}|{self.attr or ''}"
+
+    @property
+    def noise_key(self) -> str:
+        """Identidade da mudanca para efeito de ruido, sem os ids do caminho.
+
+        Medido no E1: o jogo **recria** os objetos de dentro de cada celula ao
+        carregar um save. O `idCnt` de cada nave avanca milhares de unidades por
+        load, 676 <l> somem e 676 aparecem, 625 trocam de id — com o jogo
+        pausado. Onze mil das onze mil e quatrocentas mudancas de um ciclo puro
+        carregam um id no caminho.
+
+        Um perfil de ruido baseado no caminho exato, entao, nao filtra nada na
+        rodada seguinte: os caminhos aprendidos nao existem mais. A assinatura
+        de ruido tem que ser a **forma** da mudanca, nao o endereco dela.
+
+        O preco e generalizar demais: silenciar `hf` em `ship/e` silencia `hf`
+        em toda celula de toda nave. Para ruido isso e o que se quer — se um
+        atributo muda sozinho num lugar, muda sozinho em todos. Mas e por isso
+        que `--focus` existe e que rodar sem `--noise` continua sendo o padrao.
+        """
+        return f"{_STRIP_IDENT.sub('', self.path)}|{self.kind}|{self.attr or ''}"
 
     def to_dict(self) -> dict:
         out = {"kind": self.kind, "path": self.path, "tag": self.tag}
@@ -391,12 +412,16 @@ def compare(before: str, after: str, max_depth: int = 40) -> dict:
 
 def learn_noise(changes: list) -> dict:
     """Monta um perfil de ruido a partir de um diff que deveria ser vazio."""
-    sigs = sorted({c.signature for c in changes})
+    sigs = sorted({c.noise_key for c in changes})
     return {
-        "version": 1,
+        "version": 2,
         "note": ("Assinaturas medidas carregando e salvando um save sem fazer "
-                 "nada. Tudo aqui muda sozinho e nao significa acao do jogador."),
+                 "nada. Tudo aqui muda sozinho e nao significa acao do "
+                 "jogador. As assinaturas sao a FORMA da mudanca, sem os ids "
+                 "do caminho: o jogo recria os objetos de dentro das celulas a "
+                 "cada load, entao caminho exato nao sobrevive a uma rodada."),
         "signatures": sigs,
+        "fromChanges": len(changes),
     }
 
 
@@ -405,6 +430,10 @@ def load_noise(path: str) -> set[str]:
         data = json.load(fh)
     if not isinstance(data, dict) or "signatures" not in data:
         raise SaveError(f"{path}: nao parece um perfil de ruido")
+    if data.get("version", 1) < 2:
+        raise SaveError(
+            f"{path}: perfil na versao 1, que guardava o caminho exato e por "
+            f"isso nao filtra nada. Gere de novo com --learn-noise")
     return set(data["signatures"])
 
 
@@ -412,7 +441,7 @@ def apply_filters(changes: list, noise: set[str] | None,
                   focus: str | None) -> list:
     out = changes
     if noise:
-        out = [c for c in out if c.signature not in noise]
+        out = [c for c in out if c.noise_key not in noise]
     if focus:
         needles = FOCUS[focus]
         out = [c for c in out if any(n in c.path for n in needles)]
