@@ -1,0 +1,19 @@
+Shared Galaxy
+Copyright (c) 2026 Victor Gianotto
+
+The MIT License in the LICENSE file covers the source code of this project only.
+
+*Space Haven* is a game by Bugbyte Ltd. (https://bugbyte.fi/). This project is
+unofficial, is not endorsed by Bugbyte, and has no affiliation with them.
+
+Nothing here modifies the game. This project reads and writes savegame files —
+the same thing players have done by hand for years.
+
+No game content is redistributed. Where readable names for resources,
+technologies or traits are needed, they must be extracted from the user's own
+copy of the game, as the companion savegame editor does with
+`tools/extract_gamedata.py`.
+
+The file `sgalaxy/savefile.py` is copied from that editor
+(https://github.com/Gianotto/Space-Haven-SaveGameEditor), same author and same
+MIT License. See `sgalaxy/VENDOR.md` for the exact commit.

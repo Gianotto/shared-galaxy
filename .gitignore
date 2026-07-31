@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Savegames e resultados de experimento: arquivo pessoal, não entra no repo.
+# O roteiro em docs/trade-experiment.md fica; o que sai dele, não.
+experiments/snapshots/
+experiments/*.json
+
+# Backups que as ferramentas criam ao gravar um save
+*.bak-*
+
+# Segredos e configuração local do servidor
+.env
+*.local.yml
