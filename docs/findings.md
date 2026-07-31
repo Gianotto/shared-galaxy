@@ -208,82 +208,47 @@ quem os tem.
 
 **Para o construtor de retratos:** não copiar `<markers>` é seguro.
 
-## 10. A névoa não sobrevive a um load, e o `hostmap` não fecha o interior
+## 10. A névoa vem da nave de origem, e o `hostmap` não fecha o interior
 
-**Refuta a seção 1.8 e o item 6 da receita 2.5.** Medido no E3, com nave montada
-pela ferramenta e carregada no jogo.
+Duas rodadas no jogo, mudando **uma** variável — a nave que serve de origem para
+o retrato. Mesmo destino, mesma facção, mesma linha do `hostmap`, tudo mais
+igual.
 
-A ferramenta gravou exatamente o que a receita manda:
+| Origem | Gravado pela ferramenta | Depois do load | Na tela |
+|---|---|---|---|
+| `HSS PERSEUS`, nave **de jogador** (`fg=191`, explorada) | `fog=true unex=1 forceRoof=1`, 616 células em `fg=0` | `fog=false`, `unex` e `forceRoof` **apagados**, 616 células de volta em `fg=191` | teto aberto, tripulação à mostra |
+| `CS DASHERS SCRAPPER`, **NPC autêntico** (`fg=0`, nunca explorada) | `fog=true unex=1 forceRoof=1`, 1536 células em `fg=0` | **idêntico** | `State: Normal (Unexplored)`, silhueta cinza |
 
-| | gravado pela ferramenta | depois de o jogo carregar |
-|---|---|---|
-| `<ship fog>` | `true` | **`false`** |
-| `<ship unex>` | `1` | **removido** |
-| `<ship forceRoof>` | `1` | **removido** |
-| células com `fg` | 616 em `0` | **616 em `191`** |
+**A névoa é falsificável quando a origem já é não explorada, e não é quando a
+origem é explorada.** O jogo tem outra fonte de verdade e reconstrói a partir
+dela — restaurando, no caso do jogador, exatamente os `fg=191` de origem.
 
-O jogo não só ignorou: ele **apagou** os dois atributos e restaurou cada célula
-ao valor exato que ela tinha na nave de origem. Existe outra fonte de verdade
-para a névoa, e ela não é nenhum desses campos. Não achamos qual — o `<roof>` da
-nave injetada é estruturalmente igual ao de uma nave de NPC que continua
-escondida.
+**Onde a fonte não está:** não é `fog`, `unex`, `forceRoof` nem o `fg` das
+células, porque escrevemos os quatro nos dois casos. Não é o `hostmap`:
+`accessVision="false"` atravessou o load intacto nas duas rodadas. Não é a
+relação entre facções — no mesmo save, uma Civil autêntica sob a mesma linha
+continua escondida enquanto o Escravagista em `Enemies` a −82 está revelado. E
+não é nenhum atributo da raiz `<ship>`: os dois retratos têm exatamente o mesmo
+conjunto de atributos. As únicas diferenças estruturais são `gasWarnings` de um
+lado e `markers` do outro, nenhuma com cara de marca de exploração.
 
-E o `hostmap` **não** é o que manda, ao contrário do que a seção 1.8 conclui:
+**A consequência de projeto é séria, e não é técnica.** O retrato de um vizinho
+seria a nave *dele* — e a nave de um jogador é, por definição, explorada. Pela
+regra medida, ela nasce revelada e não há como esconder. Restam dois caminhos, e
+a escolha é de desenho:
 
-```
-antes   Player x Civilian  accessTrade=true  accessShip=false  accessVision=false
-depois  Player x Civilian  accessTrade=true  accessShip=false  accessVision=false
-```
+1. **Aceitar a exposição visual.** O vizinho vê a planta e a tripulação do
+   retrato. A proteção econômica continua inteira (só o consignado está lá) e a
+   mecânica de guerra do item 11 protege contra roubo. Perde-se privacidade,
+   ganha-se a graça de ver a nave do outro de verdade.
+2. **O retrato deixa de ser a nave dele.** O servidor monta uma vitrine a partir
+   de um casco de NPC — que nasce não explorado e portanto fica escondido — e
+   transplanta só o que importa: o nome do dono, o estoque consignado e a banca.
+   Resolve a névoa de graça, é mais barato de montar, e some com a questão da
+   planta alheia. O custo é que a sala perde "aquela é a nave do Fulano".
 
-`accessVision="false"` atravessou o load intacto **e o interior está visível na
-tela** — teto aberto, tripulação à mostra. A afirmação "desligar `accessVision`
-fecha o interior na hora" não se sustenta.
-
-**O que isso quebra e o que não quebra.** A proteção *econômica* da seção 2.6
-continua inteira: só o que foi consignado está na nave, então só isso pode ser
-comprado, e o painel de comércio mostrou exatamente o estoque montado. O que cai
-é a privacidade *visual* — o vizinho vê a planta e a tripulação do retrato.
-
-**Não é a relação entre facções.** Foi a primeira hipótese e o próprio save a
-derruba: `CB DUDDE` e `VIZINHO E3` são as duas do lado `Civilian`, no mesmo
-save, sob a mesma linha do `hostmap` — e a autêntica continua escondida enquanto
-a injetada foi revelada. Mais: o Escravagista está em `Enemies` com relação −82
-e está **revelado**, enquanto a Civil a −3 está escondida.
-
-**O que as reveladas têm em comum é contato.** Nas dez naves do save:
-
-| Estado | Naves |
-|---|---|
-| revelada (`fog=false`, sem `unex`, `fg` 191/255) | a do jogador; a que ele está sucateando; a Mercante com quem negociou no E2; a injetada |
-| escondida (`fog=true`, `unex=1`, `forceRoof=1`, `fg=0`) | as quatro com que nunca houve contato |
-
-A leitura que sobra: `fog` é **estado de exploração**, mantido pelo jogo a partir
-de alguma coisa que não é nenhum dos campos que a receita mexe, e escrever nele
-de fora não cola. O retrato de um vizinho nasce condenado, porque a nave de
-origem é a nave *dele* — sempre explorada.
-
-**Próximo teste, e é barato:** montar um retrato a partir de uma nave que já
-seja NPC não explorado (a `CS DASHERS SCRAPPER` do `ship17`, com `fg=0`) em vez
-de uma nave de jogador. Se ele continuar escondido, a regra é "a névoa vem da
-história da nave de origem e não se falsifica", e o projeto tem uma restrição
-real a aceitar.
-
-**A pergunta sobre abordar tem resposta, e é melhor que uma trava.** Não existe
-bloqueio mecânico: dá para entrar numa nave sem permissão, e dá para pegar item
-numa nave ou estação alheia. O que acontece é que isso **declara guerra** e
-derruba a reputação com aquela facção. (Conhecimento de jogo, não medido aqui; a
-máquina disso está toda no `hostmap` e foi conferida — ver item 11.)
-
-Para o projeto isso é bom em três camadas:
-
-1. **O dissuasor é nativo e de graça.** O projeto não precisa inventar
-   anti-roubo. Roubar o vizinho custa uma guerra.
-2. **A prova fica gravada e o servidor enxerga.** Ele entregou o save e recebe de
-   volta: um `stance` virando `Enemies`, uma queda de `relationship`, um
-   `awareOfCrew="true"` são legíveis na devolução. É exatamente a "conferência,
-   não adivinhação" da seção 2.7 — o roubo não é impedido, é **registrado**.
-3. **A exposição visual do item 10 encolhe.** Ver a planta do vizinho sem poder
-   levar nada de graça é estética, não brecha.
+A primeira mantém a promessa do projeto; a segunda mantém a privacidade. Não dá
+para ter as duas com o que se sabe hoje.
 
 ## 11. O `hostmap` é por facção, não por vizinho — e isso limita a sala
 
@@ -344,6 +309,15 @@ primeiro armazém (`racks[0]`), e o relatório dizia "em 2 armazéns" contando o
 disponíveis em vez dos usados. Agora ele distribui um recurso por armazém,
 girando entre eles, e relata em qual cada coisa foi parar. Não é a explicação —
 é remover a suspeita óbvia e parar de mentir no relatório.
+
+**Terceira hipótese, também morta:** teto por pilha. As Placas chegam a 47 numa
+única pilha de armazém em naves autênticas, e o Infrabloco a 65 — não há teto em
+26. E o E3b repetiu o **26 com um recurso só, num armazém só**, o que enterra
+também a concentração.
+
+Mais: no E3b nada foi negociado, e o arquivo continuou com 30, `ca=500` e o
+`playerBank` intacto. **O 26 é número de painel, não de arquivo** — nada some,
+apenas não é ofertado.
 
 **Candidato ainda não excluído:** a mecânica de caixas do item 8. Se o que o
 painel oferta depende de o vendedor conseguir encaixotar e entregar, o número

@@ -223,12 +223,21 @@ Neutral e as portas fecham.
 **Essa tabela é o painel de controle do servidor** sobre o que um jogador pode
 fazer com o retrato do outro.
 
-> **Corrigido em 2026-07-31 pelo E3.** `accessVision="false"` **não** fecha o
-> interior: atravessa o load intacto e a nave continua visível na tela. O jogo
-> ainda apaga `unex` e `forceRoof` da raiz `<ship>` e restaura o `fg` de cada
-> célula ao carregar. A névoa tem outra fonte de verdade, ainda não encontrada.
-> `accessTrade` **funciona** e é o que sustenta a seção 2.6. Se `accessShip`
-> funciona é a pergunta em aberto. Ver `findings.md`, item 10.
+> **Corrigido em 2026-07-31 pelo E3 e pelo E3b.** `accessVision="false"` **não**
+> fecha o interior: atravessa o load intacto e a nave continua visível.
+> `accessTrade` **funciona**, e é ele que sustenta a seção 2.6.
+>
+> A névoa tem outra fonte de verdade. Medido com uma variável só: um retrato
+> feito a partir de uma nave de NPC nunca explorada **fica escondido**; feito a
+> partir de uma nave de jogador, o jogo apaga `unex`/`forceRoof` e restaura o
+> `fg` original. Como o retrato de um vizinho seria a nave dele, e nave de
+> jogador é sempre explorada, **o retrato nasce revelado**.
+>
+> Isso força uma decisão de desenho — aceitar a exposição visual, ou montar o
+> retrato sobre um casco de NPC em vez da nave do vizinho. Ver `findings.md`,
+> item 10.
+>
+> Sobre roubo, ver 2.7: não há trava, mas abordar declara guerra.
 
 Destroços são outro mecanismo: registrados no `<stuff>` do corpo com
 `derelict="true"`, só se revelam abordando, independente de facção.
