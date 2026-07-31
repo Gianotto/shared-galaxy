@@ -58,6 +58,15 @@ class GameDetectionNegativeTestCase(unittest.TestCase):
 class GameDetectionPositiveTestCase(unittest.TestCase):
     """O que PRECISA ser detectado. Roda mesmo com o jogo real aberto."""
 
+    def setUp(self):
+        # Sem `pgrep` não há detecção, e o cliente avisa em vez de fingir que
+        # conferiu. O teste faz o mesmo: declara-se pulado em vez de falhar
+        # numa máquina que nunca poderia passar — é o caso do container de CI,
+        # que não traz procps.
+        import shutil
+        if shutil.which("pgrep") is None:
+            self.skipTest("sem `pgrep` nesta máquina")
+
     def test_matches_the_real_executable_name(self):
         """E precisa mesmo pegar o jogo: falso negativo destrói partida.
 
