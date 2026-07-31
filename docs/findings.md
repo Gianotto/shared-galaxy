@@ -168,7 +168,35 @@ em voo — ou vai ver carga sumir e acusar de perda o que o próprio jogo ainda
 está entregando. Vale também para a devolução: uma sessão pode terminar com
 mercadoria comprada e não entregue.
 
-## 9. Miudezas
+## 9. `<markers>` não é necessário para comerciar
+
+A seção 1.7 lista `<markers>` (pontos de atracagem) como um dos três nós que
+naves de NPC costumam ter e a do jogador não. Depois do item 8 — a carga viaja
+de ônibus — a pergunta virou séria: sem ponto de atracagem, o ônibus entrega?
+
+Entrega. A `MFB STRONGHOLD`, a nave que vendeu o Hyperium do E2, **não tem
+`<markers>`**, e a transação foi executada e entregue. Medido em 9 naves:
+
+| Nave | markers | shipBank |
+|---|---|---|
+| MFB STRONGHOLD (Mercante) | não | **sim** |
+| CS DASHERS SCRAPPER (Civil) | sim (8) | sim |
+| ACS ZAHKUL (Android) | sim (6) | sim |
+| CB DUDDE (Civil) | sim (4) | sim |
+| MAS MARGIN CALL (Militar) | sim (4) | sim |
+| CNHS MORNING STAR (Cultista) | sim (4) | não |
+
+Não há correlação com `<shipBank>` nos dois sentidos: existe nave com banca e
+sem markers, e nave com markers e sem banca. O que manda para comércio é a
+banca.
+
+O formato, quando existe, é `<m m="8" x="11" y="11"/>` — coordenada dentro da
+nave. Por isso clonar de um doador não serviria: os pontos são do casco de
+quem os tem.
+
+**Para o construtor de retratos:** não copiar `<markers>` é seguro.
+
+## 10. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
