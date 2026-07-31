@@ -78,6 +78,12 @@ inteiro de 32 bits está a quatro ordens de grandeza. **Não há limite prático
 jogadores por sala vindo daqui**, porque cada save tem o próprio contador e eles
 nunca se encontram — só é preciso renumerar o que for injetado.
 
+> O limite vem de outro lugar: **vizinhos visíveis no mesmo setor** competem por
+> facção. O `hostmap` é indexado por par de lados, não por nave, e o jogo tem
+> cerca de nove lados usáveis. Dois vizinhos no mesmo lado deixam de ser
+> controláveis em separado, e uma guerra declarada a um atinge o outro. Ver
+> `findings.md`, item 11.
+
 ## 1.4 A seed reproduz a galáxia
 
 Verificado com dois jogos criados com a seed `1654267488` e as mesmas opções:
@@ -388,6 +394,14 @@ O que dá para fazer, e é bastante:
 
 Divergência não precisa virar punição automática. Pode virar sinalização, e num
 mundo cooperativo isso costuma bastar.
+
+**E o jogo ajuda mais do que este documento supunha.** Não há trava contra
+abordar a nave de outra facção e pegar o que tem dentro — mas fazer isso
+**declara guerra** e derruba a reputação com aquele lado. O dissuasor é nativo, e
+a prova fica no `hostmap` do save devolvido: `stance` virando `Enemies`, queda de
+`relationship`, `awareOfCrew`. O servidor entregou o arquivo e recebe de volta,
+então enxerga tudo isso. Roubar o vizinho não é impedido; é **registrado e
+caro**. Ver `findings.md`, item 10.
 
 ## 2.8 Responsabilidades do cliente
 

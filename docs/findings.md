@@ -256,11 +256,58 @@ de uma nave de jogador. Se ele continuar escondido, a regra é "a névoa vem da
 história da nave de origem e não se falsifica", e o projeto tem uma restrição
 real a aceitar.
 
-**Fica em aberto, e é a pergunta séria:** `accessShip="false"` impede de abordar?
-Se não impedir, o vizinho embarca e leva o que quiser, e aí não é mais estética.
-Não testado.
+**A pergunta sobre abordar tem resposta, e é melhor que uma trava.** Não existe
+bloqueio mecânico: dá para entrar numa nave sem permissão, e dá para pegar item
+numa nave ou estação alheia. O que acontece é que isso **declara guerra** e
+derruba a reputação com aquela facção. (Conhecimento de jogo, não medido aqui; a
+máquina disso está toda no `hostmap` e foi conferida — ver item 11.)
 
-## 11. Um armazém tem capacidade, e o excesso não é ofertado
+Para o projeto isso é bom em três camadas:
+
+1. **O dissuasor é nativo e de graça.** O projeto não precisa inventar
+   anti-roubo. Roubar o vizinho custa uma guerra.
+2. **A prova fica gravada e o servidor enxerga.** Ele entregou o save e recebe de
+   volta: um `stance` virando `Enemies`, uma queda de `relationship`, um
+   `awareOfCrew="true"` são legíveis na devolução. É exatamente a "conferência,
+   não adivinhação" da seção 2.7 — o roubo não é impedido, é **registrado**.
+3. **A exposição visual do item 10 encolhe.** Ver a planta do vizinho sem poder
+   levar nada de graça é estética, não brecha.
+
+## 11. O `hostmap` é por facção, não por vizinho — e isso limita a sala
+
+Consequência da mecânica de guerra acima, e não está no documento de projeto.
+
+O retrato de um vizinho recebe uma facção do conjunto fixo do jogo. Neste save
+existem dez lados: `Pirate`, `Slaver`, `Android`, `Civilian`, `Cultist`,
+`Merchant`, `Military`, `HavenFoundation`, `FlamingSwords`, `NotSet`. A tabela de
+relações é indexada por **par de lados** (item 4), nunca por nave.
+
+Então:
+
+- abordar o retrato de um vizinho declara guerra ao **lado inteiro** — a todos os
+  NPCs autênticos daquele lado, e a **qualquer outro vizinho** que tenha caído na
+  mesma facção
+- o caminho inverso também vaza: um jogador que entre em guerra com os Civis por
+  motivo normal de jogo passa a estar em guerra com o vizinho que representamos
+  como Civil
+- as permissões que o servidor liga na retirada (`accessTrade` etc.) valem para o
+  lado inteiro, não só para o retrato
+
+A seção 1.8 chama a tabela de "painel de controle do servidor sobre o que um
+jogador pode fazer com o retrato do outro". É verdade **na granularidade de
+facção**, e só.
+
+**Limite prático de sala.** A seção 1.3 conclui, pelos contadores de id, que "não
+há limite prático de jogadores por sala". Continua valendo para o save. Mas para
+**vizinhos visíveis no mesmo setor** o limite é o número de facções distintas —
+cerca de nove — porque a partir daí dois vizinhos compartilham lado e deixam de
+ser distinguíveis pelo `hostmap`. Vizinhos em setores diferentes não competem por
+isso.
+
+A identidade visual continua vindo do `sname` (seção 1.10). O que colide é o
+controle de permissão e a propagação de guerra, não o nome.
+
+## 12. Um armazém tem capacidade, e o excesso não é ofertado
 
 O retrato foi montado com 40 Produtos químicos e 30 Placas de aço, e a ferramenta
 pôs os dois no **mesmo** armazém — 70 unidades. O painel de comércio do jogo
@@ -274,7 +321,7 @@ existe, só não está à venda.
 vizinho menos do que o dono ofereceu, em silêncio. O estoque precisa ser
 distribuído por armazém, com teto por armazém.
 
-## 12. Miudezas
+## 13. Miudezas
 
 - **`balanced.bin`** existe na pasta do save e não está documentado. Os
   documentos citam `stats.bin` e `timeline.xml`; `timeline.xml` não apareceu em
