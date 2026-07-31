@@ -136,3 +136,54 @@ class CrowdedSystemTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FingerprintStabilityTestCase(unittest.TestCase):
+    """A impressão digital tem que sobreviver a jogar (findings 19).
+
+    A galáxia é materializada preguiçosamente: um salto acrescentou 14 corpos a
+    um sistema. Um digest que conte corpos mede exploração, não identidade — e o
+    servidor recusaria a devolução do primeiro jogador que viajasse.
+    """
+
+    def _galaxy(self, extra_bodies=0):
+        import xml.etree.ElementTree as ET
+        corpos = ('<l celeid="575" type="Star" seed="99" x="8261" y="2132" '
+                  'starType="A" starClass="V"/>')
+        corpos += "".join(
+            f'<l celeid="0" type="AsteroidField" seed="{i}" ox="1" oy="1" '
+            f'centerId="1"/>' for i in range(extra_bodies))
+        return (f'<game><masterData idCounter="1"/>'
+                f'<starmap w="900000" h="400000">'
+                f'<systems><l systemId="1" sn="" smn="">'
+                f'<bodies>{corpos}</bodies>'
+                f'<emptySectors/><clouds/></l></systems></starmap></game>\n')
+
+    def test_materialising_bodies_does_not_change_the_digest(self):
+        import os, sys, tempfile
+        sys.path.insert(0, os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        from server.galaxy.fingerprint import digest_of
+        with tempfile.TemporaryDirectory() as tmp:
+            digests = []
+            for n, extra in enumerate((0, 6, 14)):
+                folder = os.path.join(tmp, f"s{n}")
+                os.makedirs(folder)
+                with open(os.path.join(folder, "game"), "w") as fh:
+                    fh.write(self._galaxy(extra))
+                digests.append(digest_of(folder))
+            self.assertEqual(len(set(digests)), 1,
+                             f"o digest mudou ao materializar corpos: {digests}")
+
+    def test_a_different_star_is_a_different_galaxy(self):
+        import os, sys, tempfile
+        from server.galaxy.fingerprint import digest_of
+        with tempfile.TemporaryDirectory() as tmp:
+            a = os.path.join(tmp, "a"); os.makedirs(a)
+            with open(os.path.join(a, "game"), "w") as fh:
+                fh.write(self._galaxy())
+            b = os.path.join(tmp, "b"); os.makedirs(b)
+            with open(os.path.join(b, "game"), "w") as fh:
+                fh.write(self._galaxy().replace('seed="99"', 'seed="1234"'))
+            self.assertNotEqual(digest_of(a), digest_of(b),
+                                "duas galáxias diferentes deram o mesmo digest")

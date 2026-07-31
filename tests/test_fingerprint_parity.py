@@ -108,20 +108,31 @@ class FingerprintParityTestCase(unittest.TestCase):
                     del sys.modules[name]
             sys.modules.update(saved_modules)
 
-    def test_digests_match(self):
-        upstream = self._upstream()
-        for save in self.saves:
-            with self.subTest(save=os.path.basename(os.path.dirname(save))):
-                mine = vendored.fingerprint(save)
-                theirs = upstream(save)
-                self.assertEqual(
-                    mine["digest"], theirs["digest"],
-                    f"a cópia vendorada divergiu do editor em {save}. "
-                    f"Sincronize server/galaxy/fingerprint.py e atualize "
-                    f"sgalaxy/VENDOR.md")
+    def test_digests_deliberately_differ(self):
+        """A divergência é intencional, e está registrada.
 
-    def test_structure_matches(self):
-        """Nao so o digest: o esqueleto todo, para a deriva aparecer cedo."""
+        O editor monta o digest a partir de corpos, setores e nuvens. Medido:
+        a galáxia é materializada preguiçosamente, e um salto de hiperespaço
+        acrescentou 14 corpos a um sistema — então aquele digest identifica o
+        quanto foi explorado, não qual galáxia é. O servidor passou a usar só
+        as estrelas, que existem desde o primeiro save e não se movem.
+
+        Este teste trava a divergência para ninguém "consertar" de volta.
+        """
+        upstream = self._upstream()
+        save = self.saves[0]
+        self.assertNotEqual(
+            vendored.fingerprint(save)["digest"], upstream(save)["digest"],
+            "os digests voltaram a coincidir: ou o editor adotou as estrelas "
+            "(atualize sgalaxy/VENDOR.md), ou o servidor voltou a contar "
+            "corpos e vai recusar quem viajar")
+
+    def test_the_reading_still_matches(self):
+        """O digest diverge de propósito, a LEITURA não pode divergir.
+
+        As duas cópias têm que enxergar os mesmos sistemas, corpos e setores.
+        Se isso deriva, é bug de vendoração e não decisão de desenho.
+        """
         upstream = self._upstream()
         save = self.saves[0]
         mine, theirs = vendored.fingerprint(save), upstream(save)

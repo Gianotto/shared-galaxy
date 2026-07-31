@@ -47,6 +47,21 @@ from sgalaxy.savefile import SaveError, SaveFile  # noqa: E402
 # Atributos de um corpo celeste que o gerador define e o jogo nao mexe depois.
 BODY_KEYS = ("type", "celeid", "seed", "starType", "starClass",
              "ox", "oy", "centerId", "maxLen", "orbitSpeedMul")
+
+# What the DIGEST is built from, as opposed to what the report shows.
+#
+# A galaxy is materialised lazily, one system at a time, as the player looks at
+# it or arrives. Measured: a grafted save had 123 bodies before a hyperspace
+# jump and 137 after — system 1 gained three planets, five moons and six
+# asteroid fields at once, all with their own seeds. Counting bodies therefore
+# fingerprints how much of the galaxy has been EXPLORED, not which galaxy it is,
+# and two players in the same room would drift apart the moment either travelled.
+#
+# The star of each system does not drift. It exists from the first save, it is
+# the fixed centre the rest orbits, and it carries the generator's seed.
+# Verified stable across four states of one game — fresh, played, grafted, and
+# after a jump — and different for another galaxy.
+STAR_KEYS = ("celeid", "seed", "x", "y", "starType", "starClass")
 # O setor nao tem semente propria; o que o identifica e o tipo mais a orbita.
 SECTOR_KEYS = ("type", "strength", "rich")
 ORBIT_KEYS = ("rx", "ry", "speed")
@@ -108,7 +123,10 @@ def fingerprint(path: str) -> dict:
 
         clouds = sorted(({"color": c.get("color"), "points": len(c.findall("cd"))}
                          for c in system.findall("clouds/c")), key=_key)
+        star = next((b for b in system.findall("bodies/l")
+                     if b.get("type") == "Star"), None)
         systems.append({
+            "star": _pick(star, STAR_KEYS) if star is not None else None,
             "id": system.get("systemId"),
             "name": _text(system.get("sn")),
             "short": _text(system.get("smn")),
@@ -125,11 +143,16 @@ def fingerprint(path: str) -> dict:
         "systems": systems,
         "ignored": len(volatile),
         "named": sum(1 for s in systems if s["name"].strip()),
+        "stars": sum(1 for s in systems if s["star"]),
     }
+    # The digest covers the map size and every system's star, and nothing else.
+    # Bodies, terrain sectors and clouds stay in the report because they are
+    # useful to a human comparing two saves — but they materialise during play,
+    # so they cannot decide whether two saves share a galaxy.
     skeleton = {
         "map": fp["map"],
-        "systems": [{k: s[k] for k in ("id", "bodies", "sectors", "clouds")}
-                    for s in systems],
+        "stars": sorted(
+            [s["id"], s["star"]] for s in systems if s["star"]),
     }
     fp["digest"] = hashlib.sha256(
         json.dumps(skeleton, sort_keys=True, ensure_ascii=False).encode("utf-8")
@@ -173,6 +196,9 @@ def describe(path: str) -> dict:
         "digest": fp["digest"],
         "saveVersion": save_version(path),
         "systems": len(fp["systems"]),
+        "stars": fp["stars"],
+        # Bodies and sectors are reported, never compared: they grow as the
+        # galaxy is materialised (see STAR_KEYS).
         "bodies": sum(len(s["bodies"]) for s in fp["systems"]),
         "sectors": sum(len(s["sectors"]) for s in fp["systems"]),
         "named": fp["named"],

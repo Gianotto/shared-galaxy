@@ -419,6 +419,42 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 19. The galaxy is materialised lazily, and that broke the fingerprint
+
+**A live defect, found by a hyperspace jump.** It would have refused the check-in
+of the first player who explored.
+
+A grafted save had 123 bodies before the jump and 137 after. System 1 gained
+fourteen at once — three planets, five moons and six asteroid fields, each with
+its own seed. The player never went to system 1; opening the star map was enough.
+
+So a save does not contain the whole galaxy. Systems exist as entries and their
+bodies are filled in as the player looks at or reaches them.
+
+**Why that matters.** The fingerprint was built from bodies, terrain sectors and
+clouds — so it measured **how much of the galaxy had been explored**, not which
+galaxy it was. Two players in one room drift apart the moment either travels, and
+the server compares digests on check-in with strict equality. The first explorer
+would have been told their save was from another galaxy.
+
+The original measurement that justified the digest is not wrong: two *freshly
+created* games from one seed do match. It only never covered a played save.
+
+**The fix: stars.** Every system has one, it exists from the first save, it is
+the fixed centre the rest orbits, and it carries the generator's seed. The digest
+now covers the map size and each system's star, and nothing else.
+
+| save | old digest | new digest |
+|---|---|---|
+| fresh, age 1.29 | `c06bd078` | `b51f95ce` |
+| played, age 2.79 | `c06bd078` | `b51f95ce` |
+| grafted | `c06bd078` | `b51f95ce` |
+| **after a jump** | **`c3fe4ae9`** | **`b51f95ce`** |
+| another galaxy | `75117b0a` | `7bdd1c8d` |
+
+**The editor has the same defect**, in its own use: `compare_galaxy.py` will call
+a fresh save and a played save of one galaxy different. Worth fixing there too.
+
 ## 18. The galaxy is not a self-contained subtree
 
 **Cost a crash, and it is the correction to item 17.** The first graft moved

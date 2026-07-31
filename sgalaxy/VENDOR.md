@@ -41,6 +41,29 @@ passou, e o CI não tem save nenhum.
 A consequência de uma divergência aqui não é cosmética: o servidor recusaria
 saves legítimos na entrada de uma sala (seção 2.3) sem ninguém entender por quê.
 
+### Divergência deliberada, desde 2026-07-31
+
+O digest do servidor **não é mais o do editor**, e isso é decisão, não deriva.
+
+O `compare_galaxy.py` monta a impressão digital a partir de corpos, setores e
+nuvens. Medido depois: a galáxia é materializada preguiçosamente, um sistema por
+vez, conforme o jogador olha ou chega. Um salto de hiperespaço acrescentou 14
+corpos a um único sistema — três planetas, cinco luas e seis campos de
+asteroides. Aquele digest, portanto, identifica **o quanto da galáxia foi
+explorado**, não qual galáxia é.
+
+Para uma sala isso é fatal: o servidor recusaria a devolução de qualquer jogador
+que viajasse. O digest passou a cobrir só o tamanho do mapa e a **estrela** de
+cada sistema — que existe desde o primeiro save, é o centro fixo e carrega a
+semente do gerador. Conferido estável em quatro estados da mesma partida e
+diferente entre galáxias.
+
+**O editor tem o mesmo defeito**, no uso dele: comparar um save recém-criado com
+um jogado da mesma galáxia vai dizer que são diferentes. Vale corrigir lá também.
+
+O teste de paridade agora trava a divergência em vez de proibi-la, e continua
+exigindo que as duas cópias **leiam** a mesma coisa.
+
 ### Ainda pendente: paridade de escrita
 
 O teste acima cobre leitura. Falta o de **escrita byte-idêntica** — carregar o
