@@ -484,3 +484,85 @@ class PrivacyTestCase(unittest.TestCase):
                           json={"seed": "outra"}, headers=self._auth(dono))
         r = self.client.get(f"/api/v1/rooms/{room['id']}", headers=self._auth(dono))
         self.assertEqual(r.json()["seed"], "1654267488")
+
+
+@unittest.skipUnless(HAS_DB, "defina DATABASE_URL para rodar os testes da API")
+class WebPagesTestCase(unittest.TestCase):
+    """As páginas que alguém vê antes de instalar qualquer coisa (2.11)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        with db.pool().connection() as conn:
+            conn.execute("TRUNCATE lease, membership, save_version, "
+                         "galaxy_system, room, player RESTART IDENTITY CASCADE")
+        import shutil
+        from server.api.app import store
+        shutil.rmtree(store().root, ignore_errors=True)
+        os.makedirs(store().root, exist_ok=True)
+
+    def _player(self):
+        return self.client.post("/api/v1/players", json={"name": "Ana"}).json()
+
+    def _auth(self, p):
+        return {"Authorization": f"Bearer {p['token']}"}
+
+    def test_index_lists_rooms_without_an_account(self):
+        player = self._player()
+        self.client.post("/api/v1/rooms", json={"seed": "1", "name": "Fronteira"},
+                         headers=self._auth(player))
+        r = self.client.get("/")          # sem cabeçalho de autenticação
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Fronteira", r.text)
+        self.assertIn("Bugbyte", r.text, "faltou o aviso legal")
+
+    def test_room_page_shows_the_recipe_and_the_players(self):
+        player = self._player()
+        room = self.client.post("/api/v1/rooms",
+                                json={"seed": "1654267488", "name": "Fronteira",
+                                      "options": {"nave": "Compact"}},
+                                headers=self._auth(player)).json()
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(player))
+        r = self.client.get(f"/sala/{room['id']}")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("1654267488", r.text, "a receita não apareceu")
+        self.assertIn("Compact", r.text)
+        self.assertIn("Homestead", r.text, "a nave do jogador não apareceu")
+
+    def test_room_page_draws_the_map_after_the_first_join(self):
+        player = self._player()
+        room = self.client.post("/api/v1/rooms", json={"seed": "1"},
+                                headers=self._auth(player)).json()
+        antes = self.client.get(f"/sala/{room['id']}").text
+        self.assertNotIn("<svg", antes, "desenhou mapa sem galáxia definida")
+
+        self.client.post(f"/api/v1/rooms/{room['id']}/join",
+                         content=_save_zip(), headers=self._auth(player))
+        depois = self.client.get(f"/sala/{room['id']}").text
+        self.assertIn("<svg", depois, "não desenhou o mapa depois do primeiro save")
+
+    def test_locked_room_does_not_publish_the_seed_on_the_web(self):
+        """A página é pública; a receita de uma sala com senha não é."""
+        player = self._player()
+        room = self.client.post("/api/v1/rooms",
+                                json={"seed": "SEGREDO123", "password": "x"},
+                                headers=self._auth(player)).json()
+        r = self.client.get(f"/sala/{room['id']}")
+        self.assertNotIn("SEGREDO123", r.text)
+
+    def test_unknown_room_is_a_clean_404(self):
+        self.assertEqual(self.client.get("/sala/NAOEXISTE").status_code, 404)
+
+    def test_room_name_is_escaped(self):
+        """Nome de sala é texto de quem criou, e a página é pública."""
+        player = self._player()
+        room = self.client.post(
+            "/api/v1/rooms",
+            json={"seed": "1", "name": "<script>alert(1)</script>"},
+            headers=self._auth(player)).json()
+        r = self.client.get(f"/sala/{room['id']}")
+        self.assertNotIn("<script>alert(1)</script>", r.text)
+        self.assertIn("&lt;script&gt;", r.text)

@@ -110,3 +110,57 @@ def _player_ship(sf: SaveFile) -> dict:
         if name is None or n > crew:
             name, crew = ship.get("sname"), n
     return {"shipName": name, "ships": ships, "crew": crew}
+
+
+# ---------------------------------------------------------------------------
+# O esqueleto da galaxia, para o mapa da sala
+# ---------------------------------------------------------------------------
+
+def galaxy_map(folder: str) -> dict:
+    """Sistemas com posicao, para desenhar a sala.
+
+    A posicao de um sistema e a da ESTRELA dele: os sistemas nao tem coordenada
+    propria no save, e a estrela e o centro fixo. Conferido em dois saves da
+    mesma partida com quase um dia e meio de jogo entre eles — nenhuma das 64 se
+    moveu, enquanto os corpos que orbitam mudaram.
+
+    O nome vem em hexadecimal e so e atribuido depois da criacao: num save
+    recem-criado ele vem vazio, e por isso a impressao digital o ignora. Aqui
+    entra como enfeite, e vazio nao e erro.
+    """
+    import binascii
+
+    try:
+        sf = SaveFile(folder)
+    except SaveError:
+        return {"w": 0, "h": 0, "systems": []}
+    starmap = sf.main.find("starmap")
+    if starmap is None:
+        return {"w": 0, "h": 0, "systems": []}
+
+    def texto(valor):
+        if not valor:
+            return None
+        try:
+            return binascii.unhexlify(valor).decode("utf-8") or None
+        except (binascii.Error, UnicodeDecodeError, ValueError):
+            return valor
+
+    sistemas = []
+    for system in starmap.findall("systems/l"):
+        estrela = next((b for b in system.findall("bodies/l")
+                        if b.get("type") == "Star"), None)
+        if estrela is None or estrela.get("x") is None:
+            continue
+        sistemas.append({
+            "systemId": system.get("systemId"),
+            "name": texto(system.get("sn")),
+            "x": int(estrela.get("x")),
+            "y": int(estrela.get("y")),
+            "bodies": len(system.findall("bodies/l")),
+        })
+    return {
+        "w": int(starmap.get("w") or 0),
+        "h": int(starmap.get("h") or 0),
+        "systems": sistemas,
+    }

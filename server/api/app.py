@@ -21,6 +21,8 @@ token perdido, e o cliente e obrigado a avisar disso.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import datetime as dt
 import json
 import os
@@ -33,9 +35,47 @@ from server.api import db
 from server.domain import rules
 from server.galaxy import fingerprint, presence
 from server.storage import blobs
+from server.web import pages
 from server.storage.blobs import BlobStore, StorageError
 
+# De quanto em quanto o servidor vence empréstimos por conta própria. Um prazo
+# de 12h não precisa de precisão de minuto, e uma sala parada não deve custar
+# consulta.
+EXPIRY_EVERY = 300
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    """Vence empréstimos sozinho, sem esperar alguém agir.
+
+    Sem isto, um empréstimo só vence quando o próprio jogador tenta retirar de
+    novo — e até lá a sala mostra ele como "jogando" para todo mundo, e o mapa
+    da 2.11 mente. É a diferença entre uma sala viva e uma sala que parece viva.
+    """
+    async def laco():
+        while True:
+            await asyncio.sleep(EXPIRY_EVERY)
+            try:
+                with db.pool().connection() as conn:
+                    venceram = db.expire_leases(conn)
+                if venceram:
+                    print(f"[prazo] {venceram} empréstimo(s) vencido(s)")
+            except Exception as exc:      # noqa: BLE001
+                # Um erro aqui não pode derrubar o servidor: quem está jogando
+                # não tem nada a ver com a faxina.
+                print(f"[prazo] falhou: {exc}")
+
+    tarefa = asyncio.create_task(laco())
+    try:
+        yield
+    finally:
+        tarefa.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await tarefa
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Galáxia Compartilhada",
     description="Servidor de custódia de savegames de Space Haven. "
                 "Projeto independente, sem vínculo com a Bugbyte Ltd.",
@@ -390,6 +430,9 @@ async def join_room(room_id: str, request: Request,
             "sha256": meta["sha256"], "bytes": meta["bytes"],
             "kind": "canonical", "game_day": day,
             "galaxy_digest": described["digest"]})
+        if not room["galaxy_digest"]:
+            with blobs.with_unpacked(data) as folder:
+                db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
         db.adopt_galaxy(conn, room_id, described["digest"],
                         described["saveVersion"])
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
@@ -529,18 +572,22 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    """Vitrine mínima. O mapa da sala entra aqui na próxima etapa."""
-    return _page("Galáxia Compartilhada", """
-<p>Servidor de custódia de savegames de <b>Space Haven</b>. Ele guarda o save de
-cada jogador de uma sala, empresta a cada sessão e recebe de volta — o que
-permite a várias pessoas dividirem a mesma galáxia, cada uma rodando o próprio
-jogo.</p>
-<p><b>Em construção.</b> Hoje existe a custódia; a aparição de vizinhos dentro do
-jogo é a próxima etapa.</p>
-<p><a href="/privacidade">o que acontece com o seu save</a> ·
-   <a href="/api/v1/rooms">salas abertas</a> ·
-   <a href="/docs">a API</a> ·
-   <a href="https://github.com/Gianotto/shared-galaxy">o código</a></p>""")
+    """As salas abertas. É a vitrine: ver antes de decidir se quer entrar."""
+    with db.pool().connection() as conn:
+        rooms = db.list_rooms(conn)
+    return pages.room_list([dict(r) for r in rooms])
+
+
+@app.get("/sala/{room_id}", response_class=HTMLResponse)
+def room_web(room_id: str):
+    """A sala como página. Sem conta, sem instalar nada — é o degrau 2 da 2.11."""
+    with db.pool().connection() as conn:
+        room = db.get_room(conn, room_id)
+        if room is None:
+            raise HTTPException(404, f"não existe sala {room_id}")
+        roster = db.room_roster(conn, room_id)
+        galaxy = db.galaxy_map(conn, room_id)
+    return pages.room_page(dict(room), [dict(r) for r in roster], galaxy)
 
 
 @app.get("/privacidade", response_class=HTMLResponse)

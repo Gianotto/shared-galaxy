@@ -259,3 +259,40 @@ def expire_leases(conn: psycopg.Connection) -> int:
     return conn.execute(
         """UPDATE lease SET state = 'expired', closed_at = now()
             WHERE state = 'open' AND expires_at <= now()""").rowcount
+
+
+# ---------------------------------------------------------------------------
+# O esqueleto da galaxia, para o mapa
+# ---------------------------------------------------------------------------
+
+def save_galaxy_map(conn: psycopg.Connection, room_id: str, mapa: dict) -> int:
+    """Grava o esqueleto uma vez, quando a sala adota a galaxia.
+
+    E constante da sala, nao estado de jogador: a seed reproduz o mundo gerado,
+    entao os sistemas e as posicoes nao mudam mais.
+    """
+    if not mapa.get("systems"):
+        return 0
+    conn.execute("UPDATE room SET galaxy_w = %s, galaxy_h = %s WHERE id = %s",
+                 (mapa["w"], mapa["h"], room_id))
+    with conn.cursor() as cur:
+        cur.executemany(
+            """INSERT INTO galaxy_system (room_id, system_id, name, x, y, bodies)
+               VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (room_id, system_id) DO NOTHING""",
+            [(room_id, s["systemId"], s["name"], s["x"], s["y"], s["bodies"])
+             for s in mapa["systems"]])
+    return len(mapa["systems"])
+
+
+def galaxy_map(conn: psycopg.Connection, room_id: str) -> dict:
+    room = conn.execute(
+        "SELECT galaxy_w, galaxy_h FROM room WHERE id = %s",
+        (room_id,)).fetchone()
+    sistemas = conn.execute(
+        """SELECT system_id AS "systemId", name, x, y, bodies
+             FROM galaxy_system WHERE room_id = %s ORDER BY system_id""",
+        (room_id,)).fetchall()
+    return {"w": (room or {}).get("galaxy_w") or 0,
+            "h": (room or {}).get("galaxy_h") or 0,
+            "systems": [dict(s) for s in sistemas]}
