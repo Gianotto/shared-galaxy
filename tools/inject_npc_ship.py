@@ -177,7 +177,18 @@ SHIP_HIDDEN_ATTRS = {"unex": "1", "forceRoof": "1", "fog": "true"}
 # tripulante, colado no `hsid`, e nas duas naves de save real onde aparece o
 # valor e sempre o `sid` da propria nave (6 vezes numa, 1 na outra). O aviso da
 # ferramenta o pegou justamente porque ele nao estava aqui.
-SID_BACKREF_ATTRS = ("sid", "homeSid", "hsid", "hdsid")
+#
+# `shipId` e `ssid` entraram depois, e a medicao diz que sao diferentes dos
+# outros: os dois guardam *qualquer* id de nave, nao so o da nave que os contem
+# (ha `ssid=37` dentro de meia duzia de naves, e `shipId=4321` dentro da 1459).
+# Entram assim mesmo porque a renumeracao so dispara quando o valor **e** o sid
+# antigo desta nave, e nesse caso a leitura natural e auto-referencia.
+#
+# O risco residual e do modo vitrine, onde o casco original continua no mesmo
+# save: um `ssid` que apontasse de proposito para ele passa a apontar para a
+# copia. Preferimos isso ao contrario — um retrato cujos registros apontam para
+# outra nave e um retrato quebrado.
+SID_BACKREF_ATTRS = ("sid", "homeSid", "hsid", "hdsid", "shipId", "ssid")
 
 # Onde um `<inv>` de armazem pendura, em oposicao aos buffers internos de
 # maquina. So armazem e carga negociavel; buffer de maquina e trabalho em curso.
@@ -350,6 +361,37 @@ def faction_tokens(faction_id: str, side: str) -> set[str]:
 # --------------------------------------------------------------------------
 # Localizar coisas nos saves
 # --------------------------------------------------------------------------
+
+
+def unexplored_hulls(sf: SaveFile) -> list[ET.Element]:
+    """Cascos do proprio save que servem de vitrine, do menor para o maior.
+
+    O retrato e uma loja montada sobre um casco de NPC, nao uma copia da nave do
+    vizinho — decisao tomada depois do E3b (secao 2.5, `findings.md` item 10). O
+    motivo e a nevoa: ela so se sustenta se a nave de origem nunca foi
+    explorada, e a nave de um jogador e sempre explorada.
+
+    O casco sai de dentro do save de destino de proposito. Alem de garantir que
+    e uma nave que aquele jogador ja tem, respeita a regra da secao 2.13: nada
+    de conteudo do jogo e redistribuido, porque nada sai da instalacao dele.
+
+    Menor primeiro porque a vitrine nao precisa ser grande, e cada retrato entra
+    inteiro no save de todo vizinho que estiver no mesmo setor.
+    """
+    out = []
+    for _doc, ship in sf.ships():
+        settings = ship.find("settings")
+        if settings is None or settings.get("owner") in (None, "Player"):
+            continue
+        if ship.get("fog") != "true" or ship.get("unex") != "1":
+            continue
+        # Nevoa de verdade, nao so o atributo: se as celulas ja foram reveladas,
+        # o jogo vai tratar como explorada e o retrato nasce aberto.
+        cells = [e for e in ship.iter("e") if e.get("fg") is not None]
+        if not cells or any(e.get("fg") != "0" for e in cells):
+            continue
+        out.append((len(list(ship.iter("e"))), ship))
+    return [ship for _n, ship in sorted(out, key=lambda p: p[0])]
 
 
 def find_ship(sf: SaveFile, sid: str | None = None, name: str | None = None) -> ET.Element:
@@ -945,7 +987,7 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
                 credits: str = DEFAULT_SHIP_CREDITS, stock: str | None = None,
                 name: str | None = None, crew_side: str | None = None,
                 keep_cargo: bool = False, celeid: str | None = None,
-                system_id: str | None = None) -> dict:
+                system_id: str | None = None, hull_mode: bool = False) -> dict:
     """Monta o retrato de um vizinho dentro de `dest`, seguindo a secao 2.5.
 
     Nao grava nada: mexe na arvore em memoria e devolve o relatorio do que fez.
@@ -1016,7 +1058,20 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
     report["warnings"] += report["stock"]["warnings"]
 
     # -- 6: nevoa e teto ----------------------------------------------------
-    report["fog"] = hide_interior(ship)
+    #
+    # No modo vitrine nao se toca. O casco ja nasce escondido, e o E3b mostrou
+    # que escrever na nevoa e justamente o que nao funciona: o jogo reconstroi a
+    # partir de uma fonte que nao encontramos, e so respeita o resultado quando
+    # a nave de origem nunca foi explorada. Mexer aqui seria, na melhor das
+    # hipoteses, inofensivo — e na pior, revelar um casco que estava fechado.
+    if hull_mode:
+        cells = [e for e in ship.iter("e") if e.get("fg") is not None]
+        report["fog"] = {"mode": "casco", "cells": len(cells),
+                         "fogged": sum(1 for e in cells if e.get("fg") == "0"),
+                         "shipAttrs": {k: ship.get(k) for k in SHIP_HIDDEN_ATTRS
+                                       if ship.get(k) is not None}}
+    else:
+        report["fog"] = hide_interior(ship)
 
     # -- a nave entra no setor carregado ------------------------------------
     attach(holder, ship)
@@ -1132,13 +1187,18 @@ def print_report(report: dict, dry_run: bool) -> None:
     else:
         print(f"  estoque: nenhum ({stock['cleared']} pilha(s) removidas, "
               f"{stock['racks']} armazém/armazéns disponíveis)")
-    print(f"  névoa: {fog['fogged']}/{fog['cells']} célula(s) com fg=0, "
-          + " ".join(f"{k}={v}" for k, v in fog["shipAttrs"].items()))
-    # Medido no E3: o jogo desfaz tudo isto ao carregar. Fica porque nao custa e
-    # porque a fonte de verdade da nevoa ainda nao foi encontrada, mas prometer
-    # que esconde o interior seria mentira. Ver findings.md, item 10.
-    print("           (o jogo desfaz isto ao carregar — o interior fica "
-          "visível; ver findings.md item 10)")
+    if fog.get("mode") == "casco":
+        print(f"  névoa: {fog['fogged']}/{fog['cells']} célula(s) já em fg=0, "
+              + " ".join(f"{k}={v}" for k, v in fog["shipAttrs"].items())
+              + " — do casco, não tocada")
+    else:
+        print(f"  névoa: {fog['fogged']}/{fog['cells']} célula(s) com fg=0, "
+              + " ".join(f"{k}={v}" for k, v in fog["shipAttrs"].items()))
+        # Medido no E3: o jogo desfaz isto ao carregar quando a nave de origem
+        # ja foi explorada, que e o caso de toda nave de jogador. Ver
+        # findings.md, item 10.
+        print("           (se a origem for nave de jogador, o jogo desfaz isto "
+              "ao carregar — use --hull; ver findings.md item 10)")
     print(f"  tamanho da nave montada: {report['bytes']} bytes")
 
     body, fleet = report["body"], report["fleet"]
@@ -1168,13 +1228,19 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="injeta a nave de um savegame em outro como NPC de outra facção "
                     "(o retrato de um jogador vizinho, receita da seção 2.5)")
-    ap.add_argument("--from", dest="source", required=True,
-                    help="save de origem, de onde a nave sai (nunca é alterado)")
+    ap.add_argument("--from", dest="source",
+                    help="save de origem, de onde a nave sai (nunca é alterado); "
+                         "dispensável com --hull")
     ap.add_argument("--into", dest="dest", required=True,
                     help="save de destino, onde a nave entra (nunca é alterado)")
     ap.add_argument("--out",
                     help="pasta nova que recebe a cópia alterada do destino; "
                          "obrigatória fora do modo de ensaio")
+    ap.add_argument("--hull", nargs="?", const="auto", metavar="SID",
+                    help="modo vitrine (seção 2.5): monta o retrato sobre um "
+                         "casco de NPC do próprio destino em vez de copiar a "
+                         "nave do vizinho. Sem valor, escolhe o menor casco não "
+                         "explorado; com um sid, usa aquele")
     ap.add_argument("--sid", help="sid da nave de origem")
     ap.add_argument("--ship-name", help="nome da nave de origem, em vez do sid")
     ap.add_argument("--faction", default=DEFAULT_FACTION_ID,
@@ -1204,9 +1270,20 @@ def main() -> int:
         print("erro: --out é obrigatório — esta ferramenta nunca escreve sobre o save "
               "de entrada. Use --dry-run para ver o que ela faria.", file=sys.stderr)
         return 1
-    if not args.sid and not args.ship_name:
-        print("erro: escolha a nave de origem com --sid ou --ship-name.", file=sys.stderr)
-        return 1
+    if args.hull:
+        if args.source:
+            print("erro: --hull monta sobre um casco do próprio destino; "
+                  "não use --from junto.", file=sys.stderr)
+            return 1
+    else:
+        if not args.source:
+            print("erro: informe --from, ou use --hull para montar a vitrine "
+                  "sobre um casco do destino.", file=sys.stderr)
+            return 1
+        if not args.sid and not args.ship_name:
+            print("erro: escolha a nave de origem com --sid ou --ship-name.",
+                  file=sys.stderr)
+            return 1
 
     try:
         crew_side = None
@@ -1215,20 +1292,50 @@ def main() -> int:
         elif args.crew_side.lower() != "keep":
             crew_side = args.crew_side
 
-        source = SaveFile(args.source)
-        ship = find_ship(source, args.sid, args.ship_name)
-
         probe = SaveFile(args.dest)
+        keep_out = ()
+
+        if args.hull:
+            # A vitrine sai do proprio destino: nada de conteudo do jogo viaja
+            # entre instalacoes, e o casco escolhido e uma nave que aquele
+            # jogador ja tem no save dele.
+            hulls = unexplored_hulls(probe)
+            if not hulls:
+                raise SaveError(
+                    "este save não tem nenhuma nave de NPC não explorada para "
+                    "servir de vitrine. Use --from com uma nave de origem, "
+                    "ciente de que a névoa não vai sobreviver ao load")
+            if args.hull == "auto":
+                ship = hulls[0]
+            else:
+                escolhidos = [h for h in hulls if h.get("sid") == args.hull]
+                if not escolhidos:
+                    disponiveis = ", ".join(
+                        f"sid={h.get('sid')} {h.get('sname')!r}" for h in hulls[:8])
+                    raise SaveError(
+                        f"sid {args.hull} não é um casco não explorado deste "
+                        f"save. Disponíveis: {disponiveis}")
+                ship = escolhidos[0]
+        else:
+            source = SaveFile(args.source)
+            ship = find_ship(source, args.sid, args.ship_name)
+            keep_out = (source.dir,)
+
         if args.dry_run:
             dest = probe
         else:
-            out = prepare_output(probe.dir, args.out, keep_out_of=(source.dir,))
+            out = prepare_output(probe.dir, args.out, keep_out_of=keep_out)
             dest = SaveFile(out)
+            # O casco veio do `probe`; no modo de gravacao a arvore que vale e a
+            # do `dest`, entao a nave tem que ser reencontrada la dentro.
+            if args.hull:
+                sid_casco = ship.get("sid")
+                ship = find_ship(dest, sid_casco, None)
 
         report = inject_ship(
             dest, ship, faction=args.faction, credits=args.credits, stock=args.stock,
             name=args.name, crew_side=crew_side, keep_cargo=args.keep_cargo,
-            celeid=args.body, system_id=args.system,
+            celeid=args.body, system_id=args.system, hull_mode=bool(args.hull),
         )
         print_report(report, args.dry_run)
         if not args.dry_run:

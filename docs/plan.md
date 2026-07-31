@@ -220,8 +220,15 @@ fica viva entre sessões e o mapa de B.6 passa a se mexer.
 
 **Fase 2 — injeção de vizinho, sem comércio.** O `inject_npc_ship.py` da etapa A
 vira construtor de retratos no servidor, e a montagem passa a acontecer no
-`checkout`. Prova o momento que vende o projeto: você abre o jogo e a nave de
+`checkout`. Prova o momento que vende o projeto: você abre o jogo e a loja de
 alguém está lá.
+
+O retrato é uma **vitrine sobre casco de NPC do próprio save de destino**
+(`--hull`), não uma cópia da nave do vizinho. Decidido depois do E3b: a névoa só
+se sustenta se a nave de origem nunca foi explorada, e nave de jogador é sempre
+explorada. Ver `findings.md` item 10 e a seção 2.5 do projeto. De quebra o casco
+sai da instalação do próprio jogador, o que mantém a regra da seção 2.13, e o
+retrato cabe em 166 KB em vez de 460.
 
 **Fase 3 — consignação e conciliação.** Depende do resultado da etapa A. Banca de
 feira, não porão: só o consignado entra no retrato, o `ca` limita o quanto a nave

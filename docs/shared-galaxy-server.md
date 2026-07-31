@@ -350,22 +350,42 @@ estado que os outros veem.
 
 ## 2.5 O que o servidor injeta na retirada
 
-Para cada vizinho da sala cuja frota esteja no mesmo corpo celeste:
+**O retrato não é a nave do vizinho. É uma vitrine.**
 
-1. a nave dele em `game/ships`, com `sid` novo tirado do `masterData/@idCounter`
-   do save de destino
-2. `entId` novo para cada tripulante, do mesmo contador
-3. `<ship>/<settings>` com `of` e `owner` da facção escolhida para representá-lo
-4. `<asi>` copiado de uma nave de NPC, para a IA existir
-5. `<shipBank>` contendo **apenas o que aquele jogador consignou**, com `ca`
+A primeira versão deste documento mandava copiar a nave dele. O E3b mostrou que
+não dá: a névoa de uma nave só se sustenta se a nave de origem nunca foi
+explorada, e a nave de um jogador é sempre explorada. O retrato nasceria com o
+teto aberto e a tripulação à mostra (`findings.md`, item 10).
+
+Então o servidor monta uma loja, não uma cópia. Para cada vizinho da sala cuja
+frota esteja no mesmo corpo celeste:
+
+1. **um casco de NPC tirado do próprio save de destino**, nunca explorado, com
+   `sid` novo do `masterData/@idCounter`. Vem de dentro do save do jogador, o
+   que também resolve a regra da seção 2.13: nada de conteúdo do jogo é
+   redistribuído, porque nada sai da instalação dele
+2. `entId` novo para cada tripulante do casco, do mesmo contador
+3. `<ship>/<settings>` com `of` e `owner` da facção escolhida
+4. `<shipBank>` contendo **apenas o que aquele jogador consignou**, com `ca`
    limitando quanto ela consegue comprar
-6. `fg="0"` em cada célula, `unex="1"`, `forceRoof="1"` e `fog="true"` na
-   raiz `<ship>` (medido: toda nave de NPC tem os quatro; ver `findings.md`)
+5. os armazéns esvaziados e preenchidos só com o consignado, um recurso por
+   armazém
+6. **a névoa não se toca.** O casco já nasce escondido; escrever nela é o que
+   não funciona
 7. uma frota `<f>` no corpo celeste, com `createdShipId` apontando para o `sid`
 8. no `hostmap`, as permissões daquela facção: `accessTrade` conforme a relação,
    `accessVision` e `accessShip` desligados
 
 O nome da nave (`sname`) carrega a identidade do jogador dono.
+
+**O que se ganha, além da névoa.** O retrato deixa de herdar a fila de
+construção da nave de origem — no E3 a tripulação começou a construir e a
+consumir o estoque consignado. Fica pequeno: um casco de vitrine em vez de
+460 KB de nave alheia por vizinho. E a planta da nave de ninguém viaja.
+
+**O que se perde,** e é real: a sala não mostra mais *a nave do Fulano*. Isso
+volta pelo mapa web da seção 2.11, onde não custa nada e ninguém precisa
+confiar em ninguém para ver.
 
 Entregas pendentes (compras fechadas, presentes) entram direto no porão da nave
 do jogador, como pilhas em um `<inv>` de armazém.
