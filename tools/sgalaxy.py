@@ -626,30 +626,6 @@ def is_member(room: str) -> bool:
     return any(p["playerId"] == eu for p in data.get("players", []))
 
 
-def other_saves() -> list:
-    """Os saves de jogo normal, sem as pastas de sala.
-
-    Ordenados do mais avançado para o mais novo. As pastas `Sala-*` são as que
-    este próprio cliente escreve, e oferecer uma delas para entrar numa sala
-    seria devolver a sala para dentro dela mesma.
-    """
-    exe = find_game()
-    if not exe:
-        return []
-    raiz = os.path.join(os.path.dirname(exe), "savegames")
-    if not os.path.isdir(raiz):
-        return []
-    achados = []
-    for nome in sorted(os.listdir(raiz)):
-        if nome.startswith("Sala-") or nome.startswith("_"):
-            continue
-        pasta = os.path.join(raiz, nome, "save")
-        if os.path.isfile(os.path.join(pasta, "game")):
-            achados.append((age_of(pasta), nome, pasta))
-    achados.sort(reverse=True)
-    return achados
-
-
 def savegame_root() -> str | None:
     exe = find_game()
     if not exe:
