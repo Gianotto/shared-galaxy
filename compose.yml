@@ -44,7 +44,11 @@ services:
     volumes:
       - save-data:/data/blobs
     ports:
-      - "${SGALAXY_PORT:-8714}:8714"
+      # Só no loopback por padrão. Quem quiser expor põe um proxy reverso na
+      # frente, ou muda SGALAXY_BIND para 0.0.0.0 de propósito — mas um serviço
+      # que aceita upload de estranhos não deve nascer aberto para a internet
+      # porque ninguém leu o compose.
+      - "${SGALAXY_BIND:-127.0.0.1}:${SGALAXY_PORT:-8714}:8714"
 
 volumes:
   db-data:
