@@ -20,7 +20,7 @@ GAME_TEMPLATE = """<game seed="0" mode="0">\
 <masterData idCounter="{id_counter}"/>\
 <playerBank ca="{player_credits}"/>\
 <settings f="461"/>\
-<starmap w="500000" h="500000" sys="6" pa="{pa}" objectIdCounter="900">\
+<starmap w="{galaxy_w}" h="500000" sys="6" pa="{pa}" objectIdCounter="900">\
 <systems>\
 <l systemId="6" sn="416c706861" smn="414c">\
 <bodies>\
@@ -103,8 +103,15 @@ def build_game(id_counter: int = 1000,
                trade: str = "true",
                vision: str = "true",
                other_side: str = "Civilian",
+               galaxy_w: int = 500000,
                ships=None) -> str:
-    """Monta o documento `game` inteiro como texto."""
+    """Monta o documento `game` inteiro como texto.
+
+    `galaxy_w` muda o tamanho da galaxia, que entra na impressao digital — e
+    portanto e o jeito de simular "outro universo". Mudar `pa` NAO serve: ele e
+    referencia, nao parametro de geracao, e fica de fora do digest de proposito
+    (docs/findings.md, item 1).
+    """
     ships = ships if ships is not None else [default_player_ship()]
 
     # O id da frota deriva do `sid` da nave, nunca da posicao dela na lista.
@@ -128,6 +135,7 @@ def build_game(id_counter: int = 1000,
 
     return GAME_TEMPLATE.format(
         id_counter=id_counter, player_credits=player_credits, pa=pa,
+        galaxy_w=galaxy_w,
         visited=visited, relation=relation, trade=trade, vision=vision,
         other_side=other_side,
         fleets=FLEETS_TEMPLATE.format(npc_fleet=npc_fleets),

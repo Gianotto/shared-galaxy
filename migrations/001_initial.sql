@@ -140,7 +140,12 @@ CREATE TABLE lease (
     state        lease_state NOT NULL DEFAULT 'open',
     -- A versão que foi entregue. O servidor montou esse arquivo, então na
     -- devolução ele compara os dois em vez de adivinhar (seção 2.7).
-    delivered_id bigint      NOT NULL REFERENCES save_version(id) ON DELETE RESTRICT,
+    --
+    -- Anulável, e com SET NULL: um empréstimo fechado é histórico, e a versão
+    -- que ele entregou pode sair pela janela de retenção meses depois. Com
+    -- RESTRICT aqui, a poda travava — e travar a poda é pior do que perder a
+    -- referência de uma sessão antiga já conciliada.
+    delivered_id bigint      REFERENCES save_version(id) ON DELETE SET NULL,
     returned_id  bigint      REFERENCES save_version(id) ON DELETE SET NULL,
     issued_at    timestamptz NOT NULL DEFAULT now(),
     expires_at   timestamptz NOT NULL,

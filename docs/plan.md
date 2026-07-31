@@ -152,6 +152,27 @@ canônica atual nem a emprestada.
 
 ### B.4 — API
 
+**Feito em 2026-07-31.** Sete rotas, mais `/me` e `/health`. Exercitadas por 25
+testes de integração contra Postgres de verdade — nunca contra dublê, porque a
+garantia que mais importa nesta fase é um índice único do banco. O ciclo inteiro
+foi rodado por HTTP com um savegame real de 340 KB: token, sala, entrada com
+conferência de galáxia, retirada com prazo, segunda retirada recusada, devolução
+e estado da sala.
+
+Quatro defeitos que só apareceram por testar contra banco de verdade:
+
+- o `delivered_id` do empréstimo travava a poda de retenção com `ON DELETE
+  RESTRICT`. Virou anulável com `SET NULL`: empréstimo fechado é histórico, e
+  travar a poda é pior que perder a referência de uma sessão já conciliada
+- o molde sintético mudava `starmap/@pa` para simular "outra galáxia", e não
+  funcionava — `pa` é referência, não parâmetro de geração, e fica fora da
+  impressão digital de propósito
+- o volume de blobs não era limpo entre testes, e um teste de "lixo não custa
+  disco" contava blobs de testes anteriores
+- a presença (nome da nave e posição) não era lida do save, então o mapa da sala
+  nasceria vazio
+
+
 Todas sob `/api/v1`, com o token no header.
 
 | Rota | O que faz |

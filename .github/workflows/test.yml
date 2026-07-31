@@ -62,3 +62,44 @@ jobs:
               raise SystemExit(1)
           print("só biblioteca padrão, como prometido")
           PY
+
+  api:
+    # O servidor é testado contra um Postgres de verdade, nunca contra dublê. A
+    # garantia que mais importa nesta fase — um empréstimo aberto por jogador —
+    # é um índice único do banco, e um dublê não testaria isso.
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: sgalaxy
+          POSTGRES_USER: sgalaxy
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Dependências
+        run: pip install -r requirements.txt httpx
+
+      - name: Migração
+        run: psql "$DATABASE_URL" -f migrations/001_initial.sql
+        env:
+          DATABASE_URL: postgresql://sgalaxy:test@localhost:5432/sgalaxy
+
+      - name: Testes da API
+        run: python -m unittest tests.test_api -v
+        env:
+          DATABASE_URL: postgresql://sgalaxy:test@localhost:5432/sgalaxy
+          BLOB_ROOT: /tmp/sgalaxy-blobs
+
+      - name: A imagem constrói
+        run: docker build -t sgalaxy .
