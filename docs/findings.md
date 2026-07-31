@@ -419,6 +419,43 @@ accepts any weaving or only what the data mods use. The other installed item
 path is confirmed and the code path is only inferred from the presence of the
 weaver.
 
+## 18. The galaxy is not a self-contained subtree
+
+**Cost a crash, and it is the correction to item 17.** The first graft moved
+`<starmap>` alone, on the assumption that a galaxy is one node. The save loaded
+fine. The first hyperspace jump crashed:
+
+```
+java.lang.NullPointerException
+  QuestExodusFleetMissions.addFindBeaconFromDere
+  QuestExodusFleet.onEvent
+  Questlines$QuestLineManager.openStarmapInHyperspace
+  StarMapScreen$2.update
+```
+
+The quest line went looking for a beacon that existed in the galaxy that had
+been replaced.
+
+Measured afterwards, three places outside `<starmap>` hold ids from inside it:
+
+| Node | Attributes pointing into the starmap |
+|---|---|
+| `<questLines>` | `atSystemId`, `atSectorId`, `decoId`, `createdShipStarmapId` |
+| `<missions>` | `systemId`, `sectorId` |
+| `<ships>` | `givenByShipId`, `systemId`, `sectorId`, on mission nodes |
+
+They are the same family of local object id as `starmap/@pa` — item 1 again, in
+a place nobody thought to look.
+
+**The fix.** `<questLines>` comes from the galaxy donor, because a player
+arriving in that galaxy should have the quest state that belongs to it. Missions
+are dropped: an outstanding job in a galaxy you just left cannot be honoured,
+and nobody would expect it to be.
+
+**Why the first test missed it.** Item 17 was verified on an asteroid base, and
+a base cannot travel — so the hyperspace path was never exercised. A test that
+cannot reach the failing code is not evidence, and I read it as if it were.
+
 ## 17. A galaxy can be grafted into a save, and the game accepts it
 
 **The biggest lever found so far for onboarding.** Measured 2026-07-31.

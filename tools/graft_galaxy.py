@@ -18,7 +18,13 @@ subtree instead, and the player's own state is never touched.
 
 WHAT MOVES
 
-    <starmap>   the whole thing: systems, bodies, terrain sectors, clouds
+    <starmap>     the whole thing: systems, bodies, terrain sectors, clouds
+    <questLines>  from the same donor, because it points INTO the starmap
+
+WHAT IS CLEARED
+
+    <missions>, and the mission nodes on ships — they name systems and sectors
+    of the galaxy being replaced
 
 WHAT IS PRESERVED FROM THE PLAYER'S SAVE
 
@@ -31,6 +37,23 @@ WHAT IS REBUILT
     body, plus `starmap/@sys` and `starmap/@pa`. `@pa` takes the body's LOCAL
     `id`, never the `celeid` — they are different numbers and confusing them
     puts the player in the wrong sector, silently (findings item 1).
+
+THE REFERENCES THAT COST A CRASH. The first version moved `<starmap>` alone, on
+the assumption that the galaxy is a self-contained subtree. It is not. Loading
+worked; the first hyperspace jump crashed with a NullPointerException inside
+`QuestExodusFleetMissions.addFindBeaconFromDere` — the quest line had gone
+looking for a beacon that existed in the old galaxy.
+
+Measured afterwards, three places outside `<starmap>` hold ids from inside it:
+
+    <questLines>  atSystemId, atSectorId, decoId, createdShipStarmapId
+    <missions>    systemId, sectorId
+    <ships>       givenByShipId, systemId, sectorId, on mission nodes
+
+`<questLines>` is taken from the donor: the player is arriving in that galaxy,
+so the fresh quest state that belongs to it is the correct one. Missions are
+dropped, because an outstanding job in a galaxy you just left cannot be honoured
+— and nobody would expect it to be.
 
 THE KNOWN SEAM. The starting sector's `<space>` was generated from the player's
 original body, and the game does not regenerate a sector on load (section 1.6).
@@ -192,6 +215,9 @@ def graft(galaxy_sf: SaveFile, player_sf: SaveFile,
     index = list(target_root).index(current)
     _remove_child(target_root, current)
     _insert_child(target_root, new_map, index)
+
+    report.update(_move_quests(galaxy_sf.main, target_root))
+
     player_sf.mark_dirty(target_root)
     player_sf.reindex()
 
@@ -203,6 +229,49 @@ def graft(galaxy_sf: SaveFile, player_sf: SaveFile,
         "bodyType": body.get("type"),
     })
     return report
+
+
+# Everything outside <starmap> that names something inside it. Found the hard
+# way: the first graft crashed on the first hyperspace jump.
+QUEST_NODE = "questLines"
+MISSION_NODES = ("missions",)
+
+
+def _move_quests(donor_root: ET.Element, target_root: ET.Element) -> dict:
+    """Brings the donor's quest state over and drops the player's missions."""
+    out: dict = {}
+
+    donor_quests = donor_root.find(QUEST_NODE)
+    current = target_root.find(QUEST_NODE)
+    if donor_quests is not None and current is not None:
+        fresh = copy.deepcopy(donor_quests)
+        fresh.tail = current.tail
+        index = list(target_root).index(current)
+        _remove_child(target_root, current)
+        _insert_child(target_root, fresh, index)
+        out["questLines"] = "from the galaxy donor"
+    elif current is not None:
+        out["questLines"] = "left as they were: the donor has none"
+
+    dropped = 0
+    for tag in MISSION_NODES:
+        node = target_root.find(tag)
+        if node is None:
+            continue
+        for child in list(node):
+            _remove_child(node, child)
+            dropped += 1
+
+    # Ships carry their own mission nodes, naming systems and sectors of the
+    # galaxy that just went away.
+    ships = target_root.find("ships")
+    if ships is not None:
+        for holder in list(ships.iter("missions")):
+            for child in list(holder):
+                _remove_child(holder, child)
+                dropped += 1
+    out["droppedMissions"] = dropped
+    return out
 
 
 def prepare_output(source_dir: str, out: str, keep_out_of: tuple) -> str:
@@ -257,6 +326,11 @@ def main() -> int:
         if report["strippedFleets"]:
             print(f"        {report['strippedFleets']} donor player fleet(s) "
                   f"removed")
+        if report.get("questLines"):
+            print(f"quests: {report['questLines']}")
+        if report.get("droppedMissions"):
+            print(f"        {report['droppedMissions']} mission(s) dropped — "
+                  f"they named places in the old galaxy")
         for warning in report["warnings"]:
             print(f"  warning: {warning}")
 
