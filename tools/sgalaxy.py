@@ -470,14 +470,14 @@ def cmd_checkout(args) -> int:
         print("         Make sure Space Haven is closed.")
 
     _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
-    destino = args.into or os.path.join(os.getcwd(), f"Sala-{args.room}")
-    final_dir = unpack(data, destino)
+    target = args.into or os.path.join(os.getcwd(), f"Sala-{args.room}")
+    final_dir = unpack(data, target)
     print(f"save checked out to {final_dir}")
     print(f"  due:  {_deadline(headers.get('x-lease-expires'))}")
     print(f"  {_size(len(data))}")
     print()
     print("  Play, then return it with:")
-    print(f"    python3 tools/sgalaxy.py devolver {args.room} --save {destino}")
+    print(f"    python3 tools/sgalaxy.py return {args.room} --save {target}")
     print("  Past the deadline, the session reverts to the state it was checked out in.")
     return 0
 
@@ -564,18 +564,18 @@ def cmd_play(args) -> int:
             "could not find the Space Haven executable. Pass --game PATH or "
             "set SPACEHAVEN_BIN")
 
-    destino = args.into or _room_folder(args.room)
+    target = args.into or _room_folder(args.room)
 
     # -- 1. retirar
     print(f"[1/4] checking out the save from room {args.room} …")
     _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
-    final_dir = unpack(data, destino)
+    final_dir = unpack(data, target)
     deadline = headers.get("x-lease-expires")
     print(f"      {final_dir}  ({_size(len(data))})")
     print(f"      due: {_deadline(deadline)}")
 
     # -- 2. jogar
-    folder_name = os.path.basename(destino.rstrip("/"))
+    folder_name = os.path.basename(target.rstrip("/"))
     print(f"[2/4] launching the game. Load the save named '{folder_name}'.")
     print("      When you close the game, I return it for you.")
     try:
@@ -588,7 +588,7 @@ def cmd_play(args) -> int:
 
     # -- 3. escolher o estado mais avancado
     print("[3/4] finding the most advanced state …")
-    folder, which, age = most_advanced(destino)
+    folder, which, age = most_advanced(target)
     print(f"      {which} (age {age:.2f})")
 
     # -- 4. devolver
@@ -600,7 +600,7 @@ def cmd_play(args) -> int:
         print(f"\nfailed to return: {exc}", file=sys.stderr)
         print(f"\nYour progress is NOT lost: it is in {folder}.")
         print("Once fixed, return it with:")
-        print(f"  python3 tools/sgalaxy.py devolver {args.room} --save {folder}")
+        print(f"  python3 tools/sgalaxy.py return {args.room} --save {folder}")
         return 1
     data = json.loads(raw)
     print(f"      age {data['ageDays']} days, version {data['versionId']}")
