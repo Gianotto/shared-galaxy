@@ -178,6 +178,61 @@ def game_is_running() -> str | None:
     return None
 
 
+def find_game() -> str | None:
+    """O executavel do jogo, se der para achar sozinho.
+
+    O launcher e um binario nativo que le `config.json` e levanta a JVM — nao
+    precisa do Steam para rodar. Achar sozinho e o que permite o fluxo unico:
+    sem isso, o jogador teria que dizer o caminho toda vez.
+    """
+    if os.environ.get("SPACEHAVEN_BIN"):
+        return os.environ["SPACEHAVEN_BIN"]
+    candidatos = [
+        "~/snap/steam/common/.local/share/Steam/steamapps/common/SpaceHaven",
+        "~/.steam/steam/steamapps/common/SpaceHaven",
+        "~/.local/share/Steam/steamapps/common/SpaceHaven",
+        "/usr/share/spacehaven",
+    ]
+    for base in candidatos:
+        exe = os.path.join(os.path.expanduser(base), "spacehaven")
+        if os.path.isfile(exe) and os.access(exe, os.X_OK):
+            return exe
+    return None
+
+
+def game_day_of(folder: str) -> float:
+    """O dia de jogo de uma pasta de save, ou -1 se nao der para ler."""
+    import xml.etree.ElementTree as ET
+    caminho = os.path.join(folder, "info")
+    try:
+        with open(caminho, "rb") as fh:
+            valor = ET.fromstring(fh.read()).get("date")
+        return int(valor) / 86400 if valor else -1.0
+    except (OSError, ET.ParseError, ValueError, TypeError):
+        return -1.0
+
+
+def most_advanced(room_folder: str) -> tuple:
+    """A pasta com mais progresso: o save manual ou o autosave mais adiantado.
+
+    Quem sai do jogo sem salvar na mao deixa o avanco no autosave, e a secao
+    2.4 e explicita: o cliente precisa conseguir devolver o ultimo autosave.
+    Comparar por dia de jogo, e nao por data de arquivo, e o que faz isso valer
+    tambem depois de uma queda — o relogio do sistema nao diz quanto se jogou.
+    """
+    room_folder = os.path.abspath(os.path.expanduser(room_folder))
+    candidatos = []
+    for nome in sorted(os.listdir(room_folder)):
+        caminho = os.path.join(room_folder, nome)
+        if os.path.isfile(os.path.join(caminho, "game")):
+            candidatos.append((game_day_of(caminho), nome, caminho))
+    if not candidatos:
+        raise ClientError(f"não achei nenhum savegame dentro de {room_folder}")
+    candidatos.sort(reverse=True)
+    dia, nome, caminho = candidatos[0]
+    return caminho, nome, dia
+
+
 def resolve_save(path: str) -> str:
     """Aceita a pasta do save, a pasta que a contem, ou o arquivo `game`."""
     path = os.path.abspath(os.path.expanduser(path))
@@ -461,6 +516,117 @@ def cmd_devolver(args) -> int:
     return 0
 
 
+def cmd_jogar(args) -> int:
+    """Retira, abre o jogo, espera, e devolve. Um comando para a sessao inteira.
+
+    E o fluxo que a secao 2.4 descreve, sem o jogador precisar lembrar de
+    nenhuma etapa. Como e o cliente que lanca o jogo e espera o processo
+    terminar, ele sabe com certeza quando a sessao comecou e acabou — que e
+    exatamente o que a secao 2.9 diz ser a razao de o cliente lancar o jogo.
+    """
+    aberto = game_is_running()
+    if aberto:
+        raise ClientError(f"o Space Haven já está aberto ({aberto}). Feche "
+                          f"antes: preciso controlar a sessão inteira")
+
+    exe = args.jogo or find_game()
+    if not exe or not os.path.isfile(exe):
+        raise ClientError(
+            "não achei o executável do Space Haven. Passe --jogo CAMINHO ou "
+            "defina SPACEHAVEN_BIN")
+
+    destino = args.para or _room_folder(args.sala)
+
+    # -- 1. retirar
+    print(f"[1/4] retirando o save da sala {args.sala} …")
+    _s, data, headers = request("POST", f"/api/v1/rooms/{args.sala}/checkout")
+    final = unpack(data, destino)
+    prazo = headers.get("x-lease-expires")
+    print(f"      {final}  ({_tamanho(len(data))})")
+    print(f"      prazo: {_prazo(prazo)}")
+
+    # -- 2. jogar
+    nome_pasta = os.path.basename(destino.rstrip("/"))
+    print(f"[2/4] abrindo o jogo. Carregue a partida '{nome_pasta}'.")
+    print("      Quando você fechar o jogo, eu devolvo sozinho.")
+    try:
+        proc = subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        proc.wait()
+    except KeyboardInterrupt:
+        print("\n      interrompido; vou devolver o que houver")
+    except OSError as exc:
+        raise ClientError(f"não consegui abrir o jogo: {exc}") from exc
+
+    # -- 3. escolher o estado mais avancado
+    print("[3/4] procurando o estado mais avançado …")
+    pasta, qual, dia = most_advanced(destino)
+    print(f"      {qual} (dia {dia:.2f})")
+
+    # -- 4. devolver
+    print("[4/4] devolvendo …")
+    try:
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{args.sala}/checkin",
+                              pack(pasta), {"Content-Type": "application/zip"})
+    except ClientError as exc:
+        print(f"\nerro ao devolver: {exc}", file=sys.stderr)
+        print(f"\nO seu progresso NÃO foi perdido: está em {pasta}.")
+        print("Quando resolver, devolva com:")
+        print(f"  python3 tools/sgalaxy.py devolver {args.sala} --save {pasta}")
+        return 1
+    dados = json.loads(raw)
+    print(f"      dia {dados['gameDay']}, versão {dados['versionId']}")
+    print()
+    print("sessão fechada. O save está no servidor.")
+    return 0
+
+
+def _room_folder(sala: str) -> str:
+    """Onde a pasta da sala mora, ao lado das outras partidas do jogo."""
+    exe = find_game()
+    if exe:
+        saves = os.path.join(os.path.dirname(exe), "savegames")
+        if os.path.isdir(saves):
+            return os.path.join(saves, f"Sala-{sala}")
+    return os.path.join(os.getcwd(), f"Sala-{sala}")
+
+
+def cmd_situacao(args) -> int:
+    """O que está em aberto, antes de você abrir o jogo por engano."""
+    dados = json_request("GET", f"/api/v1/rooms/{args.sala}/state")
+    eu = load_credentials().get("playerId")
+    meu = next((p for p in dados["players"] if p["playerId"] == eu), None)
+    if meu is None:
+        print(f"você não está na sala {args.sala}")
+        return 1
+    print(f"sala {args.sala}")
+    print(f"  sua nave:    {meu['shipName'] or '—'}")
+    print(f"  dia no servidor: {meu['gameDay'] or '—'}")
+    print(f"  empréstimo:  {'ABERTO' if meu['playing'] else 'fechado'}")
+
+    pasta = _room_folder(args.sala)
+    if not os.path.isdir(pasta):
+        print(f"  pasta local: não existe ({pasta})")
+        return 0
+    try:
+        _p, qual, dia = most_advanced(pasta)
+    except ClientError:
+        print(f"  pasta local: {pasta} (sem savegame dentro)")
+        return 0
+    print(f"  pasta local: {pasta}")
+    print(f"               mais avançado: {qual}, dia {dia:.2f}")
+    if not meu["playing"]:
+        servidor = meu["gameDay"] or 0
+        if dia > servidor + 0.01:
+            print()
+            print("  AVISO: a pasta local está À FRENTE do servidor e não há")
+            print("  empréstimo aberto. Isso quer dizer que você jogou sem")
+            print("  retirar. Uma nova retirada vai sobrescrever esse avanço.")
+            print("  Esse avanço não tem como ser entregue: a sala só aceita")
+            print("  o que saiu de um empréstimo. Guarde uma cópia da pasta")
+            print("  antes de retirar, se quiser conservá-lo fora da sala.")
+    return 0
+
+
 def cmd_estado(args) -> int:
     dados = json_request("GET", f"/api/v1/rooms/{args.sala}/state")
     if not dados["players"]:
@@ -554,6 +720,18 @@ def main() -> int:
     p.add_argument("sala")
     p.add_argument("--save", required=True)
     p.set_defaults(func=cmd_devolver)
+
+    p = sub.add_parser("jogar",
+                       help="retira, abre o jogo, e devolve ao fechar")
+    p.add_argument("sala")
+    p.add_argument("--para", help="pasta da sala (padrão: ao lado do jogo)")
+    p.add_argument("--jogo", help="caminho do executável do Space Haven")
+    p.set_defaults(func=cmd_jogar)
+
+    p = sub.add_parser("situacao",
+                       help="o que está em aberto, antes de abrir o jogo")
+    p.add_argument("sala")
+    p.set_defaults(func=cmd_situacao)
 
     p = sub.add_parser("estado", help="quem está onde na sala")
     p.add_argument("sala")

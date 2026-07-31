@@ -114,3 +114,52 @@ class SaveResolutionTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MostAdvancedTestCase(unittest.TestCase):
+    """Escolher o estado certo para devolver.
+
+    Quem sai do jogo sem salvar na mão deixa o avanço no autosave, e a seção
+    2.4 é explícita: o cliente precisa conseguir devolver o último autosave.
+    Devolver o `save/` nesse caso apagaria horas de jogo.
+    """
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _estado(self, nome: str, dia: float):
+        pasta = os.path.join(self.tmp.name, nome)
+        os.makedirs(pasta, exist_ok=True)
+        open(os.path.join(pasta, "game"), "w").close()
+        with open(os.path.join(pasta, "info"), "w") as fh:
+            fh.write(f'<info version="21" date="{int(dia * 86400)}"/>')
+        return pasta
+
+    def test_prefers_the_autosave_when_it_is_ahead(self):
+        self._estado("save", 10.0)
+        self._estado("autosave1", 12.5)
+        _p, qual, dia = client.most_advanced(self.tmp.name)
+        self.assertEqual(qual, "autosave1")
+        self.assertAlmostEqual(dia, 12.5, places=2)
+
+    def test_prefers_the_manual_save_when_it_is_ahead(self):
+        self._estado("save", 20.0)
+        self._estado("autosave1", 12.5)
+        _p, qual, _d = client.most_advanced(self.tmp.name)
+        self.assertEqual(qual, "save")
+
+    def test_compares_game_day_not_file_time(self):
+        """Depois de uma queda o relógio do sistema não diz quanto se jogou."""
+        antigo = self._estado("autosave1", 30.0)
+        recente = self._estado("save", 5.0)
+        os.utime(os.path.join(recente, "game"), None)   # save/ é o mais novo
+        os.utime(os.path.join(antigo, "game"), (0, 0))  # autosave1 é o mais velho
+        _p, qual, _d = client.most_advanced(self.tmp.name)
+        self.assertEqual(qual, "autosave1",
+                         "escolheu por data de arquivo em vez de dia de jogo")
+
+    def test_refuses_a_folder_with_no_save_inside(self):
+        with self.assertRaises(client.ClientError):
+            client.most_advanced(self.tmp.name)
