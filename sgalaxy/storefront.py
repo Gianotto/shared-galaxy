@@ -428,7 +428,8 @@ def find_npc_fleet(sf: SaveFile) -> ET.Element | None:
 
 
 def locate_body(sf: SaveFile, celeid: str | None = None,
-                system_id: str | None = None) -> tuple[ET.Element, dict]:
+                system_id: str | None = None,
+                at: tuple | None = None) -> tuple[ET.Element, dict]:
     """O corpo celeste onde o jogador esta, com o que foi conferido no caminho.
 
     Um corpo celeste tem DOIS ids, e confundi-los e o erro caro deste projeto:
@@ -444,10 +445,19 @@ def locate_body(sf: SaveFile, celeid: str | None = None,
     e nao existe corpo nenhum com `celeid=226`. `@sys`, esse sim, e o
     `systemId` direto.
 
-    Portanto `--body` fala em **celeid** — a lingua da sala — e a resolucao
-    para o `@id` local acontece aqui dentro. A autoridade sobre onde o jogador
-    esta e a frota `<f isPlayer="true">`, que e o dado mais direto; `@pa` entra
-    como conferencia e vira aviso se divergir.
+    E HA UM TERCEIRO, que so foi medido depois: `celeid` nao identifica UM
+    lugar, identifica um TIPO de lugar. Num save real, 123 corpos carregam 11
+    valores de `celeid`, e todo campo de asteroide e `celeid="0"`
+    (`docs/findings.md`, item 24). Pedir por `celeid` num sistema com dois
+    campos de asteroide entrega um dos dois, ao acaso.
+
+    Por isso existe `at=(x, y)`: `(systemId, x, y)` sai da seed, nao se move, e
+    deu 123 chaves distintas para 123 corpos em todo save conferido. E a unica
+    forma segura de o servidor dizer "o vizinho esta AQUI", e tem precedencia
+    sobre `celeid`, que fica para uso manual na linha de comando.
+
+    A autoridade sobre onde o JOGADOR esta e a frota `<f isPlayer="true">`, que
+    e o dado mais direto; `@pa` entra como conferencia e vira aviso se divergir.
     """
     starmap = sf.main.find("starmap")
     if starmap is None:
@@ -474,7 +484,17 @@ def locate_body(sf: SaveFile, celeid: str | None = None,
     info["playerFleet"] = fleet.get("id") if fleet is not None else None
 
     body = None
-    if celeid is not None:
+    if at is not None:
+        alvo = (str(at[0]), str(at[1]))
+        found = [el for system in scope for el in system.iter()
+                 if el.get("celeid") is not None
+                 and (el.get("x"), el.get("y")) == alvo]
+        if not found:
+            raise SaveError(
+                f"não achei corpo celeste em ({alvo[0]}, {alvo[1]}) "
+                f"no sistema {target_sys}")
+        body = found[0]
+    elif celeid is not None:
         found = [el for system in scope for el in system.iter()
                  if el.get("celeid") == str(celeid)]
         if not found:
@@ -924,7 +944,8 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
                 credits: str = DEFAULT_SHIP_CREDITS, stock: str | None = None,
                 name: str | None = None, crew_side: str | None = None,
                 keep_cargo: bool = False, celeid: str | None = None,
-                system_id: str | None = None, hull_mode: bool = False) -> dict:
+                system_id: str | None = None, hull_mode: bool = False,
+                at: tuple | None = None) -> dict:
     """Monta o retrato de um vizinho dentro de `dest`, seguindo a secao 2.5.
 
     Nao grava nada: mexe na arvore em memoria e devolve o relatorio do que fez.
@@ -940,7 +961,7 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
         raise SaveError("o documento `game` do destino não tem <ships>: "
                         "não há onde colocar a nave do setor carregado")
 
-    body, where = locate_body(dest, celeid, system_id)
+    body, where = locate_body(dest, celeid, system_id, at)
     report["body"] = {k: v for k, v in where.items() if k != "warnings"}
     report["warnings"] += where["warnings"]
 

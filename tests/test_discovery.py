@@ -175,3 +175,49 @@ class DiscoveryTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PlacementTestCase(unittest.TestCase):
+    """Onde a vitrine de um vizinho é colocada.
+
+    O injetor nasceu falando `celeid`, sob a ideia de que ele era "a língua da
+    sala". O item 24 desmentiu: `celeid` nomeia o TIPO de lugar, e num sistema
+    com dois campos de asteroide ele entrega um dos dois ao acaso. Pôr a
+    vitrine de alguém no lugar errado é silencioso — o save carrega, e o vizinho
+    simplesmente está onde não deveria.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="place-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def _save(self) -> SaveFile:
+        # Dois corpos com o MESMO celeid no mesmo sistema, como um save real
+        # tem para campos de asteroide.
+        xml = synthetic.build_game().replace(
+            '<l celeid="101" type="Planet" seed="7731" x="83819" y="214459"',
+            '<l celeid="0" type="AsteroidField" seed="7731" x="90000" y="90000"'
+            '/><l celeid="0" type="AsteroidField" seed="7732" x="91000"'
+            ' y="91000"/><l celeid="101" type="Planet" seed="7731"'
+            ' x="83819" y="214459"')
+        return SaveFile(synthetic.write_save(os.path.join(self.tmp, "s"), xml))
+
+    def test_coordinates_name_exactly_one_place(self):
+        from sgalaxy.storefront import locate_body
+        corpo, _info = locate_body(self._save(), at=("91000", "91000"),
+                                   system_id="6")
+        self.assertEqual((corpo.get("x"), corpo.get("y")), ("91000", "91000"))
+        self.assertEqual(corpo.get("seed"), "7732",
+                         "pegou o outro campo de asteroide")
+
+    def test_celeid_is_ambiguous_and_says_so(self):
+        from sgalaxy.storefront import locate_body
+        _corpo, info = locate_body(self._save(), celeid="0", system_id="6")
+        self.assertTrue(any("celeid=0" in w for w in info["warnings"]),
+                        "escolheu entre dois corpos sem avisar")
+
+    def test_an_empty_coordinate_is_refused_not_guessed(self):
+        from sgalaxy.savefile import SaveError
+        from sgalaxy.storefront import locate_body
+        with self.assertRaises(SaveError):
+            locate_body(self._save(), at=("1", "2"), system_id="6")
