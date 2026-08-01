@@ -82,26 +82,55 @@ public class AutoLoadAspect {
      */
     public static final String NEW_GAME = "__new__";
 
-    /**
-     * Frames to wait after the menu exists, before taking it over.
-     *
-     * <p>Readiness is the real condition; this is only a cushion on top of it.
-     */
-    private static final int SETTLE_FRAMES = 20;
+    /** Milliseconds to wait after the menu exists, before taking it over. */
+    private static final long SETTLE_MILLIS = 250;
 
     /**
      * How long to keep waiting for a menu that never comes.
      *
-     * <p>Roughly a minute at 60fps. Past that something is wrong and the marker
-     * is dropped, so it cannot sit there and hijack the next launch.
+     * <p>WALL CLOCK, not frames. The first version counted 3600 frames calling
+     * it a minute; on a 144Hz machine that is twenty-five seconds, and it gave
+     * up while the player was still reading the disclaimer.
+     *
+     * <p>Five minutes because the wait is not ours to bound: {@code
+     * createContent} is only called from {@code Disclaimer} and {@code
+     * MainMenu2}, so the Load menu does not exist until the person dismisses
+     * the disclaimer. We are waiting on them, not on the machine.
+     *
+     * <p>Overridable so the test can shorten it.
      */
-    private static final int GIVE_UP_FRAMES = 3600;
+    private static final long GIVE_UP_MILLIS =
+        Long.getLong("sharedgalaxy.giveup.ms", 300000L).longValue();
+
+    /**
+     * Frames between readiness checks.
+     *
+     * <p>Each check is a handful of reflective calls. At 144Hz, doing it every
+     * frame is a few hundred a second for no gain.
+     */
+    private static final int CHECK_EVERY = 15;
 
     private static int frames;
-    private static int settled;
+    private static long deadline;
+    private static long readyAt;
     private static boolean done;
     private static String wanted;
     private static boolean read;
+    private static volatile boolean building;
+
+    /**
+     * The game just built a menu.
+     *
+     * <p>`createContent` is the switch that constructs a {@code MenuContent}
+     * and puts it in the array `getContent` searches — it is the only thing
+     * that does, and only `Disclaimer` and `MainMenu2` call it. Watching it is
+     * how we learn the menus are being built rather than guessing at how long
+     * that takes.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.menu.GameMenu.createContent(..))")
+    public void afterCreateContent() {
+        building = true;
+    }
 
     @After("execution(* fi.bugbyte.spacehaven.gui.menu.GameMenu.update(float))")
     public void afterMenuUpdate(JoinPoint joinPoint) {
@@ -110,6 +139,7 @@ public class AutoLoadAspect {
         }
         if (!read) {
             read = true;
+            deadline = System.currentTimeMillis() + GIVE_UP_MILLIS;
             File marker = new File(MARKER);
             wanted = marker.isFile() ? read(marker) : null;
             if (wanted == null || wanted.length() == 0) {
@@ -117,20 +147,34 @@ public class AutoLoadAspect {
                 return;
             }
         }
+        if (++frames % CHECK_EVERY != 0 && readyAt == 0) {
+            return;
+        }
 
         Object gameMenu = joinPoint.getTarget();
         String menu = NEW_GAME.equals(wanted) ? "NewGame" : "Load";
 
-        // WAIT FOR THE MENU TO EXIST, do not count frames and hope.
+        // WAIT FOR THE MENU TO EXIST, and wait in seconds rather than frames.
         //
-        // The first version fired on frame 10 and failed with "the game has no
-        // Load menu". Measured afterwards: `getContent` and the private
-        // `getMenu` are the same lookup over a `content` array — neither of
-        // them creates anything. That array is filled when the menu system is
-        // built, which on a real launch happens well after the tenth frame,
-        // while the disclaimer screen is still up.
+        // Two failures in a row here, both from guessing instead of measuring.
+        // First it fired on frame 10 and hit "the game has no Load menu":
+        // `getContent` and the private `getMenu` are the same lookup over a
+        // `content` array and neither creates anything. Then it waited 3600
+        // frames calling that a minute, which on a 144Hz machine is
+        // twenty-five seconds, and gave up mid-disclaimer.
+        //
+        // `content` is filled by `createContent`, called only from
+        // `Disclaimer` and `MainMenu2`. So the Load menu exists once the person
+        // has dismissed the disclaimer — the wait is on them.
         if (!ready(gameMenu, menu)) {
-            if (++frames > GIVE_UP_FRAMES) {
+            // Enquanto o jogo ainda esta montando menu, ha o que esperar e o
+            // prazo nao corre. O prazo existe so para nao deixar o bilhete
+            // parado se a montagem nunca comecar.
+            if (building) {
+                deadline = System.currentTimeMillis() + GIVE_UP_MILLIS;
+                building = false;
+            }
+            if (System.currentTimeMillis() > deadline) {
                 done = true;
                 consume();
                 System.err.println("[shared-galaxy] the " + menu + " menu never "
@@ -138,7 +182,10 @@ public class AutoLoadAspect {
             }
             return;
         }
-        if (++settled < SETTLE_FRAMES) {
+        if (readyAt == 0) {
+            readyAt = System.currentTimeMillis();
+        }
+        if (System.currentTimeMillis() - readyAt < SETTLE_MILLIS) {
             return;
         }
 

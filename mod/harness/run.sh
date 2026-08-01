@@ -16,8 +16,9 @@ trap 'rm -rf "$WORK"' EXIT
 
 cp -r "$HERE"/fi "$WORK/"
 
-rodar() {   # rodar <rótulo> <conteúdo-do-marcador|-> <esperado> <frames>
-    local rotulo="$1" marcador="$2" esperado="$3" frames="$4"
+# rodar <rótulo> <marcador|-> <esperado> <ms-de-execução> [props extras]
+rodar() {
+    local rotulo="$1" marcador="$2" esperado="$3" duracao="$4" props="${5:-}"
     echo "$rotulo"
     if [ "$marcador" = "-" ]; then rm -f "$WORK/sharedgalaxy.autoload"
     else printf '%s\n' "$marcador" > "$WORK/sharedgalaxy.autoload"; fi
@@ -25,17 +26,20 @@ rodar() {   # rodar <rótulo> <conteúdo-do-marcador|-> <esperado> <frames>
         -v "$WORK:/h" -v "$AJ:/aj:ro" -v "$JAR:/mod.jar:ro" -w /h \
         eclipse-temurin:8-jdk sh -c '
             javac -d /h $(find /h -name "*.java") &&
-            java -javaagent:/aj/aspectjweaver.jar \
+            java -javaagent:/aj/aspectjweaver.jar '"$props"' \
                  -cp /h:/mod.jar:/aj/aspectjrt.jar \
-                 fi.bugbyte.spacehaven.gui.menu.GameMenu '"$esperado $frames"'
+                 fi.bugbyte.spacehaven.gui.menu.GameMenu '"$esperado $duracao"'
         ' 2>&1 | grep -vE '^\[AppClassLoader'
 }
 
-rodar "menu que só existe tarde (o defeito que chegou ao jogador):" \
-      "Sala-6359GV" "Sala-6359GV" 400
+# O primeiro é o defeito que chegou ao jogador, com os dois erros juntos: o
+# menu só existe depois de um tempo, e o laço roda a 144Hz — um prazo contado
+# em frames estoura antes de o menu aparecer.
+rodar "menu que só aparece depois do disclaimer, a 144Hz:" \
+      "Sala-6359GV" "Sala-6359GV" 3000 "-Dharness.menusAfterMs=1500"
 rodar "primeiro acesso, abre o criador de partida:" \
-      "__new__" "__new__" 400
-rodar "sem marcador, jogo se comporta como sem mod:" \
-      "-" "-" 400
-rodar "menu que nunca aparece, desiste sem travar:" \
-      "Sala-6359GV" "-" 100
+      "__new__" "__new__" 2000 "-Dharness.menusAfterMs=400"
+rodar "sem marcador, o jogo se comporta como sem mod:" \
+      "-" "-" 800 "-Dharness.menusAfterMs=200"
+rodar "menu que nunca aparece, desiste sem travar o jogo:" \
+      "Sala-6359GV" "-" 2000 "-Dharness.menusAfterMs=999999 -Dsharedgalaxy.giveup.ms=300"

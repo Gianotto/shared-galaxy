@@ -472,12 +472,19 @@ and `GameMenu$LoadGameMenu.load(String, boolean, int, boolean)` builds the
 Calling that one method inherits all of it, including whatever a future version
 adds there.
 
-**The menus do not exist when the game starts.** `getContent` and the private
-`getMenu` are the same lookup over a `content` array; neither creates anything.
-That array is filled when the menu system is built, which on a real launch is
-long after the first frames — the first version of the mod acted on frame ten,
-while the disclaimer was still on screen, and failed with "the game has no Load
-menu". Poll for the menu instead of counting frames.
+**The menus do not exist when the game starts, and there is a signal for when
+they do.** `getContent` and the private `getMenu` are the same lookup over a
+`content` array; neither creates anything. The only thing that fills that array
+is `createContent(MenuType)`, a switch that constructs the content and adds it —
+and it is called from exactly two places, `Disclaimer` and `MainMenu2`. So the
+Load menu comes into existence when the person dismisses the disclaimer, and
+`createContent` is the event to watch rather than a duration to guess.
+
+Two versions failed here before that was measured. The first acted on frame ten
+and hit "the game has no Load menu". The second waited 3600 frames, calling that
+a minute; on the player's 144Hz machine it is twenty-five seconds, and it gave
+up mid-disclaimer. **Frames are not time**, and the wait was never ours to bound
+anyway — it ends when the player clicks.
 
 Two more things that are not obvious and cost a crash each if missed:
 
