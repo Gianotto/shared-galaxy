@@ -185,6 +185,107 @@ class ApiTestCase(unittest.TestCase):
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
 
+    # -- checkpoint: o autosave chega ao servidor no meio da sessao -------
+
+    def _checkout(self, player, room_id):
+        return self.client.post(f"/api/v1/rooms/{room_id}/checkout",
+                                headers=self._auth(player))
+
+    def _checkpoint(self, player, room_id, data=None):
+        return self.client.post(
+            f"/api/v1/rooms/{room_id}/checkpoint",
+            content=data if data is not None else _save_zip(age_days=3.0),
+            headers=self._auth(player))
+
+    def test_a_checkpoint_is_stored_without_ending_the_session(self):
+        """O ponto todo: chegar ao servidor sem entregar a vez."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self._checkout(dono, room["id"])
+
+        r = self._checkpoint(dono, room["id"])
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["ageDays"], 3.0)
+
+        with db.pool().connection() as conn:
+            versao = conn.execute(
+                "SELECT kind FROM save_version WHERE id = %s",
+                (r.json()["versionId"],)).fetchone()
+            emprestimo = conn.execute(
+                "SELECT state FROM lease WHERE room_id = %s AND player_id = %s",
+                (room["id"], dono["playerId"])).fetchone()
+        self.assertEqual(versao["kind"], "checkpoint")
+        self.assertEqual(emprestimo["state"], "open",
+                         "o checkpoint fechou o empréstimo; ele não entrega a vez")
+
+    def test_a_checkpoint_does_not_become_the_canonical(self):
+        """Quem decide o que fica é o `checkin`. Trocar isso quebraria a regra
+        de uma sessão por vez: bastaria autosalvar para publicar."""
+        dono = self._player()
+        room = self._room(dono)
+        entrada = self._join(dono, room["id"]).json()
+        self._checkout(dono, room["id"])
+        self._checkpoint(dono, room["id"])
+
+        with db.pool().connection() as conn:
+            canonica = conn.execute(
+                "SELECT canonical_id FROM membership WHERE room_id = %s AND player_id = %s",
+                (room["id"], dono["playerId"])).fetchone()["canonical_id"]
+        self.assertEqual(canonica, entrada["versionId"],
+                         "o checkpoint virou canônico")
+
+    def test_a_checkpoint_moves_the_player_on_the_map(self):
+        """É metade da razão de existir: a sala anda durante a sessão."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self._checkout(dono, room["id"])
+        self._checkpoint(dono, room["id"])
+
+        estado = self.client.get(f"/api/v1/rooms/{room['id']}/state",
+                                 headers=self._auth(dono)).json()
+        eu = estado["players"][0]
+        self.assertEqual((eu["x"], eu["y"]), ("84119", "214759"))
+
+    def test_a_checkpoint_needs_an_open_session(self):
+        """Sem empréstimo aberto não há sessão, e sem sessão não há autosave."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        r = self._checkpoint(dono, room["id"])
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("no open lease", r.json()["detail"])
+
+    def test_a_checkpoint_from_another_galaxy_is_refused(self):
+        """Seria outra pessoa jogando outra coisa, entrando no mapa desta."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self._checkout(dono, room["id"])
+        r = self._checkpoint(dono, room["id"],
+                             data=_save_zip(age_days=3.0, galaxy_w=777000))
+        self.assertEqual(r.status_code, 409)
+
+    def test_checkin_still_closes_the_session_after_checkpoints(self):
+        """O ciclo inteiro tem que continuar valendo com checkpoints no meio."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self._checkout(dono, room["id"])
+        self._checkpoint(dono, room["id"], data=_save_zip(age_days=3.0))
+        self._checkpoint(dono, room["id"], data=_save_zip(age_days=4.0))
+
+        r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
+                             content=_save_zip(age_days=5.0),
+                             headers=self._auth(dono))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["ageDays"], 5.0)
+        with db.pool().connection() as conn:
+            estados = [row["state"] for row in conn.execute(
+                "SELECT state FROM lease WHERE room_id = %s", (room["id"],))]
+        self.assertEqual(estados, ["returned"])
+
     # -- todo mundo comeca junto -----------------------------------------
 
     def test_a_new_game_is_accepted(self):

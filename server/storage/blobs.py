@@ -61,7 +61,7 @@ class BlobStore:
 
     def _path(self, digest: str) -> str:
         if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
-            raise StorageError(f"{digest!r} não é um sha256 hexadecimal")
+            raise StorageError(f"{digest!r} is not a hex sha256")
         return os.path.join(self.root, digest[:FANOUT], f"{digest}.gz")
 
     def exists(self, digest: str) -> bool:
@@ -77,7 +77,7 @@ class BlobStore:
         entender custo de armazenamento sem contar arquivo na mao.
         """
         if not data:
-            raise StorageError("save vazio")
+            raise StorageError("empty save")
         if len(data) > MAX_UPLOAD_BYTES:
             raise StorageError(
                 f"save de {len(data)} bytes passa do limite de "
@@ -110,7 +110,7 @@ class BlobStore:
     def get(self, digest: str) -> bytes:
         path = self._path(digest)
         if not os.path.isfile(path):
-            raise StorageError(f"blob {digest[:12]}… não está guardado")
+            raise StorageError(f"blob {digest[:12]}… is not stored")
         with gzip.open(path, "rb") as fh:
             data = fh.read()
         # Conferir na leitura e barato e transforma bit podre em erro claro, em
@@ -195,7 +195,7 @@ def unpack_save(data: bytes, dest: str) -> str:
                     "`game` dentro dele")
             zf.extractall(dest)
     except zipfile.BadZipFile as exc:
-        raise StorageError(f"o upload não é um zip válido: {exc}") from exc
+        raise StorageError(f"the upload is not a valid zip: {exc}") from exc
     return os.path.join(dest, root) if root else dest
 
 
@@ -216,7 +216,7 @@ def _save_root(names: list[str]) -> str | None:
 def pack_save(folder: str) -> bytes:
     """Compacta uma pasta de save, para devolver ao cliente na retirada."""
     if not os.path.isfile(os.path.join(folder, "game")):
-        raise StorageError(f"{folder} não tem um arquivo `game`")
+        raise StorageError(f"{folder} has no `game` file")
     buf = io_buffer()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for dirpath, _dirs, files in os.walk(folder):

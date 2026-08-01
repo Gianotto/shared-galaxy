@@ -547,8 +547,8 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
                                     version["id"], expires)
         except psycopg.errors.UniqueViolation as exc:
             # O indice parcial pegou uma corrida. E o desenho funcionando.
-            raise HTTPException(409, "outra retirada deste save aconteceu ao "
-                                     "mesmo tempo. Tente de novo") from exc
+            raise HTTPException(409, "another checkout of this save happened "
+                                     "at the same time. Try again") from exc
         data = store().get(version["sha256"])
 
     return Response(
@@ -559,6 +559,73 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
             "X-Lease-Expires": expires.isoformat(),
             "X-Version-Id": str(version["id"]),
         })
+
+
+@app.post("/api/v1/rooms/{room_id}/checkpoint")
+async def checkpoint(room_id: str, request: Request,
+                     player: dict = Depends(current_player)):
+    """Recebe um autosave no meio da sessao, sem fechar o emprestimo.
+
+    POR QUE ISTO EXISTE
+
+    Uma sessao dura horas e so chega ao servidor no fim. Ate la, o mapa da sala
+    mostra onde a pessoa estava quando saiu da vez passada, e uma queda de luz
+    custa a sessao inteira. O autosave ja acontece — isto so o aproveita.
+
+    O QUE ELE NAO FAZ
+
+    Nao mexe no canonico, nao fecha o emprestimo e nao muda de quem e a vez. E
+    historico e presenca, nao entrega: quem decide o que fica e o `checkin`, e e
+    isso que mantem a regra de uma sessao por vez intacta.
+
+    A galaxia continua sendo conferida. Um checkpoint de outra partida seria
+    outra pessoa jogando outra coisa, e entraria no mapa como se fosse esta.
+    """
+    data = await body_bytes(request)
+
+    with db.pool().connection() as conn:
+        room = _require_room(conn, room_id)
+        db.expire_leases(conn)
+        lease = conn.execute(
+            """SELECT * FROM lease
+                WHERE room_id = %s AND player_id = %s AND state = 'open'
+                ORDER BY issued_at DESC LIMIT 1""",
+            (room_id, player["id"])).fetchone()
+        if lease is None:
+            raise HTTPException(
+                409, "no open lease: a checkpoint belongs to a session that is "
+                     "running. Check the save out first")
+
+        try:
+            with blobs.with_unpacked(data) as folder:
+                described = fingerprint.describe(folder)
+                here = presence.read(folder)
+                day = here["ageDays"]
+        except StorageError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(400, f"could not read this save: {exc}") from exc
+
+        if described["digest"] != room["galaxy_digest"]:
+            raise HTTPException(409, "this save's galaxy is not the room's")
+
+        meta = store().put(data)
+        version = db.add_version(conn, {
+            "room_id": room_id, "player_id": player["id"],
+            "sha256": meta["sha256"], "bytes": meta["bytes"],
+            "kind": "checkpoint", "age_days": day,
+            "galaxy_digest": described["digest"]})
+        # A presenca anda junto: e o que faz o mapa da sala se mexer durante a
+        # sessao em vez de so no fim dela.
+        db.set_position(conn, room_id, player["id"], here["system"],
+                        here["x"], here["y"], here["body"])
+        db.record_visit(conn, room_id, player["id"], here["system"],
+                        here["x"], here["y"])
+        pruned = _prune(conn, room_id, player["id"], room["retention_n"])
+
+    return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
+            "presence": here, "pruned": pruned, "bytes": meta["bytes"],
+            "message": "checkpoint stored. The room can see where you are."}
 
 
 @app.post("/api/v1/rooms/{room_id}/checkin")

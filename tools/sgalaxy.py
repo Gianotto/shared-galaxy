@@ -40,6 +40,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 import zipfile
@@ -538,7 +539,9 @@ def _deadline(iso: str | None) -> str:
     falta = vence - dt.datetime.now(dt.timezone.utc)
     horas = falta.total_seconds() / 3600
     local = vence.astimezone().strftime("%d/%m %H:%M")
-    return f"{local} (faltam {horas:.1f}h)"
+    if horas < 0:
+        return f"{local} (expired {abs(horas):.1f}h ago)"
+    return f"{local} ({horas:.1f}h left)"
 
 
 def _size(n: int) -> str:
@@ -795,6 +798,81 @@ def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
     return True
 
 
+def _folder_state(pasta: str) -> tuple:
+    """Assinatura barata de uma pasta de save: tamanhos e horários.
+
+    Serve para saber se o jogo terminou de escrever. Ler um save no meio da
+    gravação daria XML cortado, e o servidor recusaria — sem estragar nada, mas
+    sem servir para nada.
+    """
+    estado = []
+    for raiz, _dirs, arquivos in os.walk(pasta):
+        for nome in sorted(arquivos):
+            caminho = os.path.join(raiz, nome)
+            try:
+                st = os.stat(caminho)
+            except OSError:
+                continue
+            estado.append((os.path.relpath(caminho, pasta), st.st_size,
+                           int(st.st_mtime)))
+    return tuple(estado)
+
+
+def watch_autosaves(target: str, room: str, game_dir: str, parar) -> None:
+    """Manda cada autosave para o servidor enquanto a pessoa joga.
+
+    É a fase 1 do plano — o heartbeat — e o autosave já acontece, então isto só
+    o aproveita. Vale por duas coisas: o mapa da sala anda durante a sessão em
+    vez de só no fim, e uma queda de luz deixa de custar a sessão inteira.
+
+    NÃO É A DEVOLUÇÃO. O servidor guarda como `checkpoint`: não mexe no
+    canônico e não fecha o empréstimo. Quem decide o que fica é o `checkin`, e é
+    isso que mantém a regra de uma sessão por vez.
+
+    NUNCA ESCREVE. Só lê, e só depois que a pasta para de mudar — o jogo é dono
+    daqueles arquivos enquanto estiver aberto.
+    """
+    vistos = {}
+    while not parar.is_set():
+        parar.wait(WATCH_EVERY)
+        try:
+            candidatos = [n for n in os.listdir(target)
+                          if n.startswith("autosave")
+                          and os.path.isfile(os.path.join(target, n, "game"))]
+        except OSError:
+            continue
+        for nome in sorted(candidatos):
+            pasta = os.path.join(target, nome)
+            estado = _folder_state(pasta)
+            if not estado or vistos.get(nome) == estado:
+                continue
+            # Mudou desde a última olhada: espera parar de mudar antes de ler.
+            parar.wait(SETTLE_SECONDS)
+            if _folder_state(pasta) != estado:
+                continue        # ainda estava gravando; pega na próxima volta
+            vistos[nome] = estado
+            _send_checkpoint(pasta, nome, room, game_dir)
+
+
+def _send_checkpoint(pasta: str, nome: str, room: str, game_dir: str) -> None:
+    try:
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/checkpoint",
+                              pack(pasta),
+                              {"Content-Type": "application/zip"})
+    except ClientError as exc:
+        # Falhar aqui não pode atrapalhar quem está jogando: o save continua na
+        # máquina e a devolução no fim da sessão é que vale.
+        note_in_game(game_dir, [f"Shared Galaxy — {nome} NOT sent: {exc}",
+                                "Your progress is safe locally; the return at "
+                                "the end is what counts."])
+        return
+    data = json.loads(raw)
+    note_in_game(game_dir, [
+        f"Shared Galaxy — {nome} sent to the server "
+        f"(v{data['versionId']}, day {data['ageDays']})",
+    ])
+
+
 def cmd_play(args) -> int:
     """Retira, abre o jogo, espera, e devolve. Um comando para a sessao inteira.
 
@@ -853,14 +931,24 @@ def cmd_play(args) -> int:
         print(f"[2/4] launching the game. Load the save named '{folder_name}'.")
         print("      (install mod/ to skip this step: "
               "python3 tools/install_mod.py)")
+    print("      Each autosave is sent to the server while you play.")
     print("      When you close the game, I return it for you.")
+
+    parar = threading.Event()
+    vigia = threading.Thread(target=watch_autosaves,
+                             args=(target, args.room, game_dir, parar),
+                             daemon=True)
+    vigia.start()
     try:
-        proc = subprocess.Popen([exe], cwd=os.path.dirname(exe))
+        proc = subprocess.Popen([exe], cwd=game_dir)
         proc.wait()
     except KeyboardInterrupt:
         print("\n      interrupted; returning whatever is there")
     except OSError as exc:
         raise ClientError(f"could not launch the game: {exc}") from exc
+    finally:
+        parar.set()
+        vigia.join(timeout=5)
 
     # -- 3. escolher o estado mais avancado
     print("[3/4] finding the most advanced state …")
@@ -896,6 +984,11 @@ AUTOLOAD_NEW_GAME = "__new__"
 # nem um servidor, e não tem por que saber.
 NOTES_FILE = "sharedgalaxy.log"
 
+# De quanto em quanto tempo olhar se apareceu autosave novo, e quanto esperar
+# para ter certeza de que o jogo terminou de gravar.
+WATCH_EVERY = 20
+SETTLE_SECONDS = 3
+
 
 def mod_is_installed(game_dir: str) -> bool:
     """O mod está armado nesta instalação?
@@ -924,10 +1017,14 @@ def note_in_game(game_dir: str, linhas: list) -> bool:
     save da sala ou uma partida local — é a confusão que faz alguém devolver a
     partida errada.
     """
+    alvo = os.path.join(game_dir, NOTES_FILE)
     try:
-        with open(os.path.join(game_dir, NOTES_FILE), "w",
-                  encoding="utf-8") as fh:
+        # Grava num temporário e renomeia: o mod olha esse arquivo a cada meio
+        # segundo, e ler um arquivo pela metade mostraria linha cortada.
+        tmp = alvo + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
             fh.write("\n".join(linhas) + "\n")
+        os.replace(tmp, alvo)
         return True
     except OSError:
         return False

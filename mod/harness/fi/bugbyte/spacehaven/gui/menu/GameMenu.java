@@ -106,8 +106,10 @@ public class GameMenu {
         // a rodar. É quando o log aceita linha.
         if ("-".equals(esperado) || abriu != null || ultimoSetMenu != null) {
             fi.bugbyte.spacehaven.SpaceHaven.isLoading = false;
+            // No jogo a GUI atualiza todo frame; o mod olha o arquivo de
+            // notas a cada trinta. Rodar cinco frames aqui escondia isso.
             fi.bugbyte.spacehaven.gui.GUI gui = new fi.bugbyte.spacehaven.gui.GUI();
-            for (int i = 0; i < 5; i++) { gui.update(1f / 144f); }
+            for (int i = 0; i < 120; i++) { gui.update(1f / 144f); }
         }
 
         boolean consumido = !new java.io.File("sharedgalaxy.autoload").isFile();

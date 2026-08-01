@@ -119,7 +119,15 @@ public class AutoLoadAspect {
      */
     private static final int CHECK_EVERY = 15;
 
-    private static boolean posted;
+    /**
+     * Frames between looks at the notes file.
+     *
+     * <p>A stat every half second at 60fps. The client writes the file by
+     * rename, so a look never catches a half-written one.
+     */
+    private static final int NOTES_EVERY = 30;
+
+    private static int guiFrames;
     private static int frames;
     private static long deadline;
     private static long readyAt;
@@ -235,18 +243,19 @@ public class AutoLoadAspect {
      */
     @After("execution(* fi.bugbyte.spacehaven.gui.GUI.update(float))")
     public void afterGuiUpdate() {
-        if (posted) {
+        // Não é uma vez só. O cliente escreve de novo a cada autosave que ele
+        // manda para o servidor, e a pessoa merece saber que o progresso dela
+        // saiu da máquina — é a diferença entre confiar e torcer.
+        if (++guiFrames % NOTES_EVERY != 0) {
             return;
         }
         File notes = new File(NOTES);
         if (!notes.isFile()) {
-            posted = true;      // nothing to say; stop looking every frame
             return;
         }
         if (stillLoading()) {
             return;             // addLog would swallow it
         }
-        posted = true;
         String text = read(notes, 4096);
         notes.delete();
         if (text == null) {

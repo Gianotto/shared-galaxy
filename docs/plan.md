@@ -239,10 +239,22 @@ can exercise the API with `curl` and with the browser itself.
 
 ## Stage D — Phases 1 to 3
 
-**Phase 1 — heartbeat.** The client watches the autosaves and sends a reduced
-state: system, celestial body, game day, fleet, consigned manifest. Full save only
-at check-in — sending 4.5 MB on every autosave is waste. The room stays alive
-between sessions and the map from B.6 starts to move.
+**Phase 1 — heartbeat. Built.** The client watches the room folder while the
+game runs and posts each autosave to `POST /rooms/{id}/checkpoint`. The server
+stores it as `kind='checkpoint'` and moves the player on the map. It does not
+touch the canonical and does not close the lease: what is delivered is still
+decided by `checkin`, which is what keeps one session at a time intact.
+
+The plan said "reduced state, full save only at check-in — sending 4.5 MB on
+every autosave is waste". Measured, a save in this room is 150 KB compressed,
+not 4.5 MB, and a whole autosave buys crash protection that a summary cannot.
+So it sends the save. If a room ever grows saves where that stops being true,
+the reduced state is still the fallback.
+
+The client never writes during a session and only reads a folder that has
+stopped changing — the game owns those files while it is open. And the mod puts
+a line in the game's own log window on each send, so the player can see their
+progress leaving the machine instead of hoping it did.
 
 **Phase 2 — neighbour injection, without trade.** The `inject_npc_ship.py` from
 stage A becomes the portrait builder on the server, and assembly moves into
