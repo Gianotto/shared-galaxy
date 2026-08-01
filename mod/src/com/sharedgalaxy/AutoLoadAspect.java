@@ -82,6 +82,15 @@ public class AutoLoadAspect {
      */
     public static final String NEW_GAME = "__new__";
 
+    /**
+     * Lines to put in the game's own log window, one per line.
+     *
+     * <p>Written by the client next to the game, read once in-world, deleted.
+     * The mod does not know what a room or a server is and has no business
+     * knowing — the client writes the text and this only carries it in.
+     */
+    public static final String NOTES = "sharedgalaxy.log";
+
     /** Milliseconds to wait after the menu exists, before taking it over. */
     private static final long SETTLE_MILLIS = 250;
 
@@ -110,6 +119,7 @@ public class AutoLoadAspect {
      */
     private static final int CHECK_EVERY = 15;
 
+    private static boolean posted;
     private static int frames;
     private static long deadline;
     private static long readyAt;
@@ -212,6 +222,71 @@ public class AutoLoadAspect {
     }
 
     /**
+     * Puts the client's lines in the game's own log window.
+     *
+     * <p>The window is the one that says "Day 3.10 Autosaved". It already
+     * exists, it already scrolls, and the player already reads it — so telling
+     * them which room and which version they are in costs no new UI and cannot
+     * break the game's layout.
+     *
+     * <p>The timing is not guessed either. {@code GameLog.addLog} drops
+     * everything while {@code SpaceHaven.isLoading} is true, and that flag is
+     * public, so it is the signal rather than a delay.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.GUI.update(float))")
+    public void afterGuiUpdate() {
+        if (posted) {
+            return;
+        }
+        File notes = new File(NOTES);
+        if (!notes.isFile()) {
+            posted = true;      // nothing to say; stop looking every frame
+            return;
+        }
+        if (stillLoading()) {
+            return;             // addLog would swallow it
+        }
+        posted = true;
+        String text = read(notes, 4096);
+        notes.delete();
+        if (text == null) {
+            return;
+        }
+        try {
+            String[] lines = text.split("\n");
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.length() > 0) {
+                    log(line);
+                }
+            }
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not write to the game "
+                               + "log: " + failure);
+        }
+    }
+
+    private static boolean stillLoading() {
+        try {
+            return Class.forName("fi.bugbyte.spacehaven.SpaceHaven")
+                .getField("isLoading").getBoolean(null);
+        } catch (Throwable unknown) {
+            // If the flag cannot be read, assume it is safe to write: the worst
+            // case is a line the game drops, not a crash.
+            return false;
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void log(String line) throws Exception {
+        Class gameLog = Class.forName("fi.bugbyte.spacehaven.gui.GameLog");
+        Class logType = Class.forName(
+            "fi.bugbyte.spacehaven.gui.GameLog$LogType");
+        gameLog.getMethod("addLog", String.class, logType, Object.class)
+            .invoke(null, line, Enum.valueOf(logType, "Normal"), null);
+    }
+
+    /**
      * Is the menu we want built?
      *
      * <p>That is the whole condition, and asking anything else was the third
@@ -247,10 +322,14 @@ public class AutoLoadAspect {
     }
 
     private static String read(File marker) {
+        return read(marker, 512);
+    }
+
+    private static String read(File marker, int max) {
         InputStream in = null;
         try {
             in = new FileInputStream(marker);
-            byte[] buffer = new byte[512];
+            byte[] buffer = new byte[max];
             int n = in.read(buffer);
             if (n <= 0) {
                 return null;

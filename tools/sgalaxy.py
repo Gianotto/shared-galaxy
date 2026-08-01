@@ -839,6 +839,14 @@ def cmd_play(args) -> int:
     game_dir = os.path.dirname(exe)
     armed = arm_autoload(game_dir, folder_name) and mod_is_installed(game_dir)
 
+    versao = headers.get("x-version-id")
+    servidor = base_url().split("//", 1)[-1]
+    note_in_game(game_dir, [
+        f"Shared Galaxy — room {args.room}, save v{versao or '?'}",
+        f"{servidor} — due {_deadline(deadline)}",
+        "Close the game when you are done and it goes back to the room.",
+    ])
+
     if armed:
         print(f"[2/4] launching the game straight into '{folder_name}'.")
     else:
@@ -883,6 +891,11 @@ AUTOLOAD_MARKER = "sharedgalaxy.autoload"
 # partida. E o primeiro acesso de alguem a uma sala — a nave dela nasce ali.
 AUTOLOAD_NEW_GAME = "__new__"
 
+# Linhas que o mod põe na janela de log do jogo — a mesma que diz "Day 3.10
+# Autosaved". Quem escreve o texto é o cliente: o mod não sabe o que é uma sala
+# nem um servidor, e não tem por que saber.
+NOTES_FILE = "sharedgalaxy.log"
+
 
 def mod_is_installed(game_dir: str) -> bool:
     """O mod está armado nesta instalação?
@@ -902,6 +915,22 @@ def mod_is_installed(game_dir: str) -> bool:
     tem_mod = any(os.path.basename(str(c)) == "SharedGalaxy.jar"
                   for c in (config.get("classPath") or []))
     return tem_agente and tem_mod
+
+
+def note_in_game(game_dir: str, linhas: list) -> bool:
+    """Deixa para o mod as linhas que vão aparecer no log do jogo.
+
+    Serve para a pessoa não se perguntar, no meio da sessão, se está jogando o
+    save da sala ou uma partida local — é a confusão que faz alguém devolver a
+    partida errada.
+    """
+    try:
+        with open(os.path.join(game_dir, NOTES_FILE), "w",
+                  encoding="utf-8") as fh:
+            fh.write("\n".join(linhas) + "\n")
+        return True
+    except OSError:
+        return False
 
 
 def arm_autoload(game_dir: str, folder_name: str) -> bool:

@@ -7,6 +7,7 @@
          exactly one. The aspect only ever needs the main menu's update loop. -->
     <weaver options="-Xlint:ignore">
         <include within="fi.bugbyte.spacehaven.gui.menu.GameMenu"/>
+        <include within="fi.bugbyte.spacehaven.gui.GUI"/>
         <include within="com.sharedgalaxy.*"/>
     </weaver>
 </aspectj>

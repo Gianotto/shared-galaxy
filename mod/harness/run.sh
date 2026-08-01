@@ -19,9 +19,12 @@ cp -r "$HERE"/fi "$WORK/"
 # rodar <rótulo> <marcador|-> <esperado> <ms-de-execução> [props extras]
 rodar() {
     local rotulo="$1" marcador="$2" esperado="$3" duracao="$4" props="${5:-}"
+    local notas="${6:-}"
     echo "$rotulo"
     if [ "$marcador" = "-" ]; then rm -f "$WORK/sharedgalaxy.autoload"
     else printf '%s\n' "$marcador" > "$WORK/sharedgalaxy.autoload"; fi
+    if [ -n "$notas" ]; then printf '%s\n' "$notas" > "$WORK/sharedgalaxy.log"
+    else rm -f "$WORK/sharedgalaxy.log"; fi
     docker run --rm --user "$(id -u):$(id -g)" \
         -v "$WORK:/h" -v "$AJ:/aj:ro" -v "$JAR:/mod.jar:ro" -w /h \
         eclipse-temurin:8-jdk sh -c '
@@ -41,5 +44,9 @@ rodar "primeiro acesso, abre o criador de partida:" \
       "__new__" "__new__" 2000 "-Dharness.menusAfterMs=400"
 rodar "sem marcador, o jogo se comporta como sem mod:" \
       "-" "-" 800 "-Dharness.menusAfterMs=200"
+rodar "as linhas do cliente aparecem no log do jogo:" \
+      "Sala-6359GV" "Sala-6359GV" 2500 \
+      "-Dharness.menusAfterMs=400 -Dharness.notes=1" \
+      "Shared Galaxy — room 6359GV, save v6"
 rodar "menu que nunca aparece, desiste sem travar o jogo:" \
       "Sala-6359GV" "-" 2000 "-Dharness.menusAfterMs=999999 -Dsharedgalaxy.giveup.ms=300"

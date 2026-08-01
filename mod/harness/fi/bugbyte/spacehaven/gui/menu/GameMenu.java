@@ -102,11 +102,30 @@ public class GameMenu {
             }
         }
 
+        // Depois de "carregar", o jogo sai do estado de loading e a GUI passa
+        // a rodar. É quando o log aceita linha.
+        if ("-".equals(esperado) || abriu != null || ultimoSetMenu != null) {
+            fi.bugbyte.spacehaven.SpaceHaven.isLoading = false;
+            fi.bugbyte.spacehaven.gui.GUI gui = new fi.bugbyte.spacehaven.gui.GUI();
+            for (int i = 0; i < 5; i++) { gui.update(1f / 144f); }
+        }
+
         boolean consumido = !new java.io.File("sharedgalaxy.autoload").isFile();
         System.out.println("  frames    -> " + frames + " em " + duracao + "ms");
         System.out.println("  setMenu   -> " + ultimoSetMenu);
         System.out.println("  carregou  -> " + abriu);
         System.out.println("  consumido -> " + consumido);
+        System.out.println("  no log    -> "
+            + fi.bugbyte.spacehaven.gui.GameLog.linhas);
+
+        // Se havia linhas para o log, elas tinham que chegar lá.
+        boolean tinhaNotas = System.getProperty("harness.notes") != null;
+        boolean logOk = !tinhaNotas
+            || !fi.bugbyte.spacehaven.gui.GameLog.linhas.isEmpty();
+        if (!logOk) {
+            System.out.println("  FALHOU (nada chegou no log do jogo)");
+            System.exit(1);
+        }
 
         boolean ok;
         if ("-".equals(esperado)) {

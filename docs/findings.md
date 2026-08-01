@@ -563,6 +563,26 @@ different asteroid fields in one system are recorded as the same visit. Any
 merge of discovery between players (plan, shared discovery) has to key on
 `(systemId, x, y)`.
 
+## 24c. The game already has a log window, and it takes text from anyone
+
+`fi.bugbyte.spacehaven.gui.GameLog.addLog(String, LogType, Object)` is public
+and static. `LogType` includes `Normal`, `Good`, `Bad`, `Debug` and more. It is
+the window that shows "Day 3.10 Autosaved" while you play.
+
+Using it beats drawing anything: `Renderer2D` has no text method at all — text
+is a libGDX `BitmapFont` on a batch — so an overlay would mean fonts, positions
+and scaling on a screen this project cannot test without launching the game.
+The log window already exists, already scrolls, and the player already reads it.
+
+**It has its own readiness flag**, and it is public:
+`fi.bugbyte.spacehaven.SpaceHaven.isLoading`, a `public static volatile
+boolean`. `addLog` returns immediately while it is true, so a line posted too
+early is silently dropped. Read the flag rather than waiting.
+
+`addLog` is also thread-safe by design: called off the main thread it wraps
+itself in `Gdx.app.postRunnable`. A null `instance` is handled too. So the only
+way to lose a line is to post it during loading.
+
 ## 23. Exploration is recorded in two places, and both are shareable
 
 Counted across real saves, at the same format version 21:

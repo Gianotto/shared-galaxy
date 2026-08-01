@@ -20,6 +20,13 @@ menu instead. That is the first time somebody joins a room: they have no ship
 there yet, the room wants everyone to start together, so the client opens the
 creator, waits, and uploads whatever was built.
 
+It also reads a second file, `sharedgalaxy.log`, and puts each line into the
+game's own log window — the one that says "Day 3.10 Autosaved". That is where
+the room, the save version and the server appear, so nobody has to wonder
+mid-session whether they are playing the room's save or a local game. The mod
+does not know what a room or a server is: the client writes the text, this only
+carries it in.
+
 Every other launch behaves exactly like an unmodded game. A mod that hijacked
 every start would be worse than the problem it solves.
 

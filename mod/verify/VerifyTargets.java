@@ -50,6 +50,17 @@ public final class VerifyTargets {
         method(loadMenu, "load", String.class, boolean.class, int.class,
                boolean.class);
 
+        // Telling the player which room and version they are in, using the
+        // game's own log window.
+        Class<?> gui = require("fi.bugbyte.spacehaven.gui.GUI");
+        Class<?> gameLog = require("fi.bugbyte.spacehaven.gui.GameLog");
+        Class<?> logType = require(
+            "fi.bugbyte.spacehaven.gui.GameLog$LogType");
+        method(gui, "update", float.class);
+        method(gameLog, "addLog", String.class, logType, Object.class);
+        constant(logType, "Normal");
+        field(require("fi.bugbyte.spacehaven.SpaceHaven"), "isLoading");
+
         System.out.println();
         if (failures > 0) {
             System.out.println(failures + " target(s) missing — the mod would "
@@ -99,6 +110,21 @@ public final class VerifyTargets {
         } catch (Throwable missing) {
             System.out.println("FAIL  ctor   " + owner.getName()
                                + describe(args));
+            failures++;
+        }
+    }
+
+    private static void field(Class<?> owner, String name) {
+        if (owner == null) {
+            failures++;
+            return;
+        }
+        try {
+            owner.getField(name);
+            System.out.println("ok    field  " + owner.getSimpleName() + "."
+                               + name);
+        } catch (Throwable missing) {
+            System.out.println("FAIL  field  " + owner.getName() + "." + name);
             failures++;
         }
     }
