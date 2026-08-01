@@ -282,6 +282,24 @@ starting ship, and that is what gets uploaded. A fresh game is not day zero —
 measured across saves made minutes apart, the game starts a colony at about day
 1.3.
 
+**Move the shop button to the storage's own toggle row.** It sits in the
+command box today, next to MOVE / DUPLICATE / DISMANTLE — which are actions.
+Being your shop is a *setting*, and the panel already has a row for those: the
+green square and the fork that turn food consumption on and off. The player
+suggested it twice and pointed at the transfer icon as the one to use.
+
+It may also end the bug. The button still vanishes intermittently from the
+command box, and measurement has ruled out insertion (always accepted),
+lifecycle (the box is already clean) and position (all four buttons sit well
+inside the screen). Whatever is left is specific to that container, and the
+toggle row is a different one.
+
+What is known about how to build it: the food toggle is a
+`ScalableToggleIconButton`, `WorldObject$ObjectFeatures` is where `eatAllowed`
+lives, and `SingleWorldElementSelected.makeFacilityAudioOnButton` is the game
+building exactly this kind of control — a working recipe to read rather than
+invent.
+
 **Let a neighbour fade from the sector after a while away.** A storefront
 appears for every member in the same system and nothing takes it out again, so
 somebody who joined once and never came back sits there for good — and a room
