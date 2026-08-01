@@ -193,6 +193,31 @@ never stored.
 **+1 in `inStorage` and +4 in crates in `<items>`**. All five are there, in two
 places. Counting only the shelf is off by 80% on that transaction.
 
+## 8c. The crate on the floor is `<items>/<i eid=…>`, one unit each
+
+Item 8 established that goods live in three places. This is the shape of the
+third one, measured in `E6 vitrine`:
+
+```xml
+<i eid="176" x="27.23" y="46.23" id="5293" moprio="5" grndTime="155"/>
+```
+
+Three things that are easy to get wrong and that only the save shows:
+
+- **the resource is `eid`, not `elementaryId`.** Different names, same
+  vocabulary — checked: every crate `eid` in that save also appears as an
+  `elementaryId` on some shelf
+- **there is no quantity attribute.** Each `<i>` is one unit, and it is by
+  counting elements that you arrive at item 8's four Chemicals
+- only the `<i>` children of `<items>` count
+
+The E6 player's ship, reconciled: resource 176 had 87 on the shelf and 4 in
+crates, total 91. A shelf-only count reports 87.
+
+A first implementation of this read `elementaryId` and an `amount` attribute,
+found neither, and cheerfully reported zero crates in a save that had nine.
+It agreed with itself and with nothing else.
+
 ## 8b. Reconciliation is by net delta, and E4 falls out for free
 
 The E6 session had several transactions — the panel allows up to four per
