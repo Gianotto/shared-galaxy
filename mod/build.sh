@@ -73,6 +73,11 @@ docker run --rm --user "$(id -u):$(id -g)" \
         /mod/src/com/sharedgalaxy/ShopButtonAspect.java \
         /mod/src/com/sharedgalaxy/QuietNeighbourAspect.java
 
+# Todo alvo dos aspectos precisa estar na lista de tecelagem. Um `execution`
+# apontando para classe nao incluida compila, instala e nunca dispara — sem
+# erro e sem aviso. Isso custou tres rodadas de teste com um jogador.
+python3 "$HERE/verify/check_weaving.py"
+
 mkdir -p "$OUT/classes/META-INF"
 cp "$HERE/META-INF/aop.xml" "$OUT/classes/META-INF/aop.xml"
 

@@ -12,6 +12,7 @@
         <include within="fi.bugbyte.spacehaven.gui.GUI"/>
         <include within="fi.bugbyte.spacehaven.gui.MenuSystemItems$SingleWorldElementSelected"/>
         <include within="fi.bugbyte.spacehaven.ai.Communication"/>
+        <include within="fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"/>
         <include within="com.sharedgalaxy.*"/>
     </weaver>
 </aspectj>
