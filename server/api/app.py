@@ -25,6 +25,7 @@ import asyncio
 import contextlib
 import datetime as dt
 import json
+import logging
 import os
 
 import psycopg
@@ -34,6 +35,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from server.api import db
 from server.domain import rules
 from server.galaxy import fingerprint, presence
+from sgalaxy import discovery as discovering
 from sgalaxy import graft as grafting
 from sgalaxy.savefile import SaveFile
 from server.storage import blobs
@@ -75,6 +77,8 @@ async def lifespan(_app):
         with contextlib.suppress(asyncio.CancelledError):
             await tarefa
 
+
+log = logging.getLogger("sgalaxy")
 
 app = FastAPI(
     lifespan=lifespan,
@@ -481,6 +485,7 @@ async def join_room(room_id: str, request: Request,
                         here["x"], here["y"], here["body"])
         db.record_visit(conn, room_id, player["id"], here["system"],
                         here["x"], here["y"])
+        _harvest_discovery(conn, room_id, player["id"], data)
 
     return {"roomId": room_id, "versionId": version["id"],
             "galaxy": described, "ageDays": day, "presence": here,
@@ -496,6 +501,51 @@ async def join_room(room_id: str, request: Request,
 # ---------------------------------------------------------------------------
 # Ciclo de sessao
 # ---------------------------------------------------------------------------
+
+def _harvest_discovery(conn, room_id: str, player_id: int,
+                       data: bytes) -> int:
+    """Recolhe o que este save conhece para a sala.
+
+    Roda em toda chegada de save — entrada, checkpoint e devolucao. Um
+    checkpoint e o que faz a descoberta aparecer para os outros DURANTE a
+    sessao, em vez de so quando ela acaba.
+
+    Falhar aqui nao pode custar o save de ninguem: descoberta e enfeite
+    coletivo, e a custodia e o que nao pode quebrar.
+    """
+    try:
+        with blobs.with_unpacked(data) as folder:
+            achados = discovering.visited(SaveFile(folder))
+        return db.record_discoveries(conn, room_id, player_id, achados)
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not read discovery from a save: %s", exc)
+        return 0
+
+
+def _share_discovery(room_id: str, data: bytes) -> tuple:
+    """Poe a descoberta da sala no save que esta sendo entregue.
+
+    Muda so os bytes entregues; o que esta guardado continua como veio. O
+    digest da galaxia nao se mexe porque ele conta ESTRELAS (findings 19), e
+    era exatamente para sobreviver a esta divergencia que ele foi mudado.
+    """
+    with db.pool().connection() as conn:
+        sala = db.room_discoveries(conn, room_id)
+    if not sala:
+        return data, {"flagged": 0, "inserted": 0, "skipped": 0}
+    try:
+        with blobs.with_unpacked(data) as folder:
+            sf = SaveFile(folder)
+            report = discovering.merge(sf, sala)
+            if not (report["flagged"] or report["inserted"]):
+                return data, report
+            sf.save(backup=False)
+            return blobs.pack_save(folder), report
+    except Exception as exc:      # noqa: BLE001
+        # Entregar o save sem a descoberta e muito melhor que nao entregar.
+        log.warning("could not share discovery into a save: %s", exc)
+        return data, {"flagged": 0, "inserted": 0, "skipped": 0, "error": str(exc)}
+
 
 def _graft_into(room: dict, data: bytes) -> tuple:
     """Puts the room's galaxy into an arriving player's save.
@@ -551,9 +601,15 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
                                      "at the same time. Try again") from exc
         data = store().get(version["sha256"])
 
+    # A descoberta da sala entra no que sai, nao no que fica guardado. Quem
+    # nunca foi ao sistema 40 recebe o mapa de quem foi.
+    data, partilha = _share_discovery(room_id, data)
+
     return Response(
         content=data, media_type="application/zip",
         headers={
+            "X-Discovery-Flagged": str(partilha["flagged"]),
+            "X-Discovery-Inserted": str(partilha["inserted"]),
             "Content-Disposition": f'attachment; filename="{room_id}-save.zip"',
             "X-Lease-Id": str(lease["id"]),
             "X-Lease-Expires": expires.isoformat(),
@@ -621,10 +677,12 @@ async def checkpoint(room_id: str, request: Request,
                         here["x"], here["y"], here["body"])
         db.record_visit(conn, room_id, player["id"], here["system"],
                         here["x"], here["y"])
+        novos = _harvest_discovery(conn, room_id, player["id"], data)
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
             "presence": here, "pruned": pruned, "bytes": meta["bytes"],
+            "discovered": novos,
             "message": "checkpoint stored. The room can see where you are."}
 
 
@@ -680,10 +738,11 @@ async def checkin(room_id: str, request: Request,
                         here["x"], here["y"], here["body"])
         db.record_visit(conn, room_id, player["id"], here["system"],
                         here["x"], here["y"])
+        novos = _harvest_discovery(conn, room_id, player["id"], data)
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
-            "presence": here, "pruned": pruned,
+            "presence": here, "pruned": pruned, "discovered": novos,
             "message": "save received and stored. It is what the others see now."}
 
 

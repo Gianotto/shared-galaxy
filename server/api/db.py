@@ -329,6 +329,41 @@ def record_visit(conn: psycopg.Connection, room_id: str, player_id: int,
         (room_id, system, x or "", y or "", player_id))
 
 
+def record_discoveries(conn: psycopg.Connection, room_id: str, player_id: int,
+                       bodies: dict) -> int:
+    """Guarda os lugares que este save conhece. Quem chegou primeiro fica.
+
+    `ON CONFLICT DO NOTHING` nao e economia: e a regra. O primeiro a cartografar
+    um lugar e quem fica registrado, e reescrever com a versao de outro jogador
+    trocaria o `<stuff>` guardado por um mais minerado.
+    """
+    if not bodies:
+        return 0
+    n = 0
+    for (system_id, x, y), xml in bodies.items():
+        n += conn.execute(
+            """INSERT INTO room_body (room_id, system_id, x, y, body_xml,
+                                      first_by)
+               VALUES (%s, %s, %s, %s, %s, %s)
+               ON CONFLICT (room_id, system_id, x, y) DO NOTHING""",
+            (room_id, system_id, x, y, xml, player_id)).rowcount
+    return n
+
+
+def room_discoveries(conn: psycopg.Connection, room_id: str) -> dict:
+    """Tudo que a sala conhece, pronto para `sgalaxy.discovery.merge`."""
+    rows = conn.execute(
+        """SELECT system_id, x, y, body_xml FROM room_body
+            WHERE room_id = %s""", (room_id,)).fetchall()
+    return {(r["system_id"], r["x"], r["y"]): r["body_xml"] for r in rows}
+
+
+def count_discoveries(conn: psycopg.Connection, room_id: str) -> int:
+    return conn.execute(
+        "SELECT count(*) AS n FROM room_body WHERE room_id = %s",
+        (room_id,)).fetchone()["n"]
+
+
 def room_visits(conn: psycopg.Connection, room_id: str) -> dict:
     """Sistemas por onde a sala passou, com quem chegou primeiro."""
     rows = conn.execute(

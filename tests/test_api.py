@@ -33,7 +33,8 @@ if HAS_DB:
     from fastapi.testclient import TestClient
 
     from server.api import db
-    from server.api.app import app
+    from server.api.app import app, store
+    from server.storage import blobs
     from tests import synthetic
 
 
@@ -184,6 +185,105 @@ class ApiTestCase(unittest.TestCase):
         estado = self.client.get(f"/api/v1/rooms/{room['id']}/state",
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
+
+    # -- descoberta compartilhada -----------------------------------------
+
+    def _explorado(self, **kw) -> bytes:
+        """Um save de alguém que esteve no asteroide inicial."""
+        import io as _io, zipfile as _zip
+        xml = synthetic.build_game(**kw).replace(
+            '<info visited="false" isVisible="false" isst="1"/>',
+            '<info visited="true" isVisible="true" isst="1"/>')
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, "w") as zf:
+            zf.writestr("game", xml)
+            zf.writestr("info", f'<info version="21" date="{synthetic.FRESH_DATE}"/>')
+        return buf.getvalue()
+
+    def _visitados_no_zip(self, data: bytes) -> int:
+        from sgalaxy import discovery
+        from sgalaxy.savefile import SaveFile
+        with blobs.with_unpacked(data) as folder:
+            return len(discovery.visited(SaveFile(folder)))
+
+    def test_the_room_learns_where_someone_has_been(self):
+        dono = self._player()
+        room = self._room(dono)
+        r = self._join(dono, room["id"], data=self._explorado())
+        self.assertEqual(r.status_code, 200, r.text)
+        with db.pool().connection() as conn:
+            self.assertEqual(db.count_discoveries(conn, room["id"]), 1)
+
+    def test_a_newcomer_receives_the_rooms_travels(self):
+        """O ponto todo: quem nunca foi lá recebe o lugar cartografado."""
+        veterano, novato = self._player(), self._player()
+        room = self._room(veterano)
+        self._join(veterano, room["id"], data=self._explorado())
+        self._join(novato, room["id"])          # nunca visitou nada
+
+        r = self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
+                             headers=self._auth(novato))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(self._visitados_no_zip(r.content), 1,
+                         "o save entregue não trouxe a descoberta da sala")
+
+    def test_what_is_stored_is_not_rewritten(self):
+        """A descoberta entra no que sai, não no que fica guardado."""
+        veterano, novato = self._player(), self._player()
+        room = self._room(veterano)
+        self._join(veterano, room["id"], data=self._explorado())
+        entrada = self._join(novato, room["id"]).json()
+
+        self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
+                         headers=self._auth(novato))
+        with db.pool().connection() as conn:
+            sha = conn.execute("SELECT sha256 FROM save_version WHERE id = %s",
+                               (entrada["versionId"],)).fetchone()["sha256"]
+        self.assertEqual(self._visitados_no_zip(store().get(sha)), 0,
+                         "reescreveu a versão guardada do jogador")
+
+    def test_the_galaxy_still_matches_after_sharing(self):
+        """A impressão digital conta ESTRELAS justamente para sobreviver a isto.
+
+        Se mudasse, o save entregue voltaria e seria recusado na devolução —
+        e o jogador perderia a sessão por causa de um enfeite coletivo.
+        """
+        veterano, novato = self._player(), self._player()
+        room = self._room(veterano)
+        self._join(veterano, room["id"], data=self._explorado())
+        self._join(novato, room["id"])
+        entregue = self.client.post(f"/api/v1/rooms/{room['id']}/checkout",
+                                    headers=self._auth(novato)).content
+
+        r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
+                             content=entregue, headers=self._auth(novato))
+        self.assertEqual(r.status_code, 200, r.text)
+
+    def test_a_checkpoint_shares_discovery_during_the_session(self):
+        """Descobrir aparece para os outros durante a sessão, não só no fim."""
+        dono = self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"])
+        self._checkout(dono, room["id"])
+        with db.pool().connection() as conn:
+            self.assertEqual(db.count_discoveries(conn, room["id"]), 0)
+
+        r = self._checkpoint(dono, room["id"], data=self._explorado())
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json()["discovered"], 1)
+
+    def test_the_first_to_chart_a_place_keeps_it(self):
+        """Ninguém é creditado duas vezes pela mesma pedra."""
+        a, b = self._player(), self._player()
+        room = self._room(a)
+        self._join(a, room["id"], data=self._explorado())
+        self._join(b, room["id"], data=self._explorado())
+        with db.pool().connection() as conn:
+            linha = conn.execute(
+                "SELECT first_by FROM room_body WHERE room_id = %s",
+                (room["id"],)).fetchone()
+            self.assertEqual(db.count_discoveries(conn, room["id"]), 1)
+        self.assertEqual(linha["first_by"], a["playerId"])
 
     # -- checkpoint: o autosave chega ao servidor no meio da sessao -------
 

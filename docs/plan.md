@@ -302,7 +302,7 @@ server has to be the one that writes it into the portrait — reading the player
 current `sname` from their save would hand the same route back, inside the game
 where it costs more.
 
-**Shared discovery.** What one player uncovers becomes visible to the others,
+**Shared discovery. Built.** What one player uncovers becomes visible to the others,
 including people who join later. It is the co-op the room is missing: today
 everyone explores the same galaxy alone, and the only thing the room shares is
 where people are standing.
@@ -320,8 +320,25 @@ as the neighbour portraits.
 It is only possible because the fingerprint counts stars. The digest that
 counted bodies would refuse the very divergence this feature creates.
 
-**The rule, decided:** share `visited`. Do not share `isVisible` on its own —
-it comes along only where a visit came with it.
+**The rule, decided and shipped:** share `visited`. Do not share `isVisible`
+on its own — it comes along only where a visit came with it.
+
+How it ended up working. The room keeps a `room_body` row per place, holding the
+body's own XML with `<fleets>` stripped, keyed by `(systemId, x, y)`. Places are
+harvested from every save that arrives — join, checkpoint and check-in, so a
+discovery reaches the others *during* a session rather than at the end of it —
+and merged into every save that leaves at checkout.
+
+Two things it deliberately does not do. It never replaces a body the receiver
+already has, only sets the flags: the local `<stuff>` holds what that person
+already mined, and overwriting would hand back ore they had taken. And
+`<fleets>` never travels, so nobody's ship appears in anybody else's sector —
+that is phase 2, with a recipe of its own.
+
+Measured before building: a visited body is 600 to 3300 bytes of XML, and the
+fifteen in a 178-day save came to 18 KB. An inserted body takes a fresh id from
+the receiver's `objectIdCounter`; reusing the donor's would collide with a body
+that already exists on the other side.
 
 So the room pools the places somebody actually went to, and those arrive
 properly charted. What a member merely glimpsed from a distance, and never
