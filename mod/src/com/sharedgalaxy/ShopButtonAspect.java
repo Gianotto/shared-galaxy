@@ -157,12 +157,16 @@ public class ShopButtonAspect {
             return;
         }
 
-        // Dois ganchos podem cobrir a mesma abertura. Reconhecer o nosso botao
-        // pelo que o proxy responde a `toString` evita dois na caixa.
+        // TIRA O NOSSO ANTIGO, nao pergunta se ja tem.
+        //
+        // A versao anterior perguntava "a caixa ja tem um botao nosso?" e
+        // voltava calada quando sim. So que a caixa continua guardando a
+        // referencia do botao da selecao passada mesmo depois de o painel ser
+        // refeito — entao a resposta era sempre "sim", e a partir da segunda
+        // selecao o botao nunca mais aparecia. Perguntar era o erro; remover e
+        // idempotente e nao depende de a caixa estar limpa.
         Object caixa = read(selectionBox, "commandBox");
-        if (contains(caixa)) {
-            return;
-        }
+        dropOurs(caixa);
         final Object button = Class.forName(BUTTONS, true, loader)
             .getMethod("getBase").invoke(null);
 
@@ -236,31 +240,47 @@ public class ShopButtonAspect {
         }
     }
 
-    /** A caixa ja tem um botao nosso? */
-    private static boolean contains(Object commandBox) {
+    /**
+     * Tira da caixa qualquer botao que seja nosso.
+     *
+     * Reconhecidos pelo que o proxy do clique responde a `toString`: o objeto
+     * muda a cada selecao, a marca nao.
+     */
+    private static void dropOurs(Object commandBox) {
         Object lista = commandBox == null ? null : read(commandBox, "buttons");
         if (lista == null) {
-            return false;
+            return;
         }
         try {
-            int total = ((Integer) lista.getClass().getField("size").get(lista))
-                .intValue();
             java.lang.reflect.Method get = lista.getClass()
                 .getMethod("get", int.class);
-            for (int i = 0; i < total; i++) {
+            java.lang.reflect.Method remove = commandBox.getClass()
+                .getMethod("removeButton",
+                    Class.forName("fi.bugbyte.framework.screen.StageButton",
+                                  true, commandBox.getClass().getClassLoader()));
+            for (int i = tamanho(lista) - 1; i >= 0; i--) {
                 Object b = get.invoke(lista, Integer.valueOf(i));
                 if (b == null) {
                     continue;
                 }
                 Object h = b.getClass().getMethod("getClickHandler").invoke(b);
                 if (h != null && MARKER.equals(h.toString())) {
-                    return true;
+                    remove.invoke(commandBox, b);
                 }
             }
-        } catch (Throwable unknown) {
-            return false;
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not clear the old shop "
+                               + "button: " + failure);
         }
-        return false;
+    }
+
+    private static int tamanho(Object lista) {
+        try {
+            return ((Integer) lista.getClass().getField("size").get(lista))
+                .intValue();
+        } catch (Throwable unknown) {
+            return 0;
+        }
     }
 
     /** Quantos botoes uma caixa carrega, ou -1 se nao der para saber. */
