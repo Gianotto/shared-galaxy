@@ -66,12 +66,20 @@ NPC_FLEET_TEMPLATE = """<f id="{fleet_id}" isPlayer="false"\
 </createdShips>\
 </f>"""
 
-SHIP_TEMPLATE = """<ship sid="{sid}" sname="{name}">\
+SHIP_TEMPLATE = """<ship sid="{sid}" sname="{name}"{hull}>\
 <settings of="{faction}" owner="{owner}"/>\
 <characters>{crew}</characters>\
 {bank}\
 <inv>{cargo}</inv>\
+{extra}\
 </ship>"""
+
+# O que faz um casco servir de vitrine, medido no save real: nunca explorado,
+# com toda celula em fg="0" (findings item 10). E o <asi> e a IA de bordo, que
+# o injetor copia de um NPC que ja esta no destino.
+HULL_ATTRS = ' fog="true" unex="1" forceRoof="1"'
+HULL_BODY = ('<elements><e eid="9001" fg="0"/><e eid="9002" fg="0"/></elements>'
+             '<asi><radio on="true"/><stance mode="Defend"/></asi>')
 
 BANK_TEMPLATE = """<shipBank s="Civilian" ca="{credits}" cr="0" slp="10066"\
  blp="9891" spmd="2"><markup>{markup}</markup><discount/></shipBank>"""
@@ -133,6 +141,8 @@ def build_game(id_counter: int = 1000,
             sid=s["sid"], name=s["name"], faction=s["faction"],
             owner=s["owner"], crew=_crew(s.get("crew", [])),
             cargo=_cargo(s.get("cargo", [])),
+            hull=HULL_ATTRS if s.get("hull") else "",
+            extra=HULL_BODY if s.get("hull") else "",
             bank=(BANK_TEMPLATE.format(credits=s["bank"]["credits"],
                                        markup=_markup(s["bank"].get("markup", [])))
                   if s.get("bank") else ""))
@@ -153,6 +163,25 @@ def default_player_ship() -> dict:
         "crew": [{"ent": 55, "name": "Ana"}, {"ent": 56, "name": "Bo"}],
         "cargo": [{"element": 2053, "amount": 40},
                   {"element": 2054, "amount": 12}],
+    }
+
+
+def unexplored_hull(sid: int = 5100, faction: int = 462) -> dict:
+    """Um casco de NPC que nunca foi explorado — o molde de uma vitrine.
+
+    E o que `storefront.unexplored_hulls` procura, e as condicoes sao exatas
+    (findings item 10): dono que nao e Player, `fog="true"`, `unex="1"`, e toda
+    celula `<e>` com `fg="0"`. Um casco ja explorado nao serve, porque a nevoa
+    nao se sustenta e o interior do vizinho ficaria visivel.
+
+    Leva tambem um `<asi>`, a IA de bordo. Sem ela a nave entra sem radio e sem
+    postura de combate, e o servidor prefere pular o vizinho a montar uma
+    vitrine quebrada.
+    """
+    return {
+        "sid": sid, "name": "Derelict", "faction": faction, "owner": "Civilian",
+        "crew": [], "cargo": [],
+        "hull": True,
     }
 
 

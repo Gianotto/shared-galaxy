@@ -940,6 +940,52 @@ def apply_hostmap_permissions(sf: SaveFile, faction_id: str, side: str,
 # --------------------------------------------------------------------------
 
 
+def remove_storefronts(dest: SaveFile, sids) -> dict:
+    """Tira do save as vitrines que o servidor montou.
+
+    POR QUE ISTO E OBRIGATORIO
+
+    A vitrine entra no save que sai no `checkout`. Sem tirar de volta no
+    `checkin`, ela vira parte permanente da partida da pessoa: seria guardada
+    como canonica, entregue de novo na proxima retirada, e as vitrines
+    empilhariam a cada sessao. Pior, a nave de um vizinho ficaria no save de
+    alguem depois de o vizinho ter ido embora da sala.
+
+    O que sai: a `<ship>` e o `<f>` que a carregava. O que NAO sai e o
+    `hostmap` — as permissoes sao por faccao, valem para NPCs que o jogo pos
+    ali, e desfaze-las mexeria numa relacao que talvez a propria pessoa tenha
+    mudado jogando.
+    """
+    alvos = {str(s) for s in sids}
+    report = {"ships": 0, "fleets": 0, "missing": []}
+    if not alvos:
+        return report
+
+    achados = set()
+    for _doc, ship in list(dest.ships()):
+        if ship.get("sid") in alvos:
+            pais = parents_of(dest.main)
+            dono = pais.get(id(ship))
+            if dono is not None:
+                dono.remove(ship)
+                achados.add(ship.get("sid"))
+                report["ships"] += 1
+
+    starmap = dest.main.find("starmap")
+    if starmap is not None:
+        for fleets in list(starmap.iter("fleets")):
+            for fleet in list(fleets):
+                criadas = fleet.findall("createdShips/l")
+                if not criadas:
+                    continue
+                if all(l.get("createdShipId") in alvos for l in criadas):
+                    fleets.remove(fleet)
+                    report["fleets"] += 1
+
+    report["missing"] = sorted(alvos - achados)
+    return report
+
+
 def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_FACTION_ID,
                 credits: str = DEFAULT_SHIP_CREDITS, stock: str | None = None,
                 name: str | None = None, crew_side: str | None = None,

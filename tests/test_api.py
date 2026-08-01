@@ -186,6 +186,112 @@ class ApiTestCase(unittest.TestCase):
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
 
+    # -- vizinhos no setor -------------------------------------------------
+
+    def _com_casco(self, **kw) -> bytes:
+        """Um save que tem um casco de NPC de onde montar uma vitrine."""
+        import io as _io, zipfile as _zip
+        xml = synthetic.build_game(
+            ships=[synthetic.default_player_ship(),
+                   synthetic.unexplored_hull()], **kw)
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, "w") as zf:
+            zf.writestr("game", xml)
+            zf.writestr("info", f'<info version="21" date="{synthetic.FRESH_DATE}"/>')
+        return buf.getvalue()
+
+    def _naves(self, data: bytes) -> list:
+        from sgalaxy.savefile import SaveFile
+        with blobs.with_unpacked(data) as folder:
+            return [s.get("sname") for _d, s in SaveFile(folder).ships()]
+
+    def test_a_neighbour_in_the_same_system_shows_up(self):
+        """O momento que vende o projeto: a loja de alguém no teu setor."""
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.headers.get("x-neighbours"), "1")
+        nomes = self._naves(r.content)
+        self.assertTrue(any(vizinha["name"] in (n or "") for n in nomes),
+                        f"a vitrine não apareceu: {nomes}")
+
+    def test_the_storefront_carries_the_account_not_just_the_ship(self):
+        """Findings item 20: o nome da nave é texto livre e mutável.
+
+        Se a vitrine só mostrasse o nome da nave, bastaria alguém renomear a
+        sua para se passar por outro — dentro do jogo, onde custa mais.
+        """
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+        nomes = self._naves(self._checkout(eu, room["id"]).content)
+        vitrine = [n for n in nomes if n and vizinha["name"] in n][0]
+        self.assertIn("Homestead", vitrine, "perdeu o nome da nave")
+        self.assertIn(vizinha["name"], vitrine, "perdeu a conta")
+
+    def test_a_storefront_never_becomes_part_of_your_game(self):
+        """O par obrigatório: o que foi montado tem que sair na devolução.
+
+        Sem isto a nave do vizinho seria guardada como canônica, voltaria na
+        próxima retirada, e empilharia uma a cada sessão.
+        """
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+        entregue = self._checkout(eu, room["id"]).content
+        self.assertEqual(len(self._naves(entregue)), 3, "não montou a vitrine")
+
+        r = self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
+                             content=entregue, headers=self._auth(eu))
+        self.assertEqual(r.status_code, 200, r.text)
+        with db.pool().connection() as conn:
+            sha = conn.execute("SELECT sha256 FROM save_version WHERE id = %s",
+                               (r.json()["versionId"],)).fetchone()["sha256"]
+        guardado = self._naves(store().get(sha))
+        self.assertEqual(len(guardado), 2,
+                         f"a vitrine ficou guardada na partida: {guardado}")
+
+    def test_storefronts_do_not_stack_across_sessions(self):
+        """A consequência de esquecer a remoção, virada teste."""
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+        for _volta in range(3):
+            entregue = self._checkout(eu, room["id"]).content
+            self.assertEqual(len(self._naves(entregue)), 3,
+                             "acumulou vitrine entre sessões")
+            self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
+                             content=entregue, headers=self._auth(eu))
+
+    def test_nobody_from_another_system_appears(self):
+        longe, eu = self._player(), self._player()
+        room = self._room(longe)
+        self._join(longe, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+        with db.pool().connection() as conn:
+            conn.execute("UPDATE membership SET at_system = '99' "
+                         "WHERE room_id = %s AND player_id = %s",
+                         (room["id"], longe["playerId"]))
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.headers.get("x-neighbours"), "0")
+
+    def test_a_save_with_no_hull_still_checks_out(self):
+        """Sem casco não há vitrine — e isso não pode custar a sessão."""
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"])            # sem casco nenhum
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.headers.get("x-neighbours"), "0")
+
     # -- descoberta compartilhada -----------------------------------------
 
     def _explorado(self, **kw) -> bytes:

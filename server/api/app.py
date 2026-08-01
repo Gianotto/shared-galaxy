@@ -37,6 +37,7 @@ from server.domain import rules
 from server.galaxy import fingerprint, presence
 from sgalaxy import discovery as discovering
 from sgalaxy import graft as grafting
+from sgalaxy import storefront
 from sgalaxy.savefile import SaveFile
 from server.storage import blobs
 from server.web import i18n, pages
@@ -547,6 +548,120 @@ def _share_discovery(room_id: str, data: bytes) -> tuple:
         return data, {"flagged": 0, "inserted": 0, "skipped": 0, "error": str(exc)}
 
 
+# Quantos vizinhos cabem num setor. Uma sala de sessenta e quatro pessoas junta
+# muita gente no sistema inicial, e um setor com vinte vitrines nao e uma sala
+# viva, e um estacionamento. Tres cabe na tela e no save.
+MAX_NEIGHBOURS = 3
+
+# A faccao das vitrines e quanto elas carregam. Fase 2 e o vizinho aparecer;
+# fase 3 e ele negociar, e ai o estoque vira consignacao.
+NEIGHBOUR_FACTION = "Civilian"
+NEIGHBOUR_CREDITS = "5000"
+
+
+def _neighbours_of(conn, room_id: str, player_id: int) -> list:
+    """Quem mais esta no mesmo sistema, com lugar conhecido."""
+    eu = db.get_membership(conn, room_id, player_id)
+    if eu is None or not eu["at_system"]:
+        return []
+    fora = []
+    for outro in db.room_roster(conn, room_id):
+        if outro["player_id"] == player_id:
+            continue
+        if outro["at_system"] != eu["at_system"]:
+            continue
+        if not (outro["at_x"] and outro["at_y"]):
+            continue
+        fora.append(outro)
+    # Mais antigos na sala primeiro: um teto tem que ser estavel, senao o
+    # vizinho de ontem some hoje sem nada ter mudado.
+    fora.sort(key=lambda r: r["joined_at"])
+    return fora[:MAX_NEIGHBOURS]
+
+
+def _place_neighbours(conn, room_id: str, player_id: int,
+                      data: bytes) -> tuple:
+    """Monta as vitrines dos vizinhos no save que esta sendo entregue.
+
+    A vitrine e montada sobre um casco NPC **do proprio save de destino**
+    (findings item 10): a neblina so se sustenta se o casco nunca foi
+    explorado, e a nave de um jogador sempre foi. De quebra, nada da maquina de
+    outro jogador atravessa.
+
+    Devolve `(zip, sids, relatorio)`. Os `sids` sao o que o `checkin` vai tirar
+    de volta — sem isso a vitrine vira parte permanente da partida da pessoa.
+
+    Falhar aqui nunca custa a sessao: sem vitrine a sala continua jogavel, e
+    entregar um save quebrado seria muito pior que entregar um save sozinho.
+    """
+    vizinhos = _neighbours_of(conn, room_id, player_id)
+    relatorio = {"placed": 0, "skipped": [], "neighbours": []}
+    if not vizinhos:
+        return data, [], relatorio
+
+    sids = []
+    try:
+        with blobs.with_unpacked(data) as folder:
+            sf = SaveFile(folder)
+            for outro in vizinhos:
+                nome = f"{outro['ship_name'] or 'ship'} ({outro['display_name']})"
+                try:
+                    cascos = storefront.unexplored_hulls(sf)
+                    if not cascos:
+                        relatorio["skipped"].append(
+                            f"{outro['display_name']}: no unexplored hull left")
+                        continue
+                    # Sem <asi> a nave entra sem IA de bordo, sem radio e sem
+                    # postura de combate. Vitrine quebrada e pior que ausente.
+                    if storefront.find_node_donor(sf, "asi") is None:
+                        relatorio["skipped"].append(
+                            f"{outro['display_name']}: nothing to copy the "
+                            f"onboard AI from")
+                        continue
+                    rel = storefront.inject_ship(
+                        sf, cascos[0], faction=NEIGHBOUR_FACTION,
+                        credits=NEIGHBOUR_CREDITS, name=nome, hull_mode=True,
+                        at=(outro["at_x"], outro["at_y"]),
+                        system_id=outro["at_system"])
+                    sids.append(rel["fleet"]["createdShipId"])
+                    relatorio["placed"] += 1
+                    relatorio["neighbours"].append(nome)
+                except Exception as exc:      # noqa: BLE001
+                    relatorio["skipped"].append(
+                        f"{outro['display_name']}: {exc}")
+            if not sids:
+                return data, [], relatorio
+            sf.save(backup=False)
+            return blobs.pack_save(folder), sids, relatorio
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not place neighbours: %s", exc)
+        return data, [], {"placed": 0, "skipped": [str(exc)], "neighbours": []}
+
+
+def _strip_neighbours(lease: dict, data: bytes) -> bytes:
+    """Tira as vitrines antes de guardar o que voltou.
+
+    E o par obrigatorio de `_place_neighbours`. Sem ele a nave de um vizinho
+    ficaria guardada como parte da partida de quem devolveu, e voltaria
+    empilhada a cada sessao.
+    """
+    sids = (lease or {}).get("injected_sids") or []
+    if not sids:
+        return data
+    try:
+        with blobs.with_unpacked(data) as folder:
+            sf = SaveFile(folder)
+            rel = storefront.remove_storefronts(sf, sids)
+            if not rel["ships"] and not rel["fleets"]:
+                return data
+            sf.save(backup=False)
+            return blobs.pack_save(folder)
+    except Exception as exc:      # noqa: BLE001
+        # Guardar com a vitrine dentro e ruim; recusar a devolucao e pior.
+        log.warning("could not strip neighbour storefronts: %s", exc)
+        return data
+
+
 def _graft_into(room: dict, data: bytes) -> tuple:
     """Puts the room's galaxy into an arriving player's save.
 
@@ -605,11 +720,20 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
     # nunca foi ao sistema 40 recebe o mapa de quem foi.
     data, partilha = _share_discovery(room_id, data)
 
+    # E os vizinhos do mesmo sistema aparecem no setor. Os sids ficam no
+    # emprestimo porque e o `checkin` que tem de tira-los de volta.
+    with db.pool().connection() as conn:
+        data, sids, vizinhanca = _place_neighbours(conn, room_id, player["id"],
+                                                   data)
+        if sids:
+            db.set_injected_sids(conn, lease["id"], sids)
+
     return Response(
         content=data, media_type="application/zip",
         headers={
             "X-Discovery-Flagged": str(partilha["flagged"]),
             "X-Discovery-Inserted": str(partilha["inserted"]),
+            "X-Neighbours": str(vizinhanca["placed"]),
             "Content-Disposition": f'attachment; filename="{room_id}-save.zip"',
             "X-Lease-Id": str(lease["id"]),
             "X-Lease-Expires": expires.isoformat(),
@@ -651,6 +775,8 @@ async def checkpoint(room_id: str, request: Request,
             raise HTTPException(
                 409, "no open lease: a checkpoint belongs to a session that is "
                      "running. Check the save out first")
+
+        data = _strip_neighbours(lease, data)
 
         try:
             with blobs.with_unpacked(data) as folder:
@@ -703,6 +829,11 @@ async def checkin(room_id: str, request: Request,
         ok, motivo = rules.can_checkin(lease, db.now())
         if not ok:
             raise HTTPException(409, motivo)
+
+        # As vitrines saem ANTES de qualquer leitura: o que for guardado, o
+        # que entrar no mapa e o que a proxima retirada entregar tem de ser a
+        # partida da pessoa, sem as naves que o servidor emprestou.
+        data = _strip_neighbours(lease, data)
 
         try:
             with blobs.with_unpacked(data) as folder:

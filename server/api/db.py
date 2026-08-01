@@ -249,6 +249,18 @@ def create_lease(conn: psycopg.Connection, room_id: str, player_id: int,
         (room_id, player_id, delivered_id, expires_at)).fetchone()
 
 
+def set_injected_sids(conn: psycopg.Connection, lease_id: int,
+                      sids: list) -> None:
+    """Anota o que o servidor montou dentro do save entregue.
+
+    Fica no emprestimo porque esse e exatamente o alcance de um save entregue:
+    aberto no `checkout`, desfeito no `checkin`.
+    """
+    import json as _json
+    conn.execute("UPDATE lease SET injected_sids = %s WHERE id = %s",
+                 (_json.dumps([str(s) for s in sids]), lease_id))
+
+
 def close_lease(conn: psycopg.Connection, lease_id: int,
                 returned_id: int) -> None:
     conn.execute(
