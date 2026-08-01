@@ -1006,6 +1006,9 @@ def cmd_play(args) -> int:
 
     versao = headers.get("x-version-id")
     servidor = base_url().split("//", 1)[-1]
+    # Sobrescreve, nunca acrescenta: uma linha da sessão passada que o mod não
+    # chegou a consumir apareceria no log da sessão nova, dizendo que um
+    # autosave de ontem acabou de subir.
     note_in_game(game_dir, [
         f"Shared Galaxy — room {args.room}, save v{versao or '?'}",
         f"{servidor} — due {_deadline(deadline)}",
