@@ -472,7 +472,14 @@ and `GameMenu$LoadGameMenu.load(String, boolean, int, boolean)` builds the
 Calling that one method inherits all of it, including whatever a future version
 adds there.
 
-Two things that are not obvious and cost a crash each if missed:
+**The menus do not exist when the game starts.** `getContent` and the private
+`getMenu` are the same lookup over a `content` array; neither creates anything.
+That array is filled when the menu system is built, which on a real launch is
+long after the first frames — the first version of the mod acted on frame ten,
+while the disclaimer was still on screen, and failed with "the game has no Load
+menu". Poll for the menu instead of counting frames.
+
+Two more things that are not obvious and cost a crash each if missed:
 
 - **The menu has to be switched to `MenuType.Load` first.** `load` dereferences
   the menu's `onScreen` field to open the popup, and `onScreen` is only set when

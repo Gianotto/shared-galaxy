@@ -21,9 +21,18 @@ import org.aspectj.lang.annotation.Aspect;
  *
  * <p>It does nothing unless a file named {@code sharedgalaxy.autoload} sits in
  * the game's working directory, holding a save folder name. The client writes
- * it just before launching and this aspect deletes it after reading. So the
+ * it just before launching and this aspect drops it once it has acted. So the
  * game behaves exactly like a vanilla game every other time it starts — a mod
  * that hijacked every launch would be worse than the problem it solves.
+ *
+ * <h2>When it acts</h2>
+ *
+ * <p>When the menu it needs actually exists, which it polls for. Counting
+ * frames instead was the first version, and it failed on a real launch with
+ * "the game has no Load menu": {@code getContent} and the private
+ * {@code getMenu} are the same lookup over a {@code content} array and neither
+ * creates anything, and that array is filled long after the tenth frame, while
+ * the disclaimer is still on screen.
  *
  * <h2>How it loads</h2>
  *
@@ -74,48 +83,77 @@ public class AutoLoadAspect {
     public static final String NEW_GAME = "__new__";
 
     /**
-     * Frames to let the menu finish coming up before taking it over.
+     * Frames to wait after the menu exists, before taking it over.
      *
-     * <p>The first {@code update} can run before the menu has been activated,
-     * and the load path needs an activated menu. Waiting a few frames costs
-     * nothing a person can perceive and removes a race that would show up as
-     * an occasional crash on startup.
+     * <p>Readiness is the real condition; this is only a cushion on top of it.
      */
-    private static final int SETTLE_FRAMES = 10;
+    private static final int SETTLE_FRAMES = 20;
+
+    /**
+     * How long to keep waiting for a menu that never comes.
+     *
+     * <p>Roughly a minute at 60fps. Past that something is wrong and the marker
+     * is dropped, so it cannot sit there and hijack the next launch.
+     */
+    private static final int GIVE_UP_FRAMES = 3600;
 
     private static int frames;
+    private static int settled;
     private static boolean done;
+    private static String wanted;
+    private static boolean read;
 
     @After("execution(* fi.bugbyte.spacehaven.gui.menu.GameMenu.update(float))")
     public void afterMenuUpdate(JoinPoint joinPoint) {
         if (done) {
             return;
         }
-        if (++frames < SETTLE_FRAMES) {
-            return;
+        if (!read) {
+            read = true;
+            File marker = new File(MARKER);
+            wanted = marker.isFile() ? read(marker) : null;
+            if (wanted == null || wanted.length() == 0) {
+                done = true;      // vanilla launch; stop looking every frame
+                return;
+            }
         }
-        done = true;
 
-        File marker = new File(MARKER);
-        if (!marker.isFile()) {
+        Object gameMenu = joinPoint.getTarget();
+        String menu = NEW_GAME.equals(wanted) ? "NewGame" : "Load";
+
+        // WAIT FOR THE MENU TO EXIST, do not count frames and hope.
+        //
+        // The first version fired on frame 10 and failed with "the game has no
+        // Load menu". Measured afterwards: `getContent` and the private
+        // `getMenu` are the same lookup over a `content` array — neither of
+        // them creates anything. That array is filled when the menu system is
+        // built, which on a real launch happens well after the tenth frame,
+        // while the disclaimer screen is still up.
+        if (!ready(gameMenu, menu)) {
+            if (++frames > GIVE_UP_FRAMES) {
+                done = true;
+                consume();
+                System.err.println("[shared-galaxy] the " + menu + " menu never "
+                                   + "appeared; load your save from the menu");
+            }
             return;
         }
-        String folder = read(marker);
-        // Deleted whatever happens next. A marker left behind would reload the
-        // same save on the next launch, silently, forever.
-        marker.delete();
-        if (folder == null || folder.length() == 0) {
+        if (++settled < SETTLE_FRAMES) {
             return;
         }
+
+        done = true;
+        String folder = wanted;
+        consume();
         try {
             if (NEW_GAME.equals(folder)) {
                 // First time in a room: no ship there yet, and the room wants
                 // everybody to start together. Going straight to the creator is
                 // what makes that fit in one command.
-                newGame(joinPoint.getTarget());
+                newGame(gameMenu);
                 System.out.println("[shared-galaxy] opening the new game menu");
             } else {
-                open(joinPoint.getTarget(), folder);
+                open(gameMenu, folder);
                 System.out.println("[shared-galaxy] opening save " + folder);
             }
         } catch (Throwable failure) {
@@ -124,6 +162,35 @@ public class AutoLoadAspect {
             System.err.println("[shared-galaxy] could not open " + folder
                                + ": " + failure);
         }
+    }
+
+    /** Is the menu system built far enough to be driven? */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static boolean ready(Object gameMenu, String menu) {
+        try {
+            if (gameMenu.getClass().getMethod("getCurrent")
+                    .invoke(gameMenu) == null) {
+                return false;
+            }
+            ClassLoader loader = gameMenu.getClass().getClassLoader();
+            Class menuType = Class.forName(
+                "fi.bugbyte.spacehaven.gui.menu.GameMenu$MenuType", true, loader);
+            return gameMenu.getClass().getMethod("getContent", menuType)
+                .invoke(gameMenu, Enum.valueOf(menuType, menu)) != null;
+        } catch (Throwable notYet) {
+            return false;
+        }
+    }
+
+    /**
+     * Drops the marker.
+     *
+     * <p>Only ever called when acting or giving up. The first version deleted
+     * it up front, which meant the one failure it hit could not be retried —
+     * the next launch had nothing left to read.
+     */
+    private static void consume() {
+        new File(MARKER).delete();
     }
 
     private static String read(File marker) {

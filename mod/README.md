@@ -73,6 +73,22 @@ future version starts doing there.
 `docs/findings.md` items 24b and 25 record what was measured to get here,
 including the two mistakes that each cost a crash.
 
+## Testing without the game
+
+```
+mod/build.sh --test
+```
+
+Runs the aspect under the real weaver against a stub that has the same shape as
+the game, including the part that matters: **the menus do not exist for the
+first frames.** Four scenarios — a menu that appears late, the new game path, no
+marker at all, and a menu that never appears.
+
+That last shape is what shipped broken once. The mod acted on a frame count, the
+menus were not built yet, and it failed in the player's hands with "the game has
+no Load menu". There was no way to exercise the reflection end to end without
+launching the game, so the defect could only show up there. Now it cannot.
+
 ## After a game update
 
 ```

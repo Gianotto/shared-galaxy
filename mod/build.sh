@@ -73,3 +73,12 @@ if [ "${1:-}" = "--verify" ]; then
             javac -d /tmp/v /mod/verify/VerifyTargets.java &&
             java -cp /tmp/v:/game/spacehaven.jar VerifyTargets'
 fi
+
+if [ "${1:-}" = "--test" ]; then
+    echo
+    # Exercita o aspecto de ponta a ponta contra um dublê com a mesma forma do
+    # jogo. É o que faltava quando a primeira versão foi para as mãos de alguém
+    # e falhou com "the game has no Load menu": não havia como rodar a reflexão
+    # inteira sem abrir o jogo, então o defeito só aparecia lá.
+    "$HERE/harness/run.sh" "$AJ" "$OUT/SharedGalaxy.jar"
+fi
