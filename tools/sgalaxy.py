@@ -52,6 +52,10 @@ CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
 # O servidor publico. Quem hospeda o proprio poe `SGALAXY_URL` e nada mais muda
 # — e a mesma promessa do compose: o caminho da sala publica e o de quem
 # levanta a dele.
+# Como o cliente se apresenta. `sgalaxy` e o nome do programa; a versao muda
+# junto com o protocolo, nao com cada correcao.
+USER_AGENT = "sgalaxy/1.0 (+https://github.com/Gianotto/shared-galaxy)"
+
 DEFAULT_URL = os.environ.get("SGALAXY_DEFAULT_URL",
                              "https://galaxy.bygianotto.com.br")
 
@@ -136,6 +140,11 @@ def request(method: str, path: str, body: bytes | None = None,
     """Devolve (status, corpo, headers). Erro do servidor vira ClientError."""
     url = f"{base_url()}{path}"
     head = dict(headers or {})
+    # Identificar-se nao e cortesia: a protecao de bot da Cloudflare barra o
+    # `Python-urllib` padrao com um 403 "error code 1010", e o erro parece do
+    # servidor sem ser dele. Um cliente que diz quem e passa, e quem hospeda
+    # consegue ver nos registros o que e trafego nosso.
+    head.setdefault("User-Agent", USER_AGENT)
     # Um `Authorization` explicito ganha do guardado. E o que permite conferir
     # um codigo de recuperacao ANTES de grava-lo por cima do que ja existe.
     if auth and "Authorization" not in head:
