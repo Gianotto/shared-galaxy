@@ -227,27 +227,30 @@ public class ShopButtonAspect {
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        // NA CAIXA DE COMANDOS, no comeco da fila.
+        // PELA API DO PROPRIO MENUSYSTEM.
         //
-        // Medido nas duas direcoes, com o jogador olhando a tela: pelo
-        // `addButton` do painel o controle vai para o rodape, quase fora da
-        // area de jogo; pelo `commandBox` ele fica junto de MOVE / DUPLICATE /
-        // DISMANTLE, que e onde alguem procuraria.
+        // Era isto que faltava, e a pergunta certa foi "voce olhou as classes
+        // que constroem esses menus?". O `MenuSystem` tem a rota publica:
         //
-        // O caminho do painel parecia o certo por ser o do jogo, e nao e: os
-        // botoes do proprio painel chegam ao commandBox por outra rota.
+        //     addCommandButton, addCommandButtonAtIndex,
+        //     addCommandButtonAsFirst, removeCommandButton,
+        //     clearCommandButtons
+        //
+        // e e por ela que MOVE, DUPLICATE e DISMANTLE entram. Eu vinha
+        // escrevendo direto no `commandBox`, por baixo de quem o administra —
+        // e existe um `clearCommandButtons()` que, rodando depois do nosso
+        // `open()`, apaga o que foi posto por fora. Some as vezes, fica outras,
+        // e nenhuma medida no botao explica, porque a causa nao esta nele.
+        Object menuSystem = read(selectionBox, "menuSystem");
+        if (menuSystem == null) {
+            throw new IllegalStateException("the box has no menuSystem");
+        }
         Class<?> stageButton = Class.forName(
             "fi.bugbyte.framework.screen.StageButton", true, loader);
-        Object aceito;
-        try {
-            commandBox.getClass()
-                .getMethod("addButtonAtIndex", stageButton, int.class)
-                .invoke(commandBox, button, Integer.valueOf(0));
-            aceito = Boolean.TRUE;
-        } catch (NoSuchMethodException semIndice) {
-            aceito = commandBox.getClass().getMethod("addButton", stageButton)
-                .invoke(commandBox, button);
-        }
+        menuSystem.getClass()
+            .getMethod("addCommandButtonAsFirst", stageButton)
+            .invoke(menuSystem, button);
+        Object aceito = Boolean.TRUE;
 
         if (Boolean.FALSE.equals(aceito)) {
             trace(hook, id, "REFUSED, box " + antes + " -> "
@@ -271,6 +274,7 @@ public class ShopButtonAspect {
         try {
             java.lang.reflect.Method get = lista.getClass()
                 .getMethod("get", int.class);
+            // Tirar tambem pela porta de quem administra a caixa.
             java.lang.reflect.Method remove = commandBox.getClass()
                 .getMethod("removeButton",
                     Class.forName("fi.bugbyte.framework.screen.StageButton",

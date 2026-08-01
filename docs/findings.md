@@ -624,6 +624,33 @@ save. Crew, onboard AI and bank come along, because the game's own bookkeeping
 comes with them — and `inject_ship` already allocated fresh `entId`s for crew,
 so the fix was which source to hand it, not new mechanics.
 
+## 24f. `MenuSystem` owns the command box; writing to it directly is why the button flickered
+
+The selection panel's buttons — MOVE, DUPLICATE, DISMANTLE — do not reach the
+command box through the panel. They go through a public API on `MenuSystem`:
+
+```
+addCommandButton(StageButton)
+addCommandButtonAtIndex(StageButton, int)
+addCommandButtonAsFirst(StageButton)
+removeCommandButton(StageButton)
+clearCommandButtons()
+```
+
+A mod button written straight into `SelectionBox.commandBox` is therefore added
+underneath whoever administers it — and `clearCommandButtons()` exists. Running
+after the panel's `open()`, it wipes what was placed from outside. Sometimes
+present, sometimes gone, and **no measurement of the button explains it**,
+because the cause is not in the button: it was always accepted, always inside
+the screen, always in a box that ended with four.
+
+Five attempts were spent on the wrong layer — lifecycle, dedupe, removal, label
+width, insertion order — because the question being asked was "what is wrong
+with my button" instead of "how does the game put a button here". The player
+asked the second question and it took one look to answer.
+
+`SelectionBox.menuSystem` is the field that leads to it.
+
 ## 24e. The starmap's Y axis grows upward, SVG's grows downward
 
 Measured in a player's save against the game's own star map:

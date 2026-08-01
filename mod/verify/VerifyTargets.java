@@ -82,9 +82,13 @@ public final class VerifyTargets {
         method(buttons, "getBaseCheckBox1");
         method(require("fi.bugbyte.framework.screen.ScalableToggleIconButton"),
                "setHoldDown", boolean.class);
-        method(require(
-            "fi.bugbyte.spacehaven.gui.MenuSystemItems$AbstractSelectedBoxItem"),
-            "addButton", stageButton);
+        // A rota publica do MenuSystem, que e por onde os botoes do proprio
+        // painel entram na caixa de comandos.
+        Class<?> menuSystem = require("fi.bugbyte.spacehaven.gui.MenuSystem");
+        method(menuSystem, "addCommandButtonAsFirst", stageButton);
+        method(menuSystem, "removeCommandButton", stageButton);
+        field(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"),
+              "menuSystem", false);
         Class<?> selBox = require(
             "fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox");
         Class<?> boxItem = require(
