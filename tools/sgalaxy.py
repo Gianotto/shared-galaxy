@@ -118,7 +118,9 @@ def request(method: str, path: str, body: bytes | None = None,
     """Devolve (status, corpo, headers). Erro do servidor vira ClientError."""
     url = f"{base_url()}{path}"
     head = dict(headers or {})
-    if auth:
+    # Um `Authorization` explicito ganha do guardado. E o que permite conferir
+    # um codigo de recuperacao ANTES de grava-lo por cima do que ja existe.
+    if auth and "Authorization" not in head:
         head["Authorization"] = f"Bearer {token()}"
     req = urllib.request.Request(url, data=body, method=method, headers=head)
     try:
@@ -321,8 +323,15 @@ def cmd_register(args) -> int:
     # Quem registrou pelo navegador já tem conta; aqui só guarda o código.
     if args.recover:
         code = parse_recovery_code(args.recover)
-        save_credentials({"token": code})
-        me = json_request("GET", "/api/v1/me")
+        # CONFERIR ANTES DE GRAVAR.
+        #
+        # A primeira versao gravava o codigo e so entao perguntava ao servidor
+        # quem era. Um codigo digitado errado apagava a conta que ja estava ali
+        # — e como o token e a unica credencial que existe, isso e perder a
+        # conta se o papel nao estiver a mao.
+        _s, raw, _h = request("GET", "/api/v1/me",
+                              headers={"Authorization": f"Bearer {code}"})
+        me = json.loads(raw)
         save_credentials({"token": code, "playerId": me["playerId"],
                           "name": me["name"]})
         print(f"signed in as {me['name']} on {base_url()}")

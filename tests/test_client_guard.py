@@ -362,3 +362,63 @@ class NewShipTestCase(unittest.TestCase):
         self.addCleanup(lambda: setattr(builtins, "input", real_input))
         self.assertIsNone(client.create_ship("XXXXXX", self.exe, sim=False))
         self.assertEqual(chamadas, [], "abriu o jogo mesmo com a pessoa dizendo não")
+
+
+class RecoveryTestCase(unittest.TestCase):
+    """O código de recuperação, que é a única volta para uma conta.
+
+    Não há e-mail e não há senha: o token é tudo. Por isso um código digitado
+    errado não pode custar a conta que já estava guardada.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self._cred, self._dir = client.CREDENTIALS, client.CONFIG_DIR
+        client.CONFIG_DIR = self.tmp.name
+        client.CREDENTIALS = os.path.join(self.tmp.name, "credentials.json")
+        self.addCleanup(lambda: setattr(client, "CREDENTIALS", self._cred))
+        self.addCleanup(lambda: setattr(client, "CONFIG_DIR", self._dir))
+        self.boa = {"token": "TOKEN-QUE-FUNCIONA", "playerId": 1, "name": "Eu"}
+        with open(client.CREDENTIALS, "w", encoding="utf-8") as fh:
+            json.dump({client.base_url(): self.boa}, fh)
+
+    def _guardado(self) -> dict:
+        with open(client.CREDENTIALS, encoding="utf-8") as fh:
+            return json.load(fh)[client.base_url()]
+
+    def _servidor(self, aceita: str | None):
+        """Finge um servidor que só conhece um token."""
+        def falso(method, path, body=None, headers=None, auth=True):
+            enviado = (headers or {}).get("Authorization", "")
+            if aceita is not None and enviado == f"Bearer {aceita}":
+                return 200, json.dumps({"playerId": 7, "name": "Eu"}).encode(), {}
+            raise client.ClientError("the server refused (401): unknown token")
+        real = client.request
+        client.request = falso
+        self.addCleanup(lambda: setattr(client, "request", real))
+
+    def test_a_wrong_code_does_not_cost_the_stored_account(self):
+        """Gravar antes de conferir apagava a conta de quem errou o código."""
+        self._servidor(aceita="OCODIGOCERTO")
+        with self.assertRaises(client.ClientError):
+            client.cmd_register(_Args(recover="CODIGO-ERRADO"))
+        self.assertEqual(self._guardado(), self.boa,
+                         "um código errado apagou a conta que estava guardada")
+
+    def test_a_right_code_signs_in(self):
+        self._servidor(aceita="OCODIGOCERTO")
+        self.assertEqual(client.cmd_register(_Args(recover="OCOD-IGOC-ERTO")), 0)
+        self.assertEqual(self._guardado()["token"], "OCODIGOCERTO")
+        self.assertEqual(self._guardado()["playerId"], 7)
+
+    def test_the_code_survives_dashes_spaces_and_case(self):
+        """Ele é copiado de um papel; tem que voltar mesmo mal digitado."""
+        self._servidor(aceita="OCODIGOCERTO")
+        client.cmd_register(_Args(recover="  ocod-igoc-erto \n"))
+        self.assertEqual(self._guardado()["token"], "OCODIGOCERTO")
+
+
+class _Args:
+    def __init__(self, **kw): self.__dict__.update(kw)
+    def __getattr__(self, _): return None
