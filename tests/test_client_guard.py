@@ -17,6 +17,8 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -468,3 +470,78 @@ class ConnectionFailureTestCase(unittest.TestCase):
         with self.assertRaises(client.ClientError) as erro:
             self._pede()
         self.assertIn(client.base_url(), str(erro.exception))
+
+
+class WatcherTestCase(unittest.TestCase):
+    """O vigia de autosaves durante a sessão.
+
+    Ele só lê, e só depois que a pasta para de mudar: enquanto o jogo está
+    aberto aqueles arquivos são dele. E ele conta o que fez nos dois lugares —
+    no log do jogo, que é onde a pessoa está olhando, e no terminal, que é onde
+    ela vai procurar se algo der errado.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.sala = os.path.join(self.tmp.name, "Sala-XXXXXX")
+        self.jogo = os.path.join(self.tmp.name, "jogo")
+        os.makedirs(self.sala)
+        os.makedirs(self.jogo)
+
+    def _autosave(self, nome: str, dia: float) -> str:
+        pasta = os.path.join(self.sala, nome)
+        os.makedirs(pasta, exist_ok=True)
+        with open(os.path.join(pasta, "game"), "w", encoding="utf-8") as fh:
+            fh.write("<game/>")
+        with open(os.path.join(pasta, "info"), "w", encoding="utf-8") as fh:
+            fh.write(f'<info version="21" date="{int(dia * 86400)}"/>')
+        return pasta
+
+    def test_only_autosaves_are_watched(self):
+        """A pasta `save` é a manual; ela vai na devolução, não em checkpoint."""
+        self._autosave("save", 5.0)
+        self._autosave("autosave1", 5.2)
+        enviados = []
+        real = client._send_checkpoint
+        client._send_checkpoint = lambda p, n, r, g: enviados.append(n)
+        self.addCleanup(lambda: setattr(client, "_send_checkpoint", real))
+
+        parar = threading.Event()
+        client.WATCH_EVERY, client.SETTLE_SECONDS = 0.01, 0.01
+        t = threading.Thread(target=client.watch_autosaves,
+                             args=(self.sala, "XXXXXX", self.jogo, parar))
+        t.start()
+        time.sleep(0.3)
+        parar.set()
+        t.join(timeout=2)
+        self.assertEqual(enviados, ["autosave1"],
+                         f"mandou o que não devia: {enviados}")
+
+    def test_the_same_autosave_is_not_sent_twice(self):
+        """Sem isto, um autosave viraria uma versão nova a cada volta do laço."""
+        self._autosave("autosave1", 5.2)
+        enviados = []
+        real = client._send_checkpoint
+        client._send_checkpoint = lambda p, n, r, g: enviados.append(n)
+        self.addCleanup(lambda: setattr(client, "_send_checkpoint", real))
+
+        parar = threading.Event()
+        client.WATCH_EVERY, client.SETTLE_SECONDS = 0.01, 0.01
+        t = threading.Thread(target=client.watch_autosaves,
+                             args=(self.sala, "XXXXXX", self.jogo, parar))
+        t.start()
+        time.sleep(0.4)
+        parar.set()
+        t.join(timeout=2)
+        self.assertEqual(enviados, ["autosave1"],
+                         f"mandou o mesmo autosave {len(enviados)} vezes")
+
+    def test_a_folder_still_being_written_waits(self):
+        """Ler no meio da gravação daria XML cortado. Espera a pasta assentar."""
+        pasta = self._autosave("autosave1", 5.2)
+        assinatura = client._folder_state(pasta)
+        with open(os.path.join(pasta, "game"), "a", encoding="utf-8") as fh:
+            fh.write("<mais/>")
+        self.assertNotEqual(client._folder_state(pasta), assinatura,
+                            "a assinatura não percebeu a pasta mudando")

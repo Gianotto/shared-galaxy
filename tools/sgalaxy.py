@@ -863,18 +863,27 @@ def watch_autosaves(target: str, room: str, game_dir: str, parar) -> None:
 
 
 def _send_checkpoint(pasta: str, nome: str, room: str, game_dir: str) -> None:
+    """Manda um autosave e conta nos dois lugares.
+
+    No log do jogo, porque é onde a pessoa está olhando. E no terminal, porque
+    é onde ela vai procurar depois se algo der errado — a primeira versão só
+    escrevia no jogo, e quem estava de olho no console não via nada acontecer.
+    """
+    corpo = pack(pasta)
     try:
         _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/checkpoint",
-                              pack(pasta),
-                              {"Content-Type": "application/zip"})
+                              corpo, {"Content-Type": "application/zip"})
     except ClientError as exc:
         # Falhar aqui não pode atrapalhar quem está jogando: o save continua na
         # máquina e a devolução no fim da sessão é que vale.
+        print(f"      {nome}: not sent ({exc})", flush=True)
         note_in_game(game_dir, [f"Shared Galaxy — {nome} NOT sent: {exc}",
                                 "Your progress is safe locally; the return at "
                                 "the end is what counts."])
         return
     data = json.loads(raw)
+    print(f"      {nome} sent — day {data['ageDays']}, "
+          f"v{data['versionId']}, {_size(len(corpo))}", flush=True)
     note_in_game(game_dir, [
         f"Shared Galaxy — {nome} sent to the server "
         f"(v{data['versionId']}, day {data['ageDays']})",
