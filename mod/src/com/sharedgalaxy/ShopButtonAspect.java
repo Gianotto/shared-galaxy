@@ -224,10 +224,25 @@ public class ShopButtonAspect {
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        Object aceito = commandBox.getClass().getMethod("addButton",
-                Class.forName("fi.bugbyte.framework.screen.StageButton",
-                              true, loader))
-            .invoke(commandBox, button);
+        // NO COMECO DA FILA, nao no fim.
+        //
+        // `redoButtonPositions` distribui a partir de `cx` somando a largura
+        // de cada botao, e a nossa muda com o rotulo: "SET AS SHOP" e bem mais
+        // largo que "SHOP: ON". O ultimo da fila e o que cai fora da tela
+        // quando a soma estoura — e foi por isso que ele apareceu no rodape na
+        // primeira versao e some de forma aparentemente aleatoria agora.
+        Class<?> stageButton = Class.forName(
+            "fi.bugbyte.framework.screen.StageButton", true, loader);
+        Object aceito;
+        try {
+            commandBox.getClass()
+                .getMethod("addButtonAtIndex", stageButton, int.class)
+                .invoke(commandBox, button, Integer.valueOf(0));
+            aceito = Boolean.TRUE;
+        } catch (NoSuchMethodException semIndice) {
+            aceito = commandBox.getClass().getMethod("addButton", stageButton)
+                .invoke(commandBox, button);
+        }
 
         // Registra tambem na lista do painel. E ela que o `close()` percorre
         // para tirar os botoes quando a selecao muda — sem estar la, o nosso
@@ -248,8 +263,7 @@ public class ShopButtonAspect {
         trace(hook, id, "box " + antes + " -> "
                        + tamanho(read(commandBox, "buttons"))
                        + ", dropped=" + tirados + ", accepted=" + aceito
-                       + ", boxId=" + Integer.toHexString(
-                           System.identityHashCode(commandBox)), panel);
+                       + " || " + geometry(commandBox), panel);
     }
 
     /**
@@ -287,6 +301,43 @@ public class ShopButtonAspect {
                                + "button: " + failure);
         }
         return tirados;
+    }
+
+    /**
+     * Onde cada botao da caixa foi parar, e ate onde a tela vai.
+     *
+     * O que decide se um botao existe mas nao se ve: `redoButtonPositions`
+     * distribui somando larguras, e quem passar da borda fica invisivel.
+     */
+    private static String geometry(Object commandBox) {
+        StringBuilder out = new StringBuilder();
+        try {
+            Object tela = Class.forName("com.badlogic.gdx.Gdx")
+                .getField("graphics").get(null);
+            out.append("screenW=")
+               .append(tela.getClass().getMethod("getWidth").invoke(tela));
+        } catch (Throwable unknown) {
+            out.append("screenW=?");
+        }
+        Object lista = read(commandBox, "buttons");
+        int total = tamanho(lista);
+        try {
+            java.lang.reflect.Method get = lista.getClass()
+                .getMethod("get", int.class);
+            for (int i = 0; i < total; i++) {
+                Object b = get.invoke(lista, Integer.valueOf(i));
+                Object h = b.getClass().getMethod("getClickHandler").invoke(b);
+                boolean nosso = h != null && MARKER.equals(h.toString());
+                out.append(nosso ? " [OURS " : " [")
+                   .append(b.getClass().getMethod("getX").invoke(b))
+                   .append(",w=")
+                   .append(b.getClass().getMethod("getWidth").invoke(b))
+                   .append("]");
+            }
+        } catch (Throwable unknown) {
+            out.append(" (posicoes indisponiveis: ").append(unknown).append(")");
+        }
+        return out.toString();
     }
 
     private static int tamanho(Object lista) {
