@@ -653,6 +653,29 @@ NEIGHBOUR_FACTION = "Civilian"
 NEIGHBOUR_CREDITS = "5000"
 
 
+def _shop_of(conn, membership: dict) -> dict:
+    """O que este vizinho pos a venda: o conteudo do armazem que ele escolheu.
+
+    Sai do save canonico guardado, entao e o que ele tinha quando devolveu — e
+    e por isso que o estoque da vitrine so muda de uma sessao dele para a
+    outra, nao em tempo real. Nao ha como ser diferente: o save dele so chega
+    aqui quando ele devolve.
+    """
+    if not membership.get("shop_storage_id") or not membership.get("canonical_id"):
+        return {}
+    versao = db.get_version(conn, membership["canonical_id"])
+    if versao is None:
+        return {}
+    try:
+        _game, nave = _player_ship_of(store().get(versao["sha256"]))
+        if nave is None:
+            return {}
+        return shopping.on_sale(nave, membership["shop_storage_id"])
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not read a neighbour's shop: %s", exc)
+        return {}
+
+
 def _neighbours_of(conn, room_id: str, player_id: int) -> list:
     """Quem mais esta no mesmo sistema, com lugar conhecido."""
     eu = db.get_membership(conn, room_id, player_id)
@@ -712,15 +735,23 @@ def _place_neighbours(conn, room_id: str, player_id: int,
                         continue
                     # Sem <asi> a nave entra sem IA de bordo, sem radio e sem
                     # postura de combate. Vitrine quebrada e pior que ausente.
+                    # O QUE ELE POS A VENDA vira a carga da vitrine. Sem
+                    # isto a loja abre com prateleira vazia: o jogo gera uma
+                    # lista do que ELE quer comprar, e o jogador clica em
+                    # "new trade" e nao encontra nada para levar.
+                    a_venda = _shop_of(conn, outro)
+                    estoque = ",".join(f"{r}:{q}" for r, q in
+                                       sorted(a_venda.items())) or None
                     rel = storefront.inject_ship(
                         sf, cascos[0], faction=NEIGHBOUR_FACTION,
                         credits=NEIGHBOUR_CREDITS, name=nome, hull_mode=True,
-                        crew_side=NEIGHBOUR_FACTION,
+                        crew_side=NEIGHBOUR_FACTION, stock=estoque,
                         at=(outro["at_x"], outro["at_y"]),
                         system_id=outro["at_system"])
                     sids.append(rel["fleet"]["createdShipId"])
                     relatorio["placed"] += 1
                     relatorio["neighbours"].append(nome)
+                    relatorio.setdefault("stock", {})[nome] = a_venda
                 except Exception as exc:      # noqa: BLE001
                     relatorio["skipped"].append(
                         f"{outro['display_name']}: {exc}")

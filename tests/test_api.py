@@ -225,7 +225,8 @@ class ApiTestCase(unittest.TestCase):
         armazens = self.client.get(f"/api/v1/rooms/{room['id']}/shop",
                                    headers=self._auth(eu)).json()["storages"]
         ids = {a["id"] for a in armazens}
-        self.assertEqual(ids, {"435", "608"})
+        self.assertIn("435", ids)
+        self.assertIn("608", ids)
         self.assertNotIn("900", ids, "ofereceu o insumo de uma máquina")
 
     def test_choosing_a_storage_opens_the_shop(self):
@@ -283,6 +284,25 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
 
     # -- vizinhos no setor -------------------------------------------------
+
+    # O porão da nave do jogador, que o molde cria como armazém de verdade.
+    LOJA = "37469"
+
+    def _com_loja(self) -> bytes:
+        """Save com o porão da nave (que vira a loja) e uma NPC viva.
+
+        Não inventa armazém: usa o que a nave já tem, como faria alguém
+        escolhendo o próprio porão como loja.
+        """
+        import io as _io, zipfile as _zip
+        xml = synthetic.build_game(
+            ships=[synthetic.default_player_ship(),
+                   synthetic.npc_trader_ship()])
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, "w") as zf:
+            zf.writestr("game", xml)
+            zf.writestr("info", f'<info version="21" date="{synthetic.FRESH_DATE}"/>')
+        return buf.getvalue()
 
     def _com_casco(self, **kw) -> bytes:
         """Um save com uma nave NPC viva de onde montar a vitrine."""
@@ -367,6 +387,46 @@ class ApiTestCase(unittest.TestCase):
                              "acumulou vitrine entre sessões")
             self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
                              content=entregue, headers=self._auth(eu))
+
+    def test_the_storefront_carries_what_the_neighbour_put_on_sale(self):
+        """O passo que faltava: sem carga, "new trade" nao tem o que comprar.
+
+        O jogo gera sozinho uma lista do que a NAVE quer comprar de voce. O que
+        ela tem para vender e o que nos pusermos la — e isso e o conteudo do
+        armazem que o dono escolheu.
+        """
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_loja())
+        self._join(eu, room["id"], data=self._com_casco())
+        self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                        json={"storageId": self.LOJA},
+                        headers=self._auth(vizinha))
+
+        entregue = self._checkout(eu, room["id"]).content
+        from sgalaxy import inventory
+        from sgalaxy.savefile import SaveFile
+        with blobs.with_unpacked(entregue) as pasta:
+            vitrine = [s for _d, s in SaveFile(pasta).ships()
+                       if vizinha["name"] in (s.get("sname") or "")][0]
+            carga = inventory.count(vitrine)
+        self.assertEqual(carga.get("2053"), 40,
+                         f"a vitrine abriu sem o que estava a venda: {carga}")
+
+    def test_a_neighbour_with_no_shop_sells_nothing(self):
+        """Nada a venda por padrao, e a vitrine reflete isso honestamente."""
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_loja())
+        self._join(eu, room["id"], data=self._com_casco())
+
+        entregue = self._checkout(eu, room["id"]).content
+        from sgalaxy import inventory
+        from sgalaxy.savefile import SaveFile
+        with blobs.with_unpacked(entregue) as pasta:
+            vitrine = [s for _d, s in SaveFile(pasta).ships()
+                       if vizinha["name"] in (s.get("sname") or "")][0]
+            self.assertEqual(inventory.count(vitrine), {})
 
     def test_the_checkout_says_which_ships_it_assembled(self):
         """O mod precisa distinguir a vitrine de um NPC de verdade.

@@ -66,11 +66,15 @@ NPC_FLEET_TEMPLATE = """<f id="{fleet_id}" isPlayer="false"\
 </createdShips>\
 </f>"""
 
+# A carga de uma nave mora num ARMAZEM, nao solta sob <ship>: e um `<l>` com
+# `<feat><inv>`, como no save real. O molde tinha um `<inv>` solto, e por isso
+# `ship_racks` nao achava prateleira nenhuma — a vitrine nao era esvaziada nem
+# enchida, e o teste media a carga do molde achando que media a da loja.
 SHIP_TEMPLATE = """<ship sid="{sid}" sname="{name}"{hull}>\
 <settings of="{faction}" owner="{owner}"/>\
 <characters>{crew}</characters>\
 {bank}\
-<inv>{cargo}</inv>\
+<e><l id="{sid}9" x="4" y="4"><feat><inv>{cargo}</inv></feat></l></e>\
 {extra}\
 </ship>"""
 

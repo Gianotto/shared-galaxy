@@ -163,6 +163,10 @@ def room_roster(conn: psycopg.Connection, room_id: str) -> list:
     return conn.execute(
         """SELECT m.player_id, p.display_name, m.ship_name, m.at_system,
                   m.at_x, m.at_y, m.at_body, m.joined_at, m.last_seen_at,
+                  -- A loja e o save canonico entram aqui porque e desta lista
+                  -- que sai a vizinhanca do checkout: sem eles, a vitrine de
+                  -- todo mundo abre vazia e o motivo fica invisivel.
+                  m.shop_storage_id, m.canonical_id,
                   v.age_days, v.created_at AS canonical_at,
                   (l.id IS NOT NULL) AS playing
              FROM membership m
