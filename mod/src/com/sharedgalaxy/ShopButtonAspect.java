@@ -145,17 +145,22 @@ public class ShopButtonAspect {
             throws Exception {
         ClassLoader loader = panel.getClass().getClassLoader();
 
+        // CEDO DEMAIS NAO E ERRO.
+        //
+        // `setSelectedItem` roda antes de o painel ser preso a caixa, entao o
+        // campo ainda esta vazio. Nao ha o que fazer nesse instante e nao ha o
+        // que consertar: o `open(SelectionBox)` chega logo depois com a caixa
+        // pronta, e e ele que poe o botao. Tratar isto como falha enchia o
+        // terminal de excecoes numa sequencia que funciona.
+        Object selectionBox = read(panel, "selectionBox");
+        if (selectionBox == null) {
+            return;
+        }
+
         // Dois ganchos podem cobrir a mesma abertura. Reconhecer o nosso botao
         // pelo que o proxy responde a `toString` evita dois na caixa.
-        Object jaTem = read(panel, "selectionBox");
-        Object caixa = jaTem == null ? null : read(jaTem, "commandBox");
+        Object caixa = read(selectionBox, "commandBox");
         if (contains(caixa)) {
-            // Falar tambem quando NAO faz nada. Um retorno mudo aqui produz
-            // exatamente o sintoma que estamos cacando — botao ausente e
-            // terminal calado — e foi assim que a versao anterior escondeu a
-            // propria causa.
-            System.out.println("[shared-galaxy] shop button -> storage " + id
-                               + " skipped: the box says it already has one");
             return;
         }
         final Object button = Class.forName(BUTTONS, true, loader)
@@ -199,11 +204,7 @@ public class ShopButtonAspect {
         // fora da area do jogo, e o jogador quase nao o achou. O
         // ClaimAllDerelicts ja fazia o certo e eu li a receita pela metade:
         // selectionBox -> commandBox -> addButton.
-        Object selectionBox = read(panel, "selectionBox");
-        if (selectionBox == null) {
-            throw new IllegalStateException("the panel has no selectionBox");
-        }
-        Object commandBox = read(selectionBox, "commandBox");
+        Object commandBox = caixa;
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
@@ -228,10 +229,11 @@ public class ShopButtonAspect {
         // botao sumia o terminal ficava mudo — o que nao distinguia "o
         // conselho nao rodou" de "rodou, foi aceito, e algo tirou depois".
         // Silencio que cabe em duas explicacoes nao e diagnostico.
-        System.out.println("[shared-galaxy] shop button -> storage " + id
-                           + " accepted=" + aceito
-                           + " boxHad=" + count(commandBox)
-                           + " myButtons=" + count(myButtons));
+        if (Boolean.FALSE.equals(aceito)) {
+            System.err.println("[shared-galaxy] the command box refused the "
+                               + "shop button (storage " + id + ", box had "
+                               + count(commandBox) + ")");
+        }
     }
 
     /** A caixa ja tem um botao nosso? */
