@@ -80,6 +80,13 @@ public final class VerifyTargets {
         method(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionCommandBox"),
                "addButton", stageButton);
         method(buttons, "getBase");
+        Class<?> selBox = require(
+            "fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox");
+        Class<?> boxItem = require(
+            "fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBoxItem");
+        method(selBox, "setSelectedItem", boxItem);
+        method(selBox, "setNewSelectedItem", boxItem);
+        method(stageButton, "getClickHandler");
         method(stageButton, "setClickHandler", clickHandler);
         method(require("fi.bugbyte.framework.screen.ScalableIconTextButton"),
                "setText", String.class);

@@ -67,10 +67,42 @@ public class ShopButtonAspect {
     private static final String CLICK =
         "fi.bugbyte.framework.screen.StageButton$clickHandler";
 
+    /** O que o nosso proxy responde a `toString`, para reconhecer o botao. */
+    static final String MARKER = "sharedGalaxyShopButton";
+
+    /**
+     * A troca de selecao, que e o que realmente acontece sempre.
+     *
+     * <p>O gancho era `SingleWorldElementSelected.open(..)`, e o botao ficava
+     * intermitente. A instrumentacao respondeu: quando ele nao aparecia, NAO
+     * havia linha nenhuma no terminal — o conselho nao rodava. `open()` nao e
+     * chamado em toda reselecao; a `SelectionBox` reaproveita o painel.
+     *
+     * <p>`setSelectedItem` e `setNewSelectedItem` sao por onde toda troca
+     * passa, e e de la que o painel chega como argumento.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"
+           + ".setSelectedItem(..))"
+           + " || execution(* fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"
+           + ".setNewSelectedItem(..))")
+    public void afterSelectionChanged(JoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        if (args.length == 0 || args[0] == null) {
+            return;
+        }
+        if (!args[0].getClass().getName().endsWith("SingleWorldElementSelected")) {
+            return;
+        }
+        offerButton(args[0]);
+    }
+
     @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystemItems"
            + "$SingleWorldElementSelected.open(..))")
     public void afterPanelOpened(JoinPoint joinPoint) {
-        Object panel = joinPoint.getTarget();
+        offerButton(joinPoint.getTarget());
+    }
+
+    private static void offerButton(Object panel) {
         try {
             Object element = read(panel, "element");
             if (element == null || !isStorage(element)) {
@@ -103,6 +135,14 @@ public class ShopButtonAspect {
     private static void addButton(final Object panel, final String id)
             throws Exception {
         ClassLoader loader = panel.getClass().getClassLoader();
+
+        // Dois ganchos podem cobrir a mesma abertura. Reconhecer o nosso botao
+        // pelo que o proxy responde a `toString` evita dois na caixa.
+        Object jaTem = read(panel, "selectionBox");
+        Object caixa = jaTem == null ? null : read(jaTem, "commandBox");
+        if (contains(caixa)) {
+            return;
+        }
         final Object button = Class.forName(BUTTONS, true, loader)
             .getMethod("getBase").invoke(null);
 
@@ -177,6 +217,33 @@ public class ShopButtonAspect {
                            + " accepted=" + aceito
                            + " boxHad=" + count(commandBox)
                            + " myButtons=" + count(myButtons));
+    }
+
+    /** A caixa ja tem um botao nosso? */
+    private static boolean contains(Object commandBox) {
+        Object lista = commandBox == null ? null : read(commandBox, "buttons");
+        if (lista == null) {
+            return false;
+        }
+        try {
+            int total = ((Integer) lista.getClass().getField("size").get(lista))
+                .intValue();
+            java.lang.reflect.Method get = lista.getClass()
+                .getMethod("get", int.class);
+            for (int i = 0; i < total; i++) {
+                Object b = get.invoke(lista, Integer.valueOf(i));
+                if (b == null) {
+                    continue;
+                }
+                Object h = b.getClass().getMethod("getClickHandler").invoke(b);
+                if (h != null && MARKER.equals(h.toString())) {
+                    return true;
+                }
+            }
+        } catch (Throwable unknown) {
+            return false;
+        }
+        return false;
     }
 
     /** Quantos botoes uma caixa carrega, ou -1 se nao der para saber. */
