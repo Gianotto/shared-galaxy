@@ -1124,6 +1124,14 @@ def cmd_shop(args) -> int:
         onde = f"({a['at'][0]},{a['at'][1]})"
         print(f"{marca}{a['id']:<10}{onde:<12}{a['stacks']:>7}{a['units']:>7}")
     print()
+    # O jogo nunca mostra estes ids, então a coluna que casa é `units`: o
+    # painel do armazém, no jogo, diz "Capacity: 153 / 250" — e 153 é o mesmo
+    # número. Sem esta linha, os ids são três números sem sentido.
+    print("  In the game, click a storage: the panel shows "
+          "\"Capacity: N / total\".")
+    print("  That N is the `units` column above — that is how you tell "
+          "them apart.")
+    print()
     print(f"  {data['message']}")
     if not data["shopStorageId"]:
         print(f"  {prog()} shop {args.room} --set STORAGE")
