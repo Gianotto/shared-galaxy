@@ -256,7 +256,7 @@ stopped changing — the game owns those files while it is open. And the mod put
 a line in the game's own log window on each send, so the player can see their
 progress leaving the machine instead of hoping it did.
 
-**Phase 2 — neighbour injection, without trade.** The `inject_npc_ship.py` from
+**Phase 2 — neighbour injection, without trade. Built.** The `inject_npc_ship.py` from
 stage A becomes the portrait builder on the server, and assembly moves into
 `checkout`. It proves the moment that sells the project: you open the game and
 someone's shop is there.
@@ -360,6 +360,23 @@ One consequence to watch, not a decision: **saves converge upward.** Everyone
 ends up carrying the union, so the room's saves grow toward the most-travelled
 member's. Worth measuring against the 32 MB upload ceiling before a room of 64
 people finds it for us.
+
+**What phase 2 delivered, and the seam it exposed.** A storefront now appears
+in the sector of every member in the same system, capped at three, assembled at
+checkout and stripped at check-in. Confirmed in a real game: `HSS YANNI
+(Vizinha)`, Civilians, Relationship 74 [Friendly] — and its crew opened a
+conversation asking for resources.
+
+That conversation is the seam. The storefront is a **Civilian** ship, and the
+relationship table is indexed by pair of sides, never by ship (item 11). So
+giving those resources moves the player's standing with the entire Civilian
+faction, and the neighbour it is named after receives nothing at all. The game
+will happily run an economy against a ship the server invented; what it cannot
+do is route the result to a person.
+
+That is precisely the hole reconciliation has to fill, and it is worth stating
+plainly before anyone in a room hands cargo to a shopfront believing a neighbour
+is on the other side of it.
 
 **Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
 Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`
