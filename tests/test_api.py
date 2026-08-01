@@ -368,6 +368,33 @@ class ApiTestCase(unittest.TestCase):
             self.client.post(f"/api/v1/rooms/{room['id']}/checkin",
                              content=entregue, headers=self._auth(eu))
 
+    def test_the_checkout_says_which_ships_it_assembled(self):
+        """O mod precisa distinguir a vitrine de um NPC de verdade.
+
+        O jogo só sabe chamar o jogador por FACÇÃO, nunca por nave (medido em
+        `Communication.npcHailsPlayer(FactionSide)`). Sem esta lista, calar a
+        vitrine calaria também os encontros que o próprio jogo criou.
+        """
+        vizinha, eu = self._player(), self._player()
+        room = self._room(vizinha)
+        self._join(vizinha, room["id"], data=self._com_casco())
+        self._join(eu, room["id"], data=self._com_casco())
+
+        r = self._checkout(eu, room["id"])
+        sids = r.headers.get("x-neighbour-sids", "")
+        self.assertTrue(sids, "o checkout não disse o que montou")
+        naves_no_zip = self._naves(r.content)
+        self.assertEqual(len(sids.split(",")), 1)
+        self.assertEqual(len(naves_no_zip), 3)
+
+    def test_with_no_neighbours_the_list_is_empty(self):
+        """Lista velha faria o mod calar naves que não são mais nossas."""
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_casco())
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.headers.get("x-neighbour-sids", ""), "")
+
     def test_nobody_from_another_system_appears(self):
         longe, eu = self._player(), self._player()
         room = self._room(longe)

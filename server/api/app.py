@@ -829,6 +829,10 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
             "X-Discovery-Flagged": str(partilha["flagged"]),
             "X-Discovery-Inserted": str(partilha["inserted"]),
             "X-Neighbours": str(vizinhanca["placed"]),
+            # Quais naves o servidor montou. O mod usa isto para calar o
+            # chamado automatico delas sem calar os NPCs de verdade: o jogo so
+            # sabe chamar por faccao, nunca por nave.
+            "X-Neighbour-Sids": ",".join(str(x) for x in sids),
             "Content-Disposition": f'attachment; filename="{room_id}-save.zip"',
             "X-Lease-Id": str(lease["id"]),
             "X-Lease-Expires": expires.isoformat(),

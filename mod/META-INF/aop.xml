@@ -2,6 +2,7 @@
     <aspects>
         <aspect name="com.sharedgalaxy.AutoLoadAspect"/>
         <aspect name="com.sharedgalaxy.ShopButtonAspect"/>
+        <aspect name="com.sharedgalaxy.QuietNeighbourAspect"/>
     </aspects>
 
     <!-- Weaving costs startup time on every class named here, so this names
@@ -10,6 +11,7 @@
         <include within="fi.bugbyte.spacehaven.gui.menu.GameMenu"/>
         <include within="fi.bugbyte.spacehaven.gui.GUI"/>
         <include within="fi.bugbyte.spacehaven.gui.MenuSystemItems$SingleWorldElementSelected"/>
+        <include within="fi.bugbyte.spacehaven.ai.Communication"/>
         <include within="com.sharedgalaxy.*"/>
     </weaver>
 </aspectj>

@@ -806,6 +806,26 @@ def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
     return True
 
 
+def _list_neighbour_ships(game_dir: str, sids: str | None) -> None:
+    """Diz ao mod quais naves deste save foram montadas pelo servidor.
+
+    Sem isto o mod não tem como separar a vitrine de um vizinho de uma nave
+    NPC de verdade, porque o jogo só sabe chamar o jogador por FACÇÃO. Calar a
+    facção calaria também os encontros que o próprio jogo criou.
+
+    Escreve sempre, inclusive vazio: uma lista velha de outra sessão faria o
+    mod calar naves que não são mais nossas.
+    """
+    alvo = os.path.join(game_dir, SHIPS_FILE)
+    try:
+        tmp = alvo + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write("\n".join((sids or "").split(",")) + "\n")
+        os.replace(tmp, alvo)
+    except OSError:
+        pass
+
+
 def _apply_shop_choice(room: str, game_dir: str) -> None:
     """Leva ao servidor o armazém que a pessoa escolheu no painel do jogo.
 
@@ -959,6 +979,8 @@ def cmd_play(args) -> int:
     game_dir = os.path.dirname(exe)
     armed = arm_autoload(game_dir, folder_name) and mod_is_installed(game_dir)
 
+    _list_neighbour_ships(game_dir, headers.get("x-neighbour-sids"))
+
     versao = headers.get("x-version-id")
     servidor = base_url().split("//", 1)[-1]
     note_in_game(game_dir, [
@@ -1033,6 +1055,11 @@ NOTES_FILE = "sharedgalaxy.log"
 # nosso porque não pode ficar no save: o jogo regrava a partir do modelo dele e
 # um atributo inventado por nós some no próximo salvamento.
 SHOP_FILE = "sharedgalaxy.shop"
+
+# As naves que o servidor montou neste save. O mod as usa para calar o chamado
+# automatico das vitrines — o jogo so sabe chamar por facção, nunca por nave,
+# então sem esta lista calar a nossa calaria também os NPCs de verdade.
+SHIPS_FILE = "sharedgalaxy.ships"
 
 # De quanto em quanto tempo olhar se apareceu autosave novo, e quanto esperar
 # para ter certeza de que o jogo terminou de gravar.

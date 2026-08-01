@@ -70,7 +70,8 @@ docker run --rm --user "$(id -u):$(id -g)" \
         -source 8 -target 8 -Xlint:ignore $EXTRA \
         -d /mod/build/classes \
         /mod/src/com/sharedgalaxy/AutoLoadAspect.java \
-        /mod/src/com/sharedgalaxy/ShopButtonAspect.java
+        /mod/src/com/sharedgalaxy/ShopButtonAspect.java \
+        /mod/src/com/sharedgalaxy/QuietNeighbourAspect.java
 
 mkdir -p "$OUT/classes/META-INF"
 cp "$HERE/META-INF/aop.xml" "$OUT/classes/META-INF/aop.xml"

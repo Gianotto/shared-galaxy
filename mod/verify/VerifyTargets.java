@@ -88,6 +88,18 @@ public final class VerifyTargets {
         field(worldObject, "features");
         field(features, "stores");
 
+        // Calar a vitrine sem calar os NPCs de verdade.
+        Class<?> comms = require("fi.bugbyte.spacehaven.ai.Communication");
+        Class<?> side = require(
+            "fi.bugbyte.spacehaven.stuff.FactionUtils$FactionSide");
+        Class<?> ship = require("fi.bugbyte.spacehaven.world.Ship");
+        method(comms, "npcHailsPlayer", side);
+        method(comms, "updateCallPlayer", side);
+        field(comms, "world", false);
+        method(require("fi.bugbyte.spacehaven.world.World"), "getShips");
+        method(ship, "getCurrentOwnerSide");
+        field(ship, "shipId", false);
+
         System.out.println();
         if (failures > 0) {
             System.out.println(failures + " target(s) missing — the mod would "
