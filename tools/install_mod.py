@@ -45,6 +45,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 AGENT_PREFIX = "-javaagent:./aspectjweaver"
@@ -77,6 +78,28 @@ def como_chamar() -> str:
     if getattr(sys, "frozen", False):
         return f"{os.path.basename(sys.argv[0])} install-mod"
     return "python3 tools/install_mod.py"
+
+
+def game_is_running() -> str | None:
+    """O nome do processo do jogo, se ele estiver aberto.
+
+    Mesma leitura do cliente: `spacehaven` é o lançador nativo e
+    `spacehaven.jar` é a JVM que ele levanta.
+    """
+    if shutil.which("pgrep") is None:
+        return None
+    meus = {str(os.getpid()), str(os.getppid())}
+    for args, nome in ((["-x", "spacehaven"], "spacehaven"),
+                       (["-f", "spacehaven.jar"], "spacehaven.jar")):
+        try:
+            out = subprocess.run(["pgrep", *args], capture_output=True,
+                                 timeout=5, text=True)
+        except (subprocess.SubprocessError, OSError):
+            continue
+        if out.returncode == 0 and {p for p in out.stdout.split()
+                                    if p and p not in meus}:
+            return nome
+    return None
 
 
 def find_game() -> str:
@@ -187,6 +210,16 @@ def other_code_mods(config: dict, mod_jar_name: str) -> list:
 
 
 def install(game: str, dry_run: bool) -> int:
+    # A JVM lê o jar UMA VEZ, ao abrir. Trocá-lo com o jogo rodando não muda
+    # nada até reiniciar — e faz alguém testar a versão anterior achando que
+    # testa a nova. Custou uma rodada de teste antes desta trava existir.
+    aberto = game_is_running()
+    if aberto and not dry_run:
+        raise ModError(
+            f"o Space Haven está aberto ({aberto}). A JVM carrega o mod ao "
+            f"iniciar, então instalar agora não mudaria nada nesta sessão — e "
+            f"você testaria a versão antiga. Feche o jogo e rode de novo")
+
     weaver = find_weaver()
     mod_jar = find_mod_jar()
     config = read_config(game)
