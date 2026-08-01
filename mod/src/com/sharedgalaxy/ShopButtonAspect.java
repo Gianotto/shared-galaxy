@@ -109,6 +109,39 @@ public class ShopButtonAspect {
         offerButton(joinPoint.getTarget(), "open");
     }
 
+    /**
+     * A caixa de comandos acabou de ser esvaziada; se um armazem esta
+     * selecionado, o botao dele volta.
+     *
+     * <p>E o alvo que faltava. `clearCommandButtons` e do `MenuSystem`, roda
+     * quando ele reconstroi a barra, e nao tem como saber de um botao que um
+     * mod pos ali — some o nosso e fica o resto. Reagir a ele e reagir a causa,
+     * em vez de tentar adivinhar o que havia de errado com o botao.
+     *
+     * <p>O mod publicado que faz isso em producao tece o `MenuSystem` por
+     * exatamente esta razao, e eu nao tecia.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystem"
+           + ".clearCommandButtons(..))")
+    public void afterCommandButtonsCleared(JoinPoint joinPoint) {
+        try {
+            Object menuSystem = joinPoint.getTarget();
+            Object box = read(menuSystem, "selectionBox");
+            Object item = box == null ? null : read(box, "selectedItem");
+            if (item == null) {
+                return;
+            }
+            if (!item.getClass().getName()
+                    .endsWith("SingleWorldElementSelected")) {
+                return;
+            }
+            offerButton(item, "afterClear");
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not restore the shop "
+                               + "toggle: " + failure);
+        }
+    }
+
     private static void offerButton(Object panel, String hook) {
         try {
             if (panel == null) {

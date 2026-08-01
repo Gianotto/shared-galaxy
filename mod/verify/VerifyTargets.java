@@ -86,6 +86,8 @@ public final class VerifyTargets {
         // painel entram na caixa de comandos.
         Class<?> menuSystem = require("fi.bugbyte.spacehaven.gui.MenuSystem");
         method(menuSystem, "addCommandButtonAsFirst", stageButton);
+        method(menuSystem, "clearCommandButtons");
+        field(menuSystem, "selectionBox", false);
         method(menuSystem, "removeCommandButton", stageButton);
         field(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"),
               "menuSystem", false);
