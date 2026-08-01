@@ -227,24 +227,27 @@ public class ShopButtonAspect {
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        // O CAMINHO DO PROPRIO JOGO.
+        // NA CAIXA DE COMANDOS, no comeco da fila.
         //
-        // Este painel tem UMA unica chamada de `addButton` em toda a classe, e
-        // e a herdada de `AbstractSelectedBoxItem` — MOVE, DUPLICATE e
-        // DISMANTLE entram por ela. Ir direto ao `commandBox` foi contornar o
-        // caminho que o jogo usa, e o botao ficou intermitente de um jeito que
-        // nenhuma medicao explicou: sempre aceito, sempre dentro da tela, as
-        // vezes invisivel.
+        // Medido nas duas direcoes, com o jogador olhando a tela: pelo
+        // `addButton` do painel o controle vai para o rodape, quase fora da
+        // area de jogo; pelo `commandBox` ele fica junto de MOVE / DUPLICATE /
+        // DISMANTLE, que e onde alguem procuraria.
         //
-        // Entrar pela porta do jogo tambem devolve o botao ao ciclo de vida do
-        // painel: `close()` percorre `myButtons` e tira o que esta la.
-        java.lang.reflect.Method add = Class.forName(BOX_ITEM, true, loader)
-            .getDeclaredMethod("addButton",
-                Class.forName("fi.bugbyte.framework.screen.StageButton",
-                              true, loader));
-        add.setAccessible(true);
-        add.invoke(panel, button);
-        Object aceito = Boolean.TRUE;
+        // O caminho do painel parecia o certo por ser o do jogo, e nao e: os
+        // botoes do proprio painel chegam ao commandBox por outra rota.
+        Class<?> stageButton = Class.forName(
+            "fi.bugbyte.framework.screen.StageButton", true, loader);
+        Object aceito;
+        try {
+            commandBox.getClass()
+                .getMethod("addButtonAtIndex", stageButton, int.class)
+                .invoke(commandBox, button, Integer.valueOf(0));
+            aceito = Boolean.TRUE;
+        } catch (NoSuchMethodException semIndice) {
+            aceito = commandBox.getClass().getMethod("addButton", stageButton)
+                .invoke(commandBox, button);
+        }
 
         if (Boolean.FALSE.equals(aceito)) {
             trace(hook, id, "REFUSED, box " + antes + " -> "

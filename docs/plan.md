@@ -300,6 +300,20 @@ lives, and `SingleWorldElementSelected.makeFacilityAudioOnButton` is the game
 building exactly this kind of control — a working recipe to read rather than
 invent.
 
+**A storefront lands on top of somebody's ship.** Reported from a real
+session: the neighbour's shop appeared almost on top of the player's own ship.
+The server places it at the neighbour's `(x, y)` — which is the celestial
+body's position, not a free spot in the sector — so two members parked at the
+same rock arrive stacked.
+
+The game itself has the concept we are missing: a hyperspace jump opens a
+sector grid and lets the player position their ship, showing where other ships,
+bases, derelicts and asteroids already are. The placement to copy is that one.
+
+It belongs with the in-game work rather than with the server: the sector is
+generated on arrival, so the free-space question is only answerable where the
+game is running.
+
 **Send a copy on a manual save too, not only on autosaves.** The watcher
 deliberately ignores the `save/` folder today, on the grounds that the manual
 save is what the return sends. That reasoning holds for *the return* and not
