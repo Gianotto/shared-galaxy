@@ -68,7 +68,7 @@ public final class VerifyTargets {
             "fi.bugbyte.framework.screen.StageButton");
         Class<?> clickHandler = require(
             "fi.bugbyte.framework.screen.StageButton$clickHandler");
-        Class<?> buttons = require("fi.bugbyte.gen.compiled.TextButtons2");
+        Class<?> buttons = require("fi.bugbyte.gen.compiled.ToggleTextIconButtons1");
         Class<?> worldObject = require(
             "fi.bugbyte.spacehaven.world.elements.WorldObject");
         Class<?> features = require(
@@ -79,7 +79,12 @@ public final class VerifyTargets {
               "commandBox", false);
         method(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionCommandBox"),
                "addButton", stageButton);
-        method(buttons, "getBase");
+        method(buttons, "getBaseCheckBox1");
+        method(require("fi.bugbyte.framework.screen.ScalableToggleIconButton"),
+               "setHoldDown", boolean.class);
+        method(require(
+            "fi.bugbyte.spacehaven.gui.MenuSystemItems$AbstractSelectedBoxItem"),
+            "addButton", stageButton);
         Class<?> selBox = require(
             "fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox");
         Class<?> boxItem = require(

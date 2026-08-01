@@ -63,7 +63,14 @@ public class ShopButtonAspect {
         "fi.bugbyte.spacehaven.gui.MenuSystemItems$SingleWorldElementSelected";
     private static final String BOX_ITEM =
         "fi.bugbyte.spacehaven.gui.MenuSystemItems$AbstractSelectedBoxItem";
-    private static final String BUTTONS = "fi.bugbyte.gen.compiled.TextButtons2";
+    /**
+     * A fabrica de toggles em estilo caixa de selecao — a mesma familia do
+     * "ALLOW FOOD CONSUMPTION" do painel. Ser loja e uma CONFIGURACAO do
+     * armazem, nao uma acao como MOVE ou DISMANTLE, e o controle tem que dizer
+     * isso pela forma.
+     */
+    private static final String BUTTONS =
+        "fi.bugbyte.gen.compiled.ToggleTextIconButtons1";
     private static final String CLICK =
         "fi.bugbyte.framework.screen.StageButton$clickHandler";
 
@@ -179,9 +186,10 @@ public class ShopButtonAspect {
         int antes = caixa == null ? -1 : tamanho(read(caixa, "buttons"));
         int tirados = dropOurs(caixa);
         final Object button = Class.forName(BUTTONS, true, loader)
-            .getMethod("getBase").invoke(null);
+            .getMethod("getBaseCheckBox1").invoke(null);
 
         label(button, id);
+        hold(button, id);
 
         Class<?> click = Class.forName(CLICK, true, loader);
         Object handler = Proxy.newProxyInstance(
@@ -189,11 +197,7 @@ public class ShopButtonAspect {
                 public Object invoke(Object proxy, Method method, Object[] args) {
                     if ("clicked".equals(method.getName())) {
                         toggle(id);
-                        try {
-                            label(button, id);
-                        } catch (Throwable ignored) {
-                            // the label is cosmetic; the choice is already made
-                        }
+                        hold(button, id);
                         return null;
                     }
                     if ("toString".equals(method.getName())) {
@@ -223,45 +227,25 @@ public class ShopButtonAspect {
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        // NO COMECO DA FILA, nao no fim.
+        // O CAMINHO DO PROPRIO JOGO.
         //
-        // `redoButtonPositions` distribui a partir de `cx` somando a largura
-        // de cada botao, e a nossa muda com o rotulo: "SET AS SHOP" e bem mais
-        // largo que "SHOP: ON". O ultimo da fila e o que cai fora da tela
-        // quando a soma estoura — e foi por isso que ele apareceu no rodape na
-        // primeira versao e some de forma aparentemente aleatoria agora.
-        Class<?> stageButton = Class.forName(
-            "fi.bugbyte.framework.screen.StageButton", true, loader);
-        Object aceito;
-        try {
-            commandBox.getClass()
-                .getMethod("addButtonAtIndex", stageButton, int.class)
-                .invoke(commandBox, button, Integer.valueOf(0));
-            aceito = Boolean.TRUE;
-        } catch (NoSuchMethodException semIndice) {
-            aceito = commandBox.getClass().getMethod("addButton", stageButton)
-                .invoke(commandBox, button);
-        }
-
-        // Registra tambem na lista do painel. E ela que o `close()` percorre
-        // para tirar os botoes quando a selecao muda — sem estar la, o nosso
-        // fica fora do ciclo de vida do painel, e reabrir a selecao devolve um
-        // painel onde ele nao existe mais.
-        Object myButtons = read(panel, "myButtons");
-        if (myButtons != null) {
-            myButtons.getClass().getMethod("add", Object.class)
-                .invoke(myButtons, button);
-        }
-
-        // TODA tentativa, nao so a recusa.
+        // Este painel tem UMA unica chamada de `addButton` em toda a classe, e
+        // e a herdada de `AbstractSelectedBoxItem` — MOVE, DUPLICATE e
+        // DISMANTLE entram por ela. Ir direto ao `commandBox` foi contornar o
+        // caminho que o jogo usa, e o botao ficou intermitente de um jeito que
+        // nenhuma medicao explicou: sempre aceito, sempre dentro da tela, as
+        // vezes invisivel.
         //
-        // A versao anterior so falava quando a caixa recusava, e quando o
-        // botao sumia o terminal ficava mudo — o que nao distinguia "o
-        // conselho nao rodou" de "rodou, foi aceito, e algo tirou depois".
-        // Silencio que cabe em duas explicacoes nao e diagnostico.
-        // Silencio quando da certo. O diagnostico que trouxe o botao ate aqui
-        // vive em `geometry`, e volta ligando a linha abaixo — foi ele que
-        // mostrou que a insercao sempre funcionava e o problema era posicao.
+        // Entrar pela porta do jogo tambem devolve o botao ao ciclo de vida do
+        // painel: `close()` percorre `myButtons` e tira o que esta la.
+        java.lang.reflect.Method add = Class.forName(BOX_ITEM, true, loader)
+            .getDeclaredMethod("addButton",
+                Class.forName("fi.bugbyte.framework.screen.StageButton",
+                              true, loader));
+        add.setAccessible(true);
+        add.invoke(panel, button);
+        Object aceito = Boolean.TRUE;
+
         if (Boolean.FALSE.equals(aceito)) {
             trace(hook, id, "REFUSED, box " + antes + " -> "
                            + tamanho(read(commandBox, "buttons"))
@@ -372,9 +356,22 @@ public class ShopButtonAspect {
 
 
     private static void label(Object button, String id) throws Exception {
-        String texto = id.equals(current()) ? "SHOP: ON" : "SET AS SHOP";
+        // Um so texto. Quem diz ligado ou desligado e o proprio toggle, e
+        // trocar o rotulo junto seria dizer duas vezes com palavras
+        // diferentes.
         button.getClass().getMethod("setText", String.class)
-            .invoke(button, texto);
+            .invoke(button, "SHOP");
+    }
+
+    /** Deixa o toggle no estado que ele representa. */
+    private static void hold(Object button, String id) {
+        try {
+            button.getClass().getMethod("setHoldDown", boolean.class)
+                .invoke(button, Boolean.valueOf(id.equals(current())));
+        } catch (Throwable semHold) {
+            System.err.println("[shared-galaxy] could not set the toggle "
+                               + "state: " + semHold);
+        }
     }
 
     /** One shop at a time: choosing another moves it, choosing this one closes it. */
