@@ -34,6 +34,7 @@ someone's run. `checkout`, `return` and `play` detect the process and refuse.
 from __future__ import annotations
 
 import argparse
+import http.client
 import io
 import json
 import os
@@ -156,6 +157,13 @@ def request(method: str, path: str, body: bytes | None = None,
         raise ClientError(f"the server refused ({exc.code}): {detail}") from exc
     except urllib.error.URLError as exc:
         raise ClientError(f"could not reach {base_url()}: {exc.reason}") from exc
+    except (OSError, http.client.HTTPException) as exc:
+        # A conexão caiu no meio. `RemoteDisconnected` não é `URLError` nem
+        # `HTTPError`, então escapava cru — e quem estava devolvendo um save via
+        # um traceback em vez da mensagem que diz onde a partida está e como
+        # devolvê-la. Uma sala aberta a sessenta e quatro pessoas vai ver isto.
+        raise ClientError(
+            f"the connection to {base_url()} broke: {exc}") from exc
 
 
 def json_request(method: str, path: str, payload: dict | None = None,

@@ -422,3 +422,49 @@ class RecoveryTestCase(unittest.TestCase):
 class _Args:
     def __init__(self, **kw): self.__dict__.update(kw)
     def __getattr__(self, _): return None
+
+
+class ConnectionFailureTestCase(unittest.TestCase):
+    """Quando a conexão cai no meio de uma devolução.
+
+    O cliente tem uma mensagem exatamente para isso: diz onde a partida está e
+    como devolvê-la depois. Ela só aparece se o erro chegar como `ClientError`,
+    e `RemoteDisconnected` não é `URLError` nem `HTTPError` — escapava cru, e o
+    jogador via um traceback no lugar da instrução. Numa sala aberta a sessenta
+    e quatro pessoas, isso acontece.
+    """
+
+    def _falha_com(self, erro: Exception):
+        real = client.urllib.request.urlopen
+
+        def falso(*_a, **_k):
+            raise erro
+
+        client.urllib.request.urlopen = falso
+        self.addCleanup(
+            lambda: setattr(client.urllib.request, "urlopen", real))
+
+    def _pede(self):
+        real_token = client.token
+        client.token = lambda: "x"
+        self.addCleanup(lambda: setattr(client, "token", real_token))
+        return client.request("POST", "/api/v1/rooms/X/checkin", b"z")
+
+    def test_a_dropped_connection_becomes_a_readable_error(self):
+        import http.client
+        self._falha_com(http.client.RemoteDisconnected(
+            "Remote end closed connection without response"))
+        with self.assertRaises(client.ClientError) as erro:
+            self._pede()
+        self.assertIn("broke", str(erro.exception))
+
+    def test_a_reset_connection_becomes_a_readable_error(self):
+        self._falha_com(ConnectionResetError("Connection reset by peer"))
+        with self.assertRaises(client.ClientError):
+            self._pede()
+
+    def test_a_refused_connection_still_says_where(self):
+        self._falha_com(client.urllib.error.URLError("Connection refused"))
+        with self.assertRaises(client.ClientError) as erro:
+            self._pede()
+        self.assertIn(client.base_url(), str(erro.exception))
