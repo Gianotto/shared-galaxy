@@ -42,7 +42,7 @@ import org.aspectj.lang.annotation.Aspect;
  *   TextButtons2.getBase()                 a button
  *   ScalableIconTextButton.setText         its label
  *   Proxy of StageButton$clickHandler      the click
- *   AbstractSelectedBoxItem.addButton      protected, so setAccessible
+ *   selectionBox -> commandBox -> addButton  next to MOVE and DISMANTLE
  * </pre>
  *
  * <p>The panel is rebuilt every time it opens, so the button is added on every
@@ -136,12 +136,26 @@ public class ShopButtonAspect {
         button.getClass().getMethod("setClickHandler", click)
             .invoke(button, handler);
 
-        Method add = Class.forName(BOX_ITEM, true, loader)
-            .getDeclaredMethod("addButton",
+        // NA CAIXA DE COMANDOS, junto de MOVE / DUPLICATE / DISMANTLE.
+        //
+        // A primeira versao chamou o `addButton` protegido do
+        // `AbstractSelectedBoxItem`, que repassa para o `selectionBox` — outra
+        // caixa. O botao existia e funcionava, mas aparecia no rodape, quase
+        // fora da area do jogo, e o jogador quase nao o achou. O
+        // ClaimAllDerelicts ja fazia o certo e eu li a receita pela metade:
+        // selectionBox -> commandBox -> addButton.
+        Object selectionBox = read(panel, "selectionBox");
+        if (selectionBox == null) {
+            throw new IllegalStateException("the panel has no selectionBox");
+        }
+        Object commandBox = read(selectionBox, "commandBox");
+        if (commandBox == null) {
+            throw new IllegalStateException("the panel has no commandBox");
+        }
+        commandBox.getClass().getMethod("addButton",
                 Class.forName("fi.bugbyte.framework.screen.StageButton",
-                              true, loader));
-        add.setAccessible(true);
-        add.invoke(panel, button);
+                              true, loader))
+            .invoke(commandBox, button);
     }
 
     private static void label(Object button, String id) throws Exception {

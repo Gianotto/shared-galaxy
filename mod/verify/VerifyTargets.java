@@ -64,8 +64,6 @@ public final class VerifyTargets {
         // O botão que faz de um armazém a sua loja.
         Class<?> panel = require(
             "fi.bugbyte.spacehaven.gui.MenuSystemItems$SingleWorldElementSelected");
-        Class<?> boxItem = require(
-            "fi.bugbyte.spacehaven.gui.MenuSystemItems$AbstractSelectedBoxItem");
         Class<?> stageButton = require(
             "fi.bugbyte.framework.screen.StageButton");
         Class<?> clickHandler = require(
@@ -77,7 +75,10 @@ public final class VerifyTargets {
             "fi.bugbyte.spacehaven.world.elements.WorldObject$ObjectFeatures");
 
         field(panel, "element", false);
-        method(boxItem, "addButton", stageButton);
+        field(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"),
+              "commandBox", false);
+        method(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionCommandBox"),
+               "addButton", stageButton);
         method(buttons, "getBase");
         method(stageButton, "setClickHandler", clickHandler);
         method(require("fi.bugbyte.framework.screen.ScalableIconTextButton"),
