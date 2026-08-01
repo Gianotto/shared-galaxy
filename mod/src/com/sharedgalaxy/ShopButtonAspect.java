@@ -69,6 +69,12 @@ public class ShopButtonAspect {
      * armazem, nao uma acao como MOVE ou DISMANTLE, e o controle tem que dizer
      * isso pela forma.
      */
+    /** O armazem que esta selecionado agora, ou null. */
+    private static volatile String selected;
+
+    /** O nosso toggle enquanto o painel dele estiver aberto. */
+    private static Object mine;
+
     private static final String BUTTONS =
         "fi.bugbyte.gen.compiled.ToggleTextIconButtons1";
     private static final String CLICK =
@@ -156,15 +162,142 @@ public class ShopButtonAspect {
             if (!isStorage(element)) {
                 return;     // nao e armazem: silencio aqui e correto
             }
-            final String id = String.valueOf(
+            // So registra QUAL armazem esta selecionado. O controle vive no
+            // painel OVERVIEW, e e de la que ele e posto na tela.
+            selected = String.valueOf(
                 element.getClass().getMethod("getId").invoke(element));
-            addButton(panel, id, hook);
         } catch (Throwable failure) {
             // A panel without our button is a small loss; a crash while
             // somebody clicks a crate is not.
             System.err.println("[shared-galaxy] could not add the shop button: "
                                + failure);
         }
+    }
+
+    /**
+     * O controle do armazem no OVERVIEW acabou de abrir: o toggle entra ali.
+     *
+     * <p>Aqui o registro e na TELA (`Screen.addButton`), nao numa caixa que o
+     * `MenuSystem` administra e esvazia. Foi por isso que a barra de comandos
+     * nunca parou de piscar: ela tem dono, e o dono nao tem contrato com mods.
+     *
+     * <p>E o lugar certo tambem pelo sentido: ser loja e uma configuracao do
+     * armazem, vizinha do "allow food consumption", nao uma acao ao lado de
+     * MOVE e DISMANTLE.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
+           + "$StorageControl.open(..))")
+    public void afterStorageControlOpened(JoinPoint joinPoint) {
+        Object[] args = joinPoint.getArgs();
+        String id = selected;
+        if (args.length == 0 || args[0] == null || id == null) {
+            return;
+        }
+        try {
+            Object screen = args[0];
+            ClassLoader loader = screen.getClass().getClassLoader();
+            Object button = Class.forName(BUTTONS, true, loader)
+                .getMethod("getBaseCheckBox1").invoke(null);
+            label(button, id);
+            hold(button, id);
+            handler(button, id, loader);
+            screen.getClass().getMethod("addButton",
+                    Class.forName("fi.bugbyte.framework.screen.StageButton",
+                                  true, loader))
+                .invoke(screen, button);
+            mine = button;
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not add the shop toggle: "
+                               + failure);
+        }
+    }
+
+    /**
+     * Poe o toggle ao lado do de comida.
+     *
+     * <p>A posicao sai do proprio controle do jogo, nunca de coordenadas
+     * inventadas: o `toggleEatingAllowed` acabou de ser colocado, e o nosso vai
+     * ao lado dele. Se aquele nao existir — armazem so de corpos, por exemplo —
+     * serve o botao de transferencia.
+     */
+    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
+           + "$StorageControl.setPos(..))")
+    public void afterStorageControlMoved(JoinPoint joinPoint) {
+        Object button = mine;
+        if (button == null) {
+            return;
+        }
+        try {
+            Object control = joinPoint.getTarget();
+            Object vizinho = read(control, "toggleEatingAllowed");
+            if (vizinho == null) {
+                vizinho = read(control, "shipLevelTransfer");
+            }
+            if (vizinho == null) {
+                return;
+            }
+            float x = ((Float) vizinho.getClass().getMethod("getX")
+                .invoke(vizinho)).floatValue();
+            float y = ((Float) vizinho.getClass().getMethod("getY")
+                .invoke(vizinho)).floatValue();
+            float w = ((Float) vizinho.getClass().getMethod("getWidth")
+                .invoke(vizinho)).floatValue();
+            button.getClass().getMethod("setPos", float.class, float.class)
+                .invoke(button, Float.valueOf(x + w + 6f), Float.valueOf(y));
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not place the shop "
+                               + "toggle: " + failure);
+        }
+    }
+
+    /** O painel fechou: o toggle sai com ele. */
+    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
+           + "$StorageControl.close(..))")
+    public void afterStorageControlClosed(JoinPoint joinPoint) {
+        Object button = mine;
+        Object[] args = joinPoint.getArgs();
+        mine = null;
+        if (button == null || args.length == 0 || args[0] == null) {
+            return;
+        }
+        try {
+            Object screen = args[0];
+            screen.getClass().getMethod("removeButton",
+                    Class.forName("fi.bugbyte.framework.screen.StageButton",
+                                  true, screen.getClass().getClassLoader()))
+                .invoke(screen, button);
+        } catch (Throwable failure) {
+            System.err.println("[shared-galaxy] could not remove the shop "
+                               + "toggle: " + failure);
+        }
+    }
+
+    /** O clique, por proxy: a interface tem um metodo so. */
+    private static void handler(final Object button, final String id,
+                               ClassLoader loader) throws Exception {
+        Class<?> click = Class.forName(CLICK, true, loader);
+        Object proxy = Proxy.newProxyInstance(
+            loader, new Class<?>[]{click}, new InvocationHandler() {
+                public Object invoke(Object self, Method method, Object[] a) {
+                    if ("clicked".equals(method.getName())) {
+                        toggle(id);
+                        hold(button, id);
+                        return null;
+                    }
+                    if ("toString".equals(method.getName())) {
+                        return MARKER;
+                    }
+                    if ("hashCode".equals(method.getName())) {
+                        return Integer.valueOf(System.identityHashCode(self));
+                    }
+                    if ("equals".equals(method.getName())) {
+                        return Boolean.valueOf(self == a[0]);
+                    }
+                    return null;
+                }
+            });
+        button.getClass().getMethod("setClickHandler", click)
+            .invoke(button, proxy);
     }
 
     /**
