@@ -624,6 +624,23 @@ save. Crew, onboard AI and bank come along, because the game's own bookkeeping
 comes with them — and `inject_ship` already allocated fresh `entId`s for crew,
 so the fix was which source to hand it, not new mechanics.
 
+## 24e. The starmap's Y axis grows upward, SVG's grows downward
+
+Measured in a player's save against the game's own star map:
+
+| system | y | where the game draws it |
+|---|---|---|
+| Strange Kallisti Border | 232444 | highest |
+| The Major Sotlax Wreath | 213259 | middle |
+| Magic Garuda Territory | 150263 | lowest |
+
+Bigger `y` is higher on screen, so the game's axis grows upward. SVG's grows
+downward, and drawing the coordinate straight through produced a map mirrored
+vertically — which is worse than no map, because it looks authoritative and
+sends people the wrong way.
+
+The room map now draws `h - y`.
+
 ## 24c. The game already has a log window, and it takes text from anyone
 
 `fi.bugbyte.spacehaven.gui.GameLog.addLog(String, LogType, Object)` is public

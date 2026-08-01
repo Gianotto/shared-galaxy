@@ -282,13 +282,6 @@ starting ship, and that is what gets uploaded. A fresh game is not day zero —
 measured across saves made minutes apart, the game starts a colony at about day
 1.3.
 
-**The room map is upside down.** Reported from the site against the game's own
-star map: the same systems, mirrored vertically. Almost certainly the y axis —
-the game's grows downward and SVG's grows downward too, so somewhere one of
-them is being flipped on the way in. Worth fixing before anyone tries to use
-the map to find a neighbour, because a mirrored map is worse than no map:
-it looks authoritative and sends people the wrong way.
-
 **Let a neighbour fade from the sector after a while away.** A storefront
 appears for every member in the same system and nothing takes it out again, so
 somebody who joined once and never came back sits there for good — and a room

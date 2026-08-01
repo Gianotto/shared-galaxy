@@ -210,3 +210,37 @@ class FingerprintStabilityTestCase(unittest.TestCase):
                 fh.write(self._galaxy().replace('seed="99"', 'seed="1234"'))
             self.assertNotEqual(digest_of(a), digest_of(b),
                                 "duas galáxias diferentes deram o mesmo digest")
+
+
+class OrientationTestCase(unittest.TestCase):
+    """O mapa não pode sair espelhado.
+
+    Medido contra o mapa estelar do jogo, no save de um jogador: `Strange
+    Kallisti Border` (y=232444) aparece ACIMA de `Magic Garuda Territory`
+    (y=150263). No jogo, Y maior é mais alto; em SVG, Y maior é mais baixo.
+
+    Um mapa espelhado é pior que nenhum — parece confiável e manda a pessoa
+    para o lado errado.
+    """
+
+    def _svg(self) -> str:
+        galaxia = {"w": 900000, "h": 400000, "systems": [
+            {"systemId": "1", "name": "alto", "x": 100000, "y": 232444,
+             "bodies": 1, "sectors": 0, "clouds": 0},
+            {"systemId": "2", "name": "baixo", "x": 100000, "y": 150263,
+             "bodies": 1, "sectors": 0, "clouds": 0},
+        ]}
+        return starmap_svg(galaxia, [], "en")
+
+    def test_a_bigger_game_y_draws_higher(self):
+        svg = self._svg()
+        import re
+        # Só os pontos: cada sistema também tem um círculo invisível maior,
+        # que é o alvo do hover.
+        cys = [float(v) for v in
+               re.findall(r'class="dot"[^>]*cy="([\d.]+)"', svg)]
+        self.assertEqual(len(cys), 2, f"esperava dois pontos, veio {len(cys)}")
+        alto, baixo = cys[0], cys[1]
+        self.assertLess(alto, baixo,
+                        "o sistema de Y maior no jogo tem que ficar mais alto "
+                        "no SVG (cy menor)")

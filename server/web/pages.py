@@ -202,7 +202,18 @@ def starmap_svg(galaxy: dict, roster: list, lang: str,
     height = gh * scale + 2 * MAP_PAD
 
     def px(s):
-        return MAP_PAD + s["x"] * scale, MAP_PAD + s["y"] * scale
+        """Do sistema de coordenadas do jogo para o do SVG.
+
+        O Y PRECISA VIRAR. Medido contra o mapa estelar do proprio jogo, no
+        save de um jogador: `Strange Kallisti Border` (y=232444) aparece ACIMA
+        de `The Major Sotlax Wreath` (y=213259), que aparece acima de `Magic
+        Garuda Territory` (y=150263). Ou seja, no jogo Y maior e mais alto na
+        tela — o eixo cresce para cima. Em SVG ele cresce para baixo.
+
+        Desenhar direto entregava um mapa espelhado na vertical, que e pior que
+        nao ter mapa: parece confiavel e manda a pessoa para o lado errado.
+        """
+        return MAP_PAD + s["x"] * scale, MAP_PAD + (gh - s["y"]) * scale
 
     visits = visits or {}
     here: dict = {}
