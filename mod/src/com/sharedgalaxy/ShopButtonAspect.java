@@ -93,25 +93,24 @@ public class ShopButtonAspect {
         if (!args[0].getClass().getName().endsWith("SingleWorldElementSelected")) {
             return;
         }
-        offerButton(args[0]);
+        offerButton(args[0], joinPoint.getSignature().getName());
     }
 
     @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystemItems"
            + "$SingleWorldElementSelected.open(..))")
     public void afterPanelOpened(JoinPoint joinPoint) {
-        offerButton(joinPoint.getTarget());
+        offerButton(joinPoint.getTarget(), "open");
     }
 
-    private static void offerButton(Object panel) {
+    private static void offerButton(Object panel, String hook) {
         try {
             if (panel == null) {
-                System.out.println("[shared-galaxy] shop button: no panel");
+                trace(hook, "-", "no panel", null);
                 return;
             }
             Object element = read(panel, "element");
             if (element == null) {
-                System.out.println("[shared-galaxy] shop button: panel has no "
-                                   + "element");
+                trace(hook, "-", "panel has no element", panel);
                 return;
             }
             if (!isStorage(element)) {
@@ -119,7 +118,7 @@ public class ShopButtonAspect {
             }
             final String id = String.valueOf(
                 element.getClass().getMethod("getId").invoke(element));
-            addButton(panel, id);
+            addButton(panel, id, hook);
         } catch (Throwable failure) {
             // A panel without our button is a small loss; a crash while
             // somebody clicks a crate is not.
@@ -141,7 +140,18 @@ public class ShopButtonAspect {
         return features != null && read(features, "stores") != null;
     }
 
-    private static void addButton(final Object panel, final String id)
+    /** Uma linha por evento, com tudo que decide o comportamento. */
+    private static void trace(String hook, String id, String o_que,
+                              Object panel) {
+        System.out.println("[shared-galaxy] " + hook + " storage=" + id
+                           + " panel=" + (panel == null ? "null"
+                               : Integer.toHexString(
+                                   System.identityHashCode(panel)))
+                           + " :: " + o_que);
+    }
+
+    private static void addButton(final Object panel, final String id,
+                                  final String hook)
             throws Exception {
         ClassLoader loader = panel.getClass().getClassLoader();
 
@@ -154,6 +164,7 @@ public class ShopButtonAspect {
         // terminal de excecoes numa sequencia que funciona.
         Object selectionBox = read(panel, "selectionBox");
         if (selectionBox == null) {
+            trace(hook, id, "no selectionBox yet (open() covers it)", panel);
             return;
         }
 
@@ -166,7 +177,8 @@ public class ShopButtonAspect {
         // selecao o botao nunca mais aparecia. Perguntar era o erro; remover e
         // idempotente e nao depende de a caixa estar limpa.
         Object caixa = read(selectionBox, "commandBox");
-        dropOurs(caixa);
+        int antes = caixa == null ? -1 : tamanho(read(caixa, "buttons"));
+        int tirados = dropOurs(caixa);
         final Object button = Class.forName(BUTTONS, true, loader)
             .getMethod("getBase").invoke(null);
 
@@ -233,11 +245,11 @@ public class ShopButtonAspect {
         // botao sumia o terminal ficava mudo — o que nao distinguia "o
         // conselho nao rodou" de "rodou, foi aceito, e algo tirou depois".
         // Silencio que cabe em duas explicacoes nao e diagnostico.
-        if (Boolean.FALSE.equals(aceito)) {
-            System.err.println("[shared-galaxy] the command box refused the "
-                               + "shop button (storage " + id + ", box had "
-                               + count(commandBox) + ")");
-        }
+        trace(hook, id, "box " + antes + " -> "
+                       + tamanho(read(commandBox, "buttons"))
+                       + ", dropped=" + tirados + ", accepted=" + aceito
+                       + ", boxId=" + Integer.toHexString(
+                           System.identityHashCode(commandBox)), panel);
     }
 
     /**
@@ -246,11 +258,12 @@ public class ShopButtonAspect {
      * Reconhecidos pelo que o proxy do clique responde a `toString`: o objeto
      * muda a cada selecao, a marca nao.
      */
-    private static void dropOurs(Object commandBox) {
+    private static int dropOurs(Object commandBox) {
         Object lista = commandBox == null ? null : read(commandBox, "buttons");
         if (lista == null) {
-            return;
+            return 0;
         }
+        int tirados = 0;
         try {
             java.lang.reflect.Method get = lista.getClass()
                 .getMethod("get", int.class);
@@ -266,12 +279,14 @@ public class ShopButtonAspect {
                 Object h = b.getClass().getMethod("getClickHandler").invoke(b);
                 if (h != null && MARKER.equals(h.toString())) {
                     remove.invoke(commandBox, b);
+                    tirados++;
                 }
             }
         } catch (Throwable failure) {
             System.err.println("[shared-galaxy] could not clear the old shop "
                                + "button: " + failure);
         }
+        return tirados;
     }
 
     private static int tamanho(Object lista) {
