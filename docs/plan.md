@@ -393,6 +393,25 @@ That is precisely the hole reconciliation has to fill, and it is worth stating
 plainly before anyone in a room hands cargo to a shopfront believing a neighbour
 is on the other side of it.
 
+**Consignment is one storage on your own ship.** Decided after looking at
+three ways to mark what is for sale.
+
+The player points at one storage and that is the shop. From then on they manage
+it with the game's own interface: what they move in is for sale, what they take
+out is not. No catalogue, no new screen, and dragging cargo is a mechanic they
+already know.
+
+The other two lost for different reasons. Reusing the storage `<rules>` would
+give them a meaning the game does not — they are autotransfer rules, so anybody
+using "Bring here" to tidy their ship would be putting cargo up for sale without
+knowing. A new button on the storage panel would be clearer and costs interface
+written blind, in a game only the player can see.
+
+It also matches the game's own model: an NPC bank has `offerList` and
+`holdBackItems` — it offers the cargo it has, minus what it holds back. For the
+game, having is offering. A dedicated storage is exactly "what I have to sell",
+kept apart from "what I have".
+
 **Phase 3 — consignment and reconciliation.** Depends on the result of stage A.
 Market stall, not cargo hold: only the consigned goods go into the portrait, `ca`
 limits how much the ship buys, and reconciliation debits the consignment and
