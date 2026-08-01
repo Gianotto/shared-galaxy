@@ -152,10 +152,25 @@ public class ShopButtonAspect {
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        commandBox.getClass().getMethod("addButton",
+        Object aceito = commandBox.getClass().getMethod("addButton",
                 Class.forName("fi.bugbyte.framework.screen.StageButton",
                               true, loader))
             .invoke(commandBox, button);
+
+        // Registra tambem na lista do painel. E ela que o `close()` percorre
+        // para tirar os botoes quando a selecao muda — sem estar la, o nosso
+        // fica fora do ciclo de vida do painel, e reabrir a selecao devolve um
+        // painel onde ele nao existe mais.
+        Object myButtons = read(panel, "myButtons");
+        if (myButtons != null) {
+            myButtons.getClass().getMethod("add", Object.class)
+                .invoke(myButtons, button);
+        }
+
+        if (Boolean.FALSE.equals(aceito)) {
+            System.err.println("[shared-galaxy] the command box refused the "
+                               + "shop button (storage " + id + ")");
+        }
     }
 
     private static void label(Object button, String id) throws Exception {
