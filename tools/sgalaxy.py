@@ -1092,6 +1092,44 @@ def cmd_install_mod(args) -> int:
         raise ClientError(str(erro)) from erro
 
 
+def cmd_shop(args) -> int:
+    """Escolhe de qual armazém da tua nave os vizinhos podem comprar.
+
+    Sem argumento, lista os armazéns. Com `--set`, escolhe. Com `--close`,
+    fecha a loja.
+
+    Depois de escolhido, a loja se administra dentro do jogo: o que você mover
+    para aquele armazém está à venda, o que tirar sai. Não há catálogo aqui de
+    propósito — arrastar carga é uma mecânica que você já conhece, e o que está
+    fisicamente lá é a única promessa que dá para cumprir.
+    """
+    if args.close:
+        data = json_request("PUT", f"/api/v1/rooms/{args.room}/shop",
+                            {"storageId": None})
+        print(data["message"])
+        return 0
+    if args.set:
+        data = json_request("PUT", f"/api/v1/rooms/{args.room}/shop",
+                            {"storageId": args.set})
+        print(data["message"])
+        return 0
+
+    data = json_request("GET", f"/api/v1/rooms/{args.room}/shop")
+    if not data["storages"]:
+        print("no storage found on your ship in the save the server has.")
+        return 1
+    print(f"{'':2}{'storage':<10}{'where':<12}{'stacks':>7}{'units':>7}")
+    for a in data["storages"]:
+        marca = "->" if a["isShop"] else "  "
+        onde = f"({a['at'][0]},{a['at'][1]})"
+        print(f"{marca}{a['id']:<10}{onde:<12}{a['stacks']:>7}{a['units']:>7}")
+    print()
+    print(f"  {data['message']}")
+    if not data["shopStorageId"]:
+        print(f"  {prog()} shop {args.room} --set STORAGE")
+    return 0
+
+
 def cmd_status(args) -> int:
     """What is open, before you launch the wrong save by accident."""
     data = json_request("GET", f"/api/v1/rooms/{args.room}/state")
@@ -1249,6 +1287,13 @@ def main() -> int:
     p.add_argument("--uninstall", action="store_true", help="undo it")
     p.add_argument("--status", action="store_true", help="just report")
     p.set_defaults(func=cmd_install_mod)
+
+    p = sub.add_parser("shop",
+                       help="pick which storage your neighbours can buy from")
+    p.add_argument("room")
+    p.add_argument("--set", metavar="STORAGE", help="make this storage the shop")
+    p.add_argument("--close", action="store_true", help="stop selling")
+    p.set_defaults(func=cmd_shop)
 
     p = sub.add_parser("status",
                        help="what is open, before you launch the game")

@@ -249,6 +249,21 @@ def create_lease(conn: psycopg.Connection, room_id: str, player_id: int,
         (room_id, player_id, delivered_id, expires_at)).fetchone()
 
 
+def get_version(conn: psycopg.Connection, version_id) -> dict | None:
+    if version_id is None:
+        return None
+    return conn.execute("SELECT * FROM save_version WHERE id = %s",
+                        (version_id,)).fetchone()
+
+
+def set_shop_storage(conn: psycopg.Connection, room_id: str, player_id: int,
+                     storage_id: str | None) -> None:
+    conn.execute(
+        """UPDATE membership SET shop_storage_id = %s
+            WHERE room_id = %s AND player_id = %s""",
+        (storage_id, room_id, player_id))
+
+
 def set_injected_sids(conn: psycopg.Connection, lease_id: int,
                       sids: list) -> None:
     """Anota o que o servidor montou dentro do save entregue.

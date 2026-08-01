@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import datetime as dt
+import copy
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ from server.domain import rules
 from server.galaxy import fingerprint, presence
 from sgalaxy import discovery as discovering
 from sgalaxy import graft as grafting
+from sgalaxy import shop as shopping
 from sgalaxy import storefront
 from sgalaxy.savefile import SaveFile
 from server.storage import blobs
@@ -497,6 +499,98 @@ async def join_room(room_id: str, request: Request,
                         if grafted else
                         "save adopted as canonical. The server owns it from "
                         "now on.")}
+
+
+def _player_ship_of(data: bytes):
+    """A nave do jogador dentro de um zip de save, com a arvore do jogo.
+
+    Havendo mais de uma, a de mais tripulacao — e a casa (secao 1.10).
+    """
+    with blobs.with_unpacked(data) as folder:
+        sf = SaveFile(folder)
+        candidatas = [ship for _doc, ship in sf.ships()
+                      if (ship.find("settings") is not None
+                          and ship.find("settings").get("of")
+                          == presence.PLAYER_FACTION)]
+        if not candidatas:
+            return None, None
+        melhor = max(candidatas,
+                     key=lambda sh: len(sh.findall(".//characters/c")))
+        return sf.main, copy.deepcopy(melhor)
+
+
+@app.get("/api/v1/rooms/{room_id}/shop")
+def shop_state(room_id: str, player: dict = Depends(current_player)):
+    """Os armazens da nave do jogador, e qual deles e a loja.
+
+    Os armazens saem do save canonico guardado — o servidor nao adivinha o que
+    ha na nave de ninguem, ele le o que a pessoa devolveu.
+    """
+    with db.pool().connection() as conn:
+        _require_room(conn, room_id)
+        membership = db.get_membership(conn, room_id, player["id"])
+        if membership is None:
+            raise HTTPException(403, "you are not in this room")
+        versao = db.get_version(conn, membership["canonical_id"])
+    if versao is None:
+        raise HTTPException(409, "this membership has no canonical save yet")
+
+    _game, nave = _player_ship_of(store().get(versao["sha256"]))
+    if nave is None:
+        raise HTTPException(409, "could not find your ship in the stored save")
+
+    armazens = shopping.storages(nave)
+    escolhida = membership["shop_storage_id"]
+    return {
+        "roomId": room_id,
+        "shopStorageId": escolhida,
+        "storages": [{
+            "id": a["id"], "at": [a["x"], a["y"]],
+            "stacks": a["stacks"], "units": a["units"],
+            "isShop": a["id"] == escolhida,
+            "resources": a["contents"],
+        } for a in armazens],
+        "message": ("nothing is for sale: pick a storage and move cargo into "
+                    "it with the game's own interface"
+                    if not escolhida else
+                    "what is in that storage is what your neighbours can buy"),
+    }
+
+
+@app.put("/api/v1/rooms/{room_id}/shop")
+def set_shop(room_id: str, payload: dict, player: dict = Depends(current_player)):
+    """Escolhe o armazem que e a loja, ou desliga a loja com `null`.
+
+    O id e conferido contra o save guardado. Aceitar um id que nao existe daria
+    uma loja que nunca enche, e a pessoa passaria a sessao inteira sem entender
+    por que ninguem compra nada dela.
+    """
+    escolhida = payload.get("storageId")
+    with db.pool().connection() as conn:
+        _require_room(conn, room_id)
+        membership = db.get_membership(conn, room_id, player["id"])
+        if membership is None:
+            raise HTTPException(403, "you are not in this room")
+        if escolhida is not None:
+            versao = db.get_version(conn, membership["canonical_id"])
+            if versao is None:
+                raise HTTPException(409, "this membership has no canonical save")
+            _game, nave = _player_ship_of(store().get(versao["sha256"]))
+            existentes = {a["id"] for a in shopping.storages(nave or [])} \
+                if nave is not None else set()
+            if str(escolhida) not in existentes:
+                raise HTTPException(
+                    400, f"there is no storage {escolhida} on your ship. "
+                         f"The ones there are: "
+                         f"{', '.join(sorted(existentes)) or 'none'}")
+            escolhida = str(escolhida)
+        db.set_shop_storage(conn, room_id, player["id"], escolhida)
+
+    return {"roomId": room_id, "shopStorageId": escolhida,
+            "message": ("your shop is closed; nothing of yours is for sale"
+                        if escolhida is None else
+                        f"storage {escolhida} is your shop. What you move into "
+                        f"it is what your neighbours can buy")}
 
 
 # ---------------------------------------------------------------------------

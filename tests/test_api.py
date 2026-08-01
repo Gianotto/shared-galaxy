@@ -186,6 +186,102 @@ class ApiTestCase(unittest.TestCase):
                                  headers=self._auth(dono)).json()
         self.assertEqual(len(estado["players"]), 2)
 
+    # -- a loja: um armazem da propria nave --------------------------------
+
+    def _com_armazem(self) -> bytes:
+        """Um save com dois armazéns e um produtor, como uma nave de verdade."""
+        import io as _io, zipfile as _zip
+        xml = synthetic.build_game().replace(
+            "<inv>", "<e><l id=\"435\" x=\"28\" y=\"20\"><feat><inv>"
+            "<s elementaryId=\"712\" inStorage=\"25\" onTheWayIn=\"0\""
+            " onTheWayOut=\"0\"/></inv></feat></l></e>"
+            "<e><l id=\"608\" x=\"25\" y=\"20\"><feat><inv>"
+            "<s elementaryId=\"712\" inStorage=\"200\" onTheWayIn=\"0\""
+            " onTheWayOut=\"0\"/></inv></feat></l></e>"
+            "<e><l id=\"900\" x=\"10\" y=\"10\"><feat><prod><inv>"
+            "<s elementaryId=\"2053\" inStorage=\"40\" onTheWayIn=\"0\""
+            " onTheWayOut=\"0\"/></inv></prod></feat></l></e><inv>", 1)
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, "w") as zf:
+            zf.writestr("game", xml)
+            zf.writestr("info", f'<info version="21" date="{synthetic.FRESH_DATE}"/>')
+        return buf.getvalue()
+
+    def test_nothing_is_for_sale_by_default(self):
+        """Consentimento é a pessoa mover carga, não o servidor decidir."""
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        r = self.client.get(f"/api/v1/rooms/{room['id']}/shop",
+                            headers=self._auth(eu))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIsNone(r.json()["shopStorageId"])
+
+    def test_the_storages_come_from_the_stored_save(self):
+        """O servidor não adivinha o que há na nave: lê o que foi devolvido."""
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        armazens = self.client.get(f"/api/v1/rooms/{room['id']}/shop",
+                                   headers=self._auth(eu)).json()["storages"]
+        ids = {a["id"] for a in armazens}
+        self.assertEqual(ids, {"435", "608"})
+        self.assertNotIn("900", ids, "ofereceu o insumo de uma máquina")
+
+    def test_choosing_a_storage_opens_the_shop(self):
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        r = self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                            json={"storageId": "435"}, headers=self._auth(eu))
+        self.assertEqual(r.status_code, 200, r.text)
+        estado = self.client.get(f"/api/v1/rooms/{room['id']}/shop",
+                                 headers=self._auth(eu)).json()
+        self.assertEqual(estado["shopStorageId"], "435")
+        loja = [a for a in estado["storages"] if a["isShop"]][0]
+        self.assertEqual(loja["resources"], {"712": 25})
+
+    def test_a_storage_that_is_not_there_is_refused_with_the_list(self):
+        """Aceitar um id inventado daria uma loja que nunca enche, e a pessoa
+        passaria a sessão sem entender por que ninguém compra dela."""
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        r = self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                            json={"storageId": "999"}, headers=self._auth(eu))
+        self.assertEqual(r.status_code, 400)
+        detalhe = r.json()["detail"]
+        self.assertIn("435", detalhe)
+        self.assertIn("608", detalhe)
+
+    def test_a_machine_cannot_be_made_a_shop(self):
+        """Vender o insumo de um produtor é vender o combustível do motor."""
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        r = self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                            json={"storageId": "900"}, headers=self._auth(eu))
+        self.assertEqual(r.status_code, 400)
+
+    def test_the_shop_can_be_closed_again(self):
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                        json={"storageId": "435"}, headers=self._auth(eu))
+        r = self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                            json={"storageId": None}, headers=self._auth(eu))
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertIsNone(r.json()["shopStorageId"])
+
+    def test_only_members_have_a_shop(self):
+        forasteiro, dono = self._player(), self._player()
+        room = self._room(dono)
+        self._join(dono, room["id"], data=self._com_armazem())
+        r = self.client.get(f"/api/v1/rooms/{room['id']}/shop",
+                            headers=self._auth(forasteiro))
+        self.assertEqual(r.status_code, 403)
+
     # -- vizinhos no setor -------------------------------------------------
 
     def _com_casco(self, **kw) -> bytes:
