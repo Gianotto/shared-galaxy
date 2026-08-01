@@ -167,11 +167,36 @@ public class ShopButtonAspect {
                 .invoke(myButtons, button);
         }
 
-        if (Boolean.FALSE.equals(aceito)) {
-            System.err.println("[shared-galaxy] the command box refused the "
-                               + "shop button (storage " + id + ")");
+        // TODA tentativa, nao so a recusa.
+        //
+        // A versao anterior so falava quando a caixa recusava, e quando o
+        // botao sumia o terminal ficava mudo — o que nao distinguia "o
+        // conselho nao rodou" de "rodou, foi aceito, e algo tirou depois".
+        // Silencio que cabe em duas explicacoes nao e diagnostico.
+        System.out.println("[shared-galaxy] shop button -> storage " + id
+                           + " accepted=" + aceito
+                           + " boxHad=" + count(commandBox)
+                           + " myButtons=" + count(myButtons));
+    }
+
+    /** Quantos botoes uma caixa carrega, ou -1 se nao der para saber. */
+    private static int count(Object box) {
+        if (box == null) {
+            return -1;
+        }
+        Object lista = box.getClass().getName().endsWith("Array")
+            ? box : read(box, "buttons");
+        if (lista == null) {
+            return -1;
+        }
+        try {
+            return ((Integer) lista.getClass().getField("size").get(lista))
+                .intValue();
+        } catch (Throwable unknown) {
+            return -1;
         }
     }
+
 
     private static void label(Object button, String id) throws Exception {
         String texto = id.equals(current()) ? "SHOP: ON" : "SET AS SHOP";
