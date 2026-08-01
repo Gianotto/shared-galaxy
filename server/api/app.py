@@ -833,6 +833,10 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
             # chamado automatico delas sem calar os NPCs de verdade: o jogo so
             # sabe chamar por faccao, nunca por nave.
             "X-Neighbour-Sids": ",".join(str(x) for x in sids),
+            # Qual armazem e a loja, para o mod poder mostrar SHOP: ON no
+            # armazem certo. Sem isto o canal e so de saida, e a cada sessao o
+            # botao esqueceria o que a pessoa escolheu na anterior.
+            "X-Shop-Storage": str(membership["shop_storage_id"] or ""),
             "Content-Disposition": f'attachment; filename="{room_id}-save.zip"',
             "X-Lease-Id": str(lease["id"]),
             "X-Lease-Expires": expires.isoformat(),

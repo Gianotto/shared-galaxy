@@ -387,6 +387,28 @@ class ApiTestCase(unittest.TestCase):
         self.assertEqual(len(sids.split(",")), 1)
         self.assertEqual(len(naves_no_zip), 3)
 
+    def test_the_checkout_tells_the_mod_which_storage_is_the_shop(self):
+        """A metade que faltava: o canal tem que ser de ida E volta.
+
+        Sem isto o botão no jogo esqueceria, a cada sessão, o que foi escolhido
+        na anterior — e mostraria SET AS SHOP num armazém que já é a loja.
+        """
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        self.client.put(f"/api/v1/rooms/{room['id']}/shop",
+                        json={"storageId": "435"}, headers=self._auth(eu))
+
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.headers.get("x-shop-storage"), "435")
+
+    def test_with_no_shop_the_header_is_empty(self):
+        eu = self._player()
+        room = self._room(eu)
+        self._join(eu, room["id"], data=self._com_armazem())
+        r = self._checkout(eu, room["id"])
+        self.assertEqual(r.headers.get("x-shop-storage"), "")
+
     def test_with_no_neighbours_the_list_is_empty(self):
         """Lista velha faria o mod calar naves que não são mais nossas."""
         eu = self._player()

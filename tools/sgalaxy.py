@@ -826,12 +826,35 @@ def _list_neighbour_ships(game_dir: str, sids: str | None) -> None:
         pass
 
 
+def _tell_mod_the_shop(game_dir: str, storage_id: str | None) -> None:
+    """Diz ao mod qual armazém já é a loja, antes de o jogo abrir.
+
+    É a metade que faltava. O arquivo é o canal nos DOIS sentidos: o servidor
+    escreve aqui o que já vale, o botão mostra `SHOP: ON` no armazém certo, e
+    se a pessoa mudar de ideia o mod reescreve e a devolução leva de volta.
+
+    Sem isto o botão esqueceria, a cada sessão, o que foi escolhido na
+    anterior — e mostraria `SET AS SHOP` num armazém que já é a loja.
+    """
+    alvo = os.path.join(game_dir, SHOP_FILE)
+    try:
+        tmp = alvo + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write((storage_id or "") + "\n")
+        os.replace(tmp, alvo)
+    except OSError:
+        pass
+
+
 def _apply_shop_choice(room: str, game_dir: str) -> None:
     """Leva ao servidor o armazém que a pessoa escolheu no painel do jogo.
 
-    O mod escreve o id num arquivo ao lado do jogo; o cliente o entrega e
-    apaga. Falhar aqui não pode custar a devolução — a sessão vale mais que a
-    escolha de loja, e ela se refaz com um clique.
+    Não apaga o arquivo: quem manda nele é o próximo checkout, que o reescreve
+    com o que o servidor tem. Apagar aqui era o que fazia o mod perder a
+    memória entre sessões.
+
+    Falhar não pode custar a devolução — a sessão vale mais que a escolha de
+    loja, e ela se refaz com um clique.
     """
     caminho = os.path.join(game_dir, SHOP_FILE)
     if not os.path.isfile(caminho):
@@ -841,7 +864,6 @@ def _apply_shop_choice(room: str, game_dir: str) -> None:
             escolhido = fh.read().strip()
     except OSError:
         return
-    os.remove(caminho)
     try:
         data = json_request("PUT", f"/api/v1/rooms/{room}/shop",
                             {"storageId": escolhido or None})
@@ -980,6 +1002,7 @@ def cmd_play(args) -> int:
     armed = arm_autoload(game_dir, folder_name) and mod_is_installed(game_dir)
 
     _list_neighbour_ships(game_dir, headers.get("x-neighbour-sids"))
+    _tell_mod_the_shop(game_dir, headers.get("x-shop-storage"))
 
     versao = headers.get("x-version-id")
     servidor = base_url().split("//", 1)[-1]
