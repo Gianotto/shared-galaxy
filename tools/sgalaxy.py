@@ -877,17 +877,18 @@ def _send_checkpoint(pasta: str, nome: str, room: str, game_dir: str) -> None:
         # Falhar aqui não pode atrapalhar quem está jogando: o save continua na
         # máquina e a devolução no fim da sessão é que vale.
         print(f"      {nome}: not sent ({exc})", flush=True)
-        note_in_game(game_dir, [f"Shared Galaxy — {nome} NOT sent: {exc}",
-                                "Your progress is safe locally; the return at "
-                                "the end is what counts."])
+        note_in_game(game_dir, [f"Shared Galaxy — {nome} NOT sent",
+                                "Your progress is safe on this machine; the "
+                                "return at the end is what counts."])
         return
     data = json.loads(raw)
     print(f"      {nome} sent — day {data['ageDays']}, "
           f"v{data['versionId']}, {_size(len(corpo))}", flush=True)
-    note_in_game(game_dir, [
-        f"Shared Galaxy — {nome} sent to the server "
-        f"(v{data['versionId']}, day {data['ageDays']})",
-    ])
+    # Sem o dia do jogo aqui. A janela de log já carimba cada linha com o
+    # relógio dela, e o número que vem do save não bate com aquele carimbo —
+    # dois dias diferentes na mesma linha só fazem duvidar da mensagem. O que
+    # o jogador precisa saber é que o autosave saiu da máquina dele.
+    note_in_game(game_dir, [f"Shared Galaxy — {nome} sent to the server"])
 
 
 def cmd_play(args) -> int:
