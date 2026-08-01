@@ -46,10 +46,14 @@ public class GameMenu {
      */
     public Object createContent(MenuType type) { return null; }
 
-    /** Nulo enquanto o sistema de menus não subiu. */
-    public Object getCurrent() {
-        return pronto() ? "MainMenu" : null;
-    }
+    /**
+     * O submenu ABERTO, e na tela principal não há nenhum.
+     *
+     * Sempre nulo aqui de propósito: o dublê devolvia "MainMenu" quando pronto,
+     * e foi essa mentira que escondeu a terceira falha — o aspecto exigia
+     * `getCurrent() != null` e por isso só agia quando a pessoa clicava em Load.
+     */
+    public Object getCurrent() { return null; }
 
     /** É o que devolvia nulo e produzia "the game has no Load menu". */
     public Object getContent(MenuType type) {

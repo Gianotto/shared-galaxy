@@ -34,8 +34,8 @@ public final class VerifyTargets {
         constant(menuType, "Load");
         constant(menuType, "NewGame");
 
-        // How the aspect knows the menu system is built and can be driven.
-        method(gameMenu, "getCurrent");
+        // How the aspect learns the menus are being built.
+        method(gameMenu, "createContent", menuType);
 
         // Switching the menu is what activates it, and activation is what sets
         // the `onScreen` the load path dereferences.

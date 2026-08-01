@@ -480,11 +480,25 @@ and it is called from exactly two places, `Disclaimer` and `MainMenu2`. So the
 Load menu comes into existence when the person dismisses the disclaimer, and
 `createContent` is the event to watch rather than a duration to guess.
 
-Two versions failed here before that was measured. The first acted on frame ten
-and hit "the game has no Load menu". The second waited 3600 frames, calling that
-a minute; on the player's 144Hz machine it is twenty-five seconds, and it gave
-up mid-disclaimer. **Frames are not time**, and the wait was never ours to bound
-anyway — it ends when the player clicks.
+**`getCurrent()` is not "the menus are up".** It returns the submenu that is
+OPEN, and on the main screen none is. Using it as a readiness heuristic meant
+the mod sat waiting through the whole main menu and only fired the instant the
+player clicked Load — which looks like the mod working and is really the mod
+having been blocked. `MainMenu2` calls `createContent` for NewGame, Load,
+Options, Cloud, Update, Community, PatchNotes, Credits and Quit while building
+its buttons, so `getContent(Load) != null` holds from the main menu onwards and
+is the whole condition.
+
+Three versions failed here before that was measured. The first acted on frame
+ten and hit "the game has no Load menu". The second waited 3600 frames, calling
+that a minute; on the player's 144Hz machine it is twenty-five seconds, and it
+gave up mid-disclaimer — **frames are not time**. The third waited on
+`getCurrent()`, which never becomes non-null on its own.
+
+Each of the three was a guess standing in for a measurement, and each survived
+its test suite because the stub agreed with the guess — the third one returned
+a fake current menu once "ready". A double that flatters the code under test is
+worse than no double.
 
 Two more things that are not obvious and cost a crash each if missed:
 

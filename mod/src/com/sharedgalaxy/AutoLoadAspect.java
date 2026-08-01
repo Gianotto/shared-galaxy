@@ -211,14 +211,20 @@ public class AutoLoadAspect {
         }
     }
 
-    /** Is the menu system built far enough to be driven? */
+    /**
+     * Is the menu we want built?
+     *
+     * <p>That is the whole condition, and asking anything else was the third
+     * failure here. This also required {@code getCurrent() != null} as a
+     * "menus are live" heuristic. It is not one: {@code getCurrent} returns the
+     * submenu that is OPEN, and on the main screen none is — so it stayed null
+     * until the player clicked Load, which is exactly when the mod finally
+     * fired. {@code MainMenu2} creates the Load content while building its
+     * buttons, so this is true from the main menu onwards.
+     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static boolean ready(Object gameMenu, String menu) {
         try {
-            if (gameMenu.getClass().getMethod("getCurrent")
-                    .invoke(gameMenu) == null) {
-                return false;
-            }
             ClassLoader loader = gameMenu.getClass().getClassLoader();
             Class menuType = Class.forName(
                 "fi.bugbyte.spacehaven.gui.menu.GameMenu$MenuType", true, loader);
