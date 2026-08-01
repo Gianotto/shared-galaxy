@@ -164,8 +164,7 @@ public class ShopButtonAspect {
         // terminal de excecoes numa sequencia que funciona.
         Object selectionBox = read(panel, "selectionBox");
         if (selectionBox == null) {
-            trace(hook, id, "no selectionBox yet (open() covers it)", panel);
-            return;
+            return;     // cedo demais; o `open()` cobre logo depois
         }
 
         // TIRA O NOSSO ANTIGO, nao pergunta se ja tem.
@@ -260,10 +259,14 @@ public class ShopButtonAspect {
         // botao sumia o terminal ficava mudo — o que nao distinguia "o
         // conselho nao rodou" de "rodou, foi aceito, e algo tirou depois".
         // Silencio que cabe em duas explicacoes nao e diagnostico.
-        trace(hook, id, "box " + antes + " -> "
-                       + tamanho(read(commandBox, "buttons"))
-                       + ", dropped=" + tirados + ", accepted=" + aceito
-                       + " || " + geometry(commandBox), panel);
+        // Silencio quando da certo. O diagnostico que trouxe o botao ate aqui
+        // vive em `geometry`, e volta ligando a linha abaixo — foi ele que
+        // mostrou que a insercao sempre funcionava e o problema era posicao.
+        if (Boolean.FALSE.equals(aceito)) {
+            trace(hook, id, "REFUSED, box " + antes + " -> "
+                           + tamanho(read(commandBox, "buttons"))
+                           + " || " + geometry(commandBox), panel);
+        }
     }
 
     /**
