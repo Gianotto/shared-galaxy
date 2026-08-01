@@ -190,6 +190,11 @@ public class ShopButtonAspect {
     public void afterStorageControlOpened(JoinPoint joinPoint) {
         Object[] args = joinPoint.getArgs();
         String id = selected;
+        // Falar tambem quando nao faz nada: um retorno mudo aqui produz
+        // exatamente "o botao nem apareceu", que nao distingue gancho que nao
+        // rodou de gancho que rodou sem dados.
+        System.out.println("[shared-galaxy] storageControl.open args="
+                           + args.length + " selected=" + id);
         if (args.length == 0 || args[0] == null || id == null) {
             return;
         }
@@ -206,6 +211,8 @@ public class ShopButtonAspect {
                                   true, loader))
                 .invoke(screen, button);
             mine = button;
+            System.out.println("[shared-galaxy] shop toggle added to the "
+                               + "screen for storage " + id);
         } catch (Throwable failure) {
             System.err.println("[shared-galaxy] could not add the shop toggle: "
                                + failure);
@@ -225,6 +232,8 @@ public class ShopButtonAspect {
     public void afterStorageControlMoved(JoinPoint joinPoint) {
         Object button = mine;
         if (button == null) {
+            System.out.println("[shared-galaxy] storageControl.setPos, "
+                               + "but no toggle of ours exists");
             return;
         }
         try {
@@ -244,6 +253,9 @@ public class ShopButtonAspect {
                 .invoke(vizinho)).floatValue();
             button.getClass().getMethod("setPos", float.class, float.class)
                 .invoke(button, Float.valueOf(x + w + 6f), Float.valueOf(y));
+            System.out.println("[shared-galaxy] toggle placed at "
+                               + (x + w + 6f) + "," + y + " (beside "
+                               + vizinho.getClass().getSimpleName() + ")");
         } catch (Throwable failure) {
             System.err.println("[shared-galaxy] could not place the shop "
                                + "toggle: " + failure);
