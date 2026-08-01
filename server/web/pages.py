@@ -270,19 +270,32 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
               f'padding:.8rem;border-radius:.4rem">'
               f'{t("owner_next", lang)}</p>' if just_made else '')
 
+    # O nome do sistema, que e o que o jogador ve no mapa estelar do jogo. O
+    # `at_system` e um id interno e o `at_body` e um nome de tipo — nenhum dos
+    # dois aparece na tela dele, e uma tabela cheia de vocabulario nosso nao
+    # ajuda ninguem a achar um vizinho.
+    nomes = {str(s_["systemId"]): (s_.get("name") or "")
+             for s_ in (galaxy.get("systems") or [])}
+
+    def onde(p) -> str:
+        if not p["at_system"]:
+            return "—"
+        # O mesmo recuo do mapa, para as duas telas falarem igual. Na pratica e
+        # raro: os nomes chegam todos de uma vez, cedo (findings item 15).
+        return nomes.get(str(p["at_system"])) or f'system {p["at_system"]}'
+
     if roster:
         rows = "".join(f"""
     <tr>
       <td>{_esc(p['display_name'])}</td>
       <td>{_esc(p['ship_name'] or '—')}</td>
-      <td>{_esc(p['at_system'] or '—')}</td>
-      <td>{_esc(p['at_body'] or '—')}</td>
+      <td>{_esc(onde(p))}</td>
       <td>{_esc(f"{float(p['age_days']):.1f} {t('days', lang)}") if p['age_days'] else '—'}</td>
       <td>{f'<span class="tag on">{t("playing", lang)}</span>' if p['playing'] else ''}</td>
     </tr>""" for p in roster)
         table = f"""<table>
   <tr><th>{t("th_player", lang)}</th><th>{t("th_ship", lang)}</th>
-      <th>{t("th_system", lang)}</th><th>{t("th_body", lang)}</th>
+      <th>{t("th_system", lang)}</th>
       <th>{t("th_age", lang)}</th><th></th></tr>{rows}</table>"""
     else:
         table = f'<p class="sub">{t("nobody_yet", lang)}</p>'

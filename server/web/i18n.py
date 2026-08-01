@@ -71,7 +71,6 @@ STRINGS: dict = {
     "th_player": {"pt": "jogador", "en": "player"},
     "th_ship": {"pt": "nave", "en": "ship"},
     "th_system": {"pt": "sistema", "en": "system"},
-    "th_body": {"pt": "corpo", "en": "body"},
     "th_age": {"pt": "idade", "en": "age"},
     "days": {"pt": "dias", "en": "days"},
     "playing": {"pt": "jogando", "en": "playing"},

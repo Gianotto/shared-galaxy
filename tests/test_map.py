@@ -244,3 +244,45 @@ class OrientationTestCase(unittest.TestCase):
         self.assertLess(alto, baixo,
                         "o sistema de Y maior no jogo tem que ficar mais alto "
                         "no SVG (cy menor)")
+
+
+class RosterColumnsTestCase(unittest.TestCase):
+    """A tabela "quem está onde" fala a língua do jogador.
+
+    `at_system` é id interno e `at_body` é nome de tipo: nenhum dos dois
+    aparece na tela de quem joga. O que ele vê no mapa estelar é o NOME do
+    sistema, e é isso que a tabela mostra.
+    """
+
+    GALAXIA = {"w": 900000, "h": 400000, "systems": [
+        {"systemId": "1", "name": "Taros Ivanova Cluster", "x": 1, "y": 2,
+         "bodies": 1, "sectors": 0, "clouds": 0},
+        {"systemId": "31", "name": "", "x": 3, "y": 4,
+         "bodies": 1, "sectors": 0, "clouds": 0}]}
+
+    def _pagina(self, at_system):
+        from server.web.pages import room_page
+        roster = [{"player_id": 1, "display_name": "Alguém",
+                   "ship_name": "HSS X", "at_system": at_system,
+                   "at_x": "1", "at_y": "2", "at_body": "AsteroidField",
+                   "age_days": 3.0, "playing": False, "joined_at": None,
+                   "last_seen_at": None, "canonical_at": None}]
+        sala = {"id": "X", "name": "Sala", "max_players": 64, "lease_hours": 12,
+                "galaxy_digest": "d", "seed": "1", "password_hash": None,
+                "listed": True, "retention_n": 20, "save_version": "21",
+                "options": {}}
+        return room_page(sala, roster, self.GALAXIA, "en")
+
+    def test_it_shows_the_system_name(self):
+        self.assertIn("Taros Ivanova Cluster", self._pagina("1"))
+
+    def test_it_does_not_show_the_body_type(self):
+        """`AsteroidField` é vocabulário nosso, não do jogo."""
+        self.assertNotIn("AsteroidField", self._pagina("1"))
+
+    def test_an_unnamed_system_reads_as_one(self):
+        """O mesmo recuo do mapa, para as duas telas falarem igual."""
+        self.assertIn("system 31", self._pagina("31"))
+
+    def test_nowhere_is_a_dash(self):
+        self.assertIn("—", self._pagina(None))
