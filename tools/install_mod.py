@@ -72,6 +72,13 @@ class ModError(Exception):
     pass
 
 
+def como_chamar() -> str:
+    """Como a pessoa chamou isto, para a mensagem apontar para o lugar certo."""
+    if getattr(sys, "frozen", False):
+        return f"{os.path.basename(sys.argv[0])} install-mod"
+    return "python3 tools/install_mod.py"
+
+
 def find_game() -> str:
     for path in GAME_PATHS:
         if path and os.path.isfile(os.path.join(path, "spacehaven.jar")):
@@ -100,10 +107,21 @@ def find_weaver() -> str:
 
 
 def find_mod_jar() -> str:
-    built = os.path.join(os.path.dirname(os.path.dirname(
-        os.path.abspath(__file__))), "mod", "build", MOD_JAR)
-    if os.path.isfile(built):
-        return built
+    """O jar do mod: embutido no binário, ou construído no repositório.
+
+    O binário publicado leva o jar dentro (`sys._MEIPASS` é onde o PyInstaller
+    o desempacota), para o jogador baixar uma coisa só. Rodando a partir do
+    repositório, é o que `mod/build.sh` produziu.
+    """
+    candidatos = []
+    embutido = getattr(sys, "_MEIPASS", None)
+    if embutido:
+        candidatos.append(os.path.join(embutido, MOD_JAR))
+    candidatos.append(os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "mod", "build", MOD_JAR))
+    for caminho in candidatos:
+        if os.path.isfile(caminho):
+            return caminho
     raise ModError(f"{MOD_JAR} não foi compilado ainda. Rode mod/build.sh")
 
 
@@ -197,7 +215,7 @@ def install(game: str, dry_run: bool) -> int:
 
     write_config(game, novo)
     print(f"\ninstalado. O backup do config original está em {BACKUP}.")
-    print("Para desfazer: python3 tools/install_mod.py --uninstall")
+    print(f"Para desfazer: {como_chamar()} --uninstall")
     return 0
 
 

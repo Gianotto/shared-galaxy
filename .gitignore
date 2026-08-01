@@ -20,3 +20,6 @@ experiments/*.json
 # Build do mod: sai de mod/build.sh, e o jar carrega bytecode do jogo no
 # classpath de compilação. Fonte e receita ficam versionados; o binário não.
 mod/build/
+
+# Binário do cliente: sai de client/build.sh e do CI. O fonte é que é a verdade.
+client/dist/

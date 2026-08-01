@@ -1,0 +1,140 @@
+name: Release
+
+# O binário existe porque quem joga Space Haven está majoritariamente no
+# Windows e um convite de Discord que começa por "instale o Python" não é um
+# convite. O fonte continua sendo a verdade: `tools/sgalaxy.py` é biblioteca
+# padrão e se lê em vinte minutos. Isto empacota aquilo.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # O mod compila sem o jogo: tudo nele é reflexão e o pointcut é uma string,
+  # então nada aqui nomeia um tipo do Space Haven. O AspectJ vem do Maven
+  # Central, que é onde ele é publicado — o Mod Loader também o traz, mas o CI
+  # não tem Steam.
+  mod:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Baixar o AspectJ
+        run: |
+          BASE=https://repo1.maven.org/maven2/org/aspectj
+          curl -sSLo aspectjtools.jar "$BASE/aspectjtools/1.9.19/aspectjtools-1.9.19.jar"
+          curl -sSLo aspectjrt.jar    "$BASE/aspectjrt/1.9.19/aspectjrt-1.9.19.jar"
+
+      - name: Compilar o aspecto
+        # `-target 8` não é detalhe: o jogo roda uma JRE 8 embutida e suas
+        # classes são bytecode 7. Um mod acima disso instala e não carrega.
+        run: |
+          mkdir -p mod/build/classes/META-INF
+          java -cp aspectjtools.jar org.aspectj.tools.ajc.Main \
+            -source 8 -target 8 -Xlint:ignore \
+            -classpath aspectjrt.jar \
+            -d mod/build/classes \
+            mod/src/com/sharedgalaxy/AutoLoadAspect.java
+          cp mod/META-INF/aop.xml mod/build/classes/META-INF/aop.xml
+          jar cf mod/build/SharedGalaxy.jar -C mod/build/classes .
+
+      - name: O bytecode é Java 8
+        run: |
+          python3 - <<'PY'
+          import struct, zipfile, sys
+          with zipfile.ZipFile("mod/build/SharedGalaxy.jar") as z:
+              data = z.read("com/sharedgalaxy/AutoLoadAspect.class")
+              assert "META-INF/aop.xml" in z.namelist(), "sem aop.xml o aspecto não é tecido"
+          major = struct.unpack(">H", data[6:8])[0]
+          print("class file version:", major)
+          if major != 52:
+              sys.exit(f"esperava 52 (Java 8), veio {major}: o jogo não carregaria")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod
+          path: mod/build/SharedGalaxy.jar
+
+  binario:
+    needs: mod
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            nome: sgalaxy-linux-x86_64
+            arquivo: sgalaxy
+          - os: windows-latest
+            nome: sgalaxy-windows-x86_64.exe
+            arquivo: sgalaxy.exe
+          - os: macos-latest
+            nome: sgalaxy-macos-arm64
+            arquivo: sgalaxy
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mod
+          path: mod/build
+
+      - run: pip install pyinstaller
+
+      - name: Empacotar
+        shell: bash
+        run: |
+          python -m PyInstaller --onefile --clean --noconfirm \
+            --name sgalaxy \
+            --paths tools \
+            --hidden-import install_mod \
+            --add-data "mod/build/SharedGalaxy.jar${{ matrix.os == 'windows-latest' && ';' || ':' }}." \
+            tools/sgalaxy.py
+
+      - name: Ele roda
+        shell: bash
+        run: dist/${{ matrix.arquivo }} --help > /dev/null
+
+      - name: Ele leva o mod dentro
+        shell: bash
+        # Sem save e sem jogo no CI, o que dá para provar é que o jar embutido
+        # é encontrado. `--status` não escreve nada.
+        run: |
+          dist/${{ matrix.arquivo }} install-mod --status || true
+
+      - name: Nomear
+        shell: bash
+        run: mv "dist/${{ matrix.arquivo }}" "dist/${{ matrix.nome }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.nome }}
+          path: dist/${{ matrix.nome }}
+
+  publicar:
+    needs: binario
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artefatos/**/*
+          generate_release_notes: true

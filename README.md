@@ -54,16 +54,36 @@ moved. Details in [docs/trade-experiment.md](docs/trade-experiment.md).
 
 ### The client
 
-```bash
-export SGALAXY_URL=https://your-server
-python3 tools/sgalaxy.py register "Your Name"
-python3 tools/sgalaxy.py rooms
-python3 tools/sgalaxy.py play ROOM        # checkout, launch, return — one command
+Two ways to run it, and they are the same program.
+
+**A download**, from the [releases](../../releases) — one file, nothing to
+install, Windows, Linux and macOS:
+
+```
+sgalaxy register "Your Name"
+sgalaxy rooms
+sgalaxy play ROOM              # checkout, launch, return — one command
+sgalaxy install-mod            # opens the game straight into the room's save
 ```
 
-Standard library only. `play` refuses to run while Space Haven is open: writing
-to a save with the game running destroys the run, and that is the one thing the
-client can never get wrong.
+**From this repository**, which is what the download is built from:
+
+```bash
+python3 tools/sgalaxy.py register "Your Name"
+python3 tools/sgalaxy.py play ROOM
+```
+
+Standard library only — that is the point of it. A packaged binary is
+convenient and it hides what it does; the source stays the honest path, reads
+end to end in twenty minutes, and is what `client/build.sh` and the release
+workflow package. Set `SGALAXY_URL` to point at a server other than the public
+one.
+
+`play` refuses to run while Space Haven is open: writing to a save with the game
+running destroys the run, and that is the one thing the client can never get
+wrong. It is also why the client launches the game itself rather than leaving it
+to a web page — a browser can upload and download a save, but it cannot know the
+game is closed.
 
 ### The tools
 
@@ -115,6 +135,11 @@ before the code existed, and honesty about what cannot be prevented.
 The game runs on the player's machine, on files they can edit. Nothing stops
 someone from altering their own save, and the design does not pretend otherwise:
 it is cooperative, and the server **checks** rather than guesses.
+
+The published binary is the one place that asks for trust it cannot show. It is
+built by [the release workflow](.github/workflows/release.yml) from the source
+in this repository, on GitHub's runners, and anyone who prefers not to take that
+on their word runs `tools/sgalaxy.py` directly — it needs nothing but Python.
 
 ## Disclaimer
 

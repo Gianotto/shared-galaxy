@@ -13,14 +13,14 @@ Usage:
 
     export SGALAXY_URL=https://galaxy.bygianotto.com.br
 
-    python3 tools/sgalaxy.py register "My Name"
-    python3 tools/sgalaxy.py rooms
-    python3 tools/sgalaxy.py create-room --seed 1654267488 --name "Frontier"
-    python3 tools/sgalaxy.py how-to-join ROOM
-    python3 tools/sgalaxy.py join ROOM --save ~/.../savegames/MyGame
-    python3 tools/sgalaxy.py play ROOM          # the whole session, one command
-    python3 tools/sgalaxy.py status ROOM
-    python3 tools/sgalaxy.py delete-account
+    sgalaxy register "My Name"          # or: python3 tools/sgalaxy.py …
+    sgalaxy rooms
+    sgalaxy create-room --seed 1654267488 --name "Frontier"
+    sgalaxy how-to-join ROOM
+    sgalaxy join ROOM --save ~/.../savegames/MyGame
+    sgalaxy play ROOM                   # the whole session, one command
+    sgalaxy status ROOM
+    sgalaxy delete-account
 
 The token lives in `~/.config/sgalaxy/credentials.json`, mode 600. It is the
 only credential there is: losing it means losing the account, and there is no
@@ -46,7 +46,23 @@ import zipfile
 
 CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
-DEFAULT_URL = "http://127.0.0.1:8714"
+
+# O servidor publico. Quem hospeda o proprio poe `SGALAXY_URL` e nada mais muda
+# — e a mesma promessa do compose: o caminho da sala publica e o de quem
+# levanta a dele.
+DEFAULT_URL = os.environ.get("SGALAXY_DEFAULT_URL",
+                             "https://galaxy.bygianotto.com.br")
+
+
+def prog() -> str:
+    """Como chamar este programa, do jeito que a pessoa o chamou.
+
+    Empacotado num binario nao existe `python3 tools/sgalaxy.py`, e uma
+    mensagem que manda rodar isso manda a pessoa para o lugar errado.
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.basename(sys.argv[0])
+    return f"python3 {os.path.join('tools', 'sgalaxy.py')}"
 
 # Como o jogo aparece na tabela de processos. Duas formas:
 #
@@ -105,7 +121,7 @@ def token() -> str:
     if not creds.get("token"):
         raise ClientError(
             f"no account stored for {base_url()}. "
-            f"Run: python3 tools/sgalaxy.py register \"Your Name\"")
+            f"Run: {prog()} register \"Your Name\"")
     return creds["token"]
 
 
@@ -379,12 +395,12 @@ def cmd_create_room(args) -> int:
     print(f"  deadline: {data['leaseHours']}h")
     print()
     print("  Publish the recipe for whoever joins:")
-    print(f"    python3 tools/sgalaxy.py how-to-join {data['id']}")
+    print(f"    {prog()} how-to-join {data['id']}")
     if not _recipe(args):
         print()
         print("  The recipe is empty. After creating the game, record the")
         print("  and the options you picked:")
-        print(f"    python3 tools/sgalaxy.py configurar-room {data['id']} \\")
+        print(f"    {prog()} configurar-room {data['id']} \\")
         print('        --ship "Starting ship name" --difficulty Normal')
     return 0
 
@@ -455,7 +471,7 @@ def cmd_how_to_join(args) -> int:
     print("  2. Save the game and close it.")
     print()
     print("  3. Upload the save:")
-    print(f"       python3 tools/sgalaxy.py join {room['id']} \\")
+    print(f"       {prog()} join {room['id']} \\")
     print("           --save PATH/TO/YOUR/GAME")
     print()
     if room.get("galaxyDigest"):
@@ -505,7 +521,7 @@ def cmd_checkout(args) -> int:
     print(f"  {_size(len(data))}")
     print()
     print("  Play, then return it with:")
-    print(f"    python3 tools/sgalaxy.py return {args.room} --save {target}")
+    print(f"    {prog()} return {args.room} --save {target}")
     print("  Past the deadline, the session reverts to the state it was checked out in.")
     return 0
 
@@ -611,7 +627,7 @@ def require_account() -> None:
                       "account here:")
     else:
         linhas.append("Run:")
-    linhas.append('    python3 tools/sgalaxy.py register "Your Name"')
+    linhas.append(f'    {prog()} register "Your Name"')
     raise ClientError("\n".join(linhas))
 
 
@@ -729,7 +745,7 @@ def create_ship(room: str, exe: str, sim: bool) -> str | None:
         print(f"you created more than one game ({', '.join(novas)}).")
         print("Join with the one you want:")
         for nome in novas:
-            print(f"  python3 tools/sgalaxy.py play {room} --join-with '{nome}'")
+            print(f"  {prog()} play {room} --join-with '{nome}'")
         return None
 
     pasta = os.path.join(raiz, novas[0], "save")
@@ -852,7 +868,7 @@ def cmd_play(args) -> int:
         print(f"\nfailed to return: {exc}", file=sys.stderr)
         print(f"\nYour progress is NOT lost: it is in {folder}.")
         print("Once fixed, return it with:")
-        print(f"  python3 tools/sgalaxy.py return {args.room} --save {folder}")
+        print(f"  {prog()} return {args.room} --save {folder}")
         return 1
     data = json.loads(raw)
     print(f"      age {data['ageDays']} days, version {data['versionId']}")
@@ -911,6 +927,25 @@ def _room_folder(room: str) -> str:
         if os.path.isdir(saves):
             return os.path.join(saves, f"Sala-{room}")
     return os.path.join(os.getcwd(), f"Sala-{room}")
+
+
+def cmd_install_mod(args) -> int:
+    """Instala (ou remove) o mod que abre o jogo direto no save da sala.
+
+    Vive aqui para o jogador ter um programa só. A lógica continua em
+    `tools/install_mod.py`, que roda sozinho para quem preferir.
+    """
+    import install_mod
+
+    try:
+        jogo = args.game or install_mod.find_game()
+        if args.status:
+            return install_mod.status(jogo)
+        if args.uninstall:
+            return install_mod.uninstall(jogo, args.dry_run)
+        return install_mod.install(jogo, args.dry_run)
+    except install_mod.ModError as erro:
+        raise ClientError(str(erro)) from erro
 
 
 def cmd_status(args) -> int:
@@ -1061,6 +1096,15 @@ def main() -> int:
     p.add_argument("--yes", action="store_true",
                    help="do not ask before uploading the save to join")
     p.set_defaults(func=cmd_play)
+
+    p = sub.add_parser("install-mod",
+                       help="open the game straight into the room's save")
+    p.add_argument("--game", help="the game folder (found on its own by default)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="show what it would change, without writing")
+    p.add_argument("--uninstall", action="store_true", help="undo it")
+    p.add_argument("--status", action="store_true", help="just report")
+    p.set_defaults(func=cmd_install_mod)
 
     p = sub.add_parser("status",
                        help="what is open, before you launch the game")
