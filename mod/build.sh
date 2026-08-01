@@ -69,7 +69,8 @@ docker run --rm --user "$(id -u):$(id -g)" \
     java -cp /aj/aspectjtools.jar org.aspectj.tools.ajc.Main \
         -source 8 -target 8 -Xlint:ignore $EXTRA \
         -d /mod/build/classes \
-        /mod/src/com/sharedgalaxy/AutoLoadAspect.java
+        /mod/src/com/sharedgalaxy/AutoLoadAspect.java \
+        /mod/src/com/sharedgalaxy/ShopButtonAspect.java
 
 mkdir -p "$OUT/classes/META-INF"
 cp "$HERE/META-INF/aop.xml" "$OUT/classes/META-INF/aop.xml"

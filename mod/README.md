@@ -27,6 +27,13 @@ mid-session whether they are playing the room's save or a local game. The mod
 does not know what a room or a server is: the client writes the text, this only
 carries it in.
 
+It also adds a **SET AS SHOP** button to the panel of any storage, so choosing
+which storage your neighbours buy from happens where the storage is, instead of
+by matching a number in a terminal against the "Capacity" line. The choice goes
+to `sharedgalaxy.shop`, which the client sends on when the session is returned —
+it cannot live in the savegame, because the game writes savegames from its own
+objects and an attribute this mod invents would be gone at the next save.
+
 Every other launch behaves exactly like an unmodded game. A mod that hijacked
 every start would be worse than the problem it solves.
 

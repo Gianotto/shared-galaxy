@@ -61,6 +61,32 @@ public final class VerifyTargets {
         constant(logType, "Normal");
         field(require("fi.bugbyte.spacehaven.SpaceHaven"), "isLoading");
 
+        // O botão que faz de um armazém a sua loja.
+        Class<?> panel = require(
+            "fi.bugbyte.spacehaven.gui.MenuSystemItems$SingleWorldElementSelected");
+        Class<?> boxItem = require(
+            "fi.bugbyte.spacehaven.gui.MenuSystemItems$AbstractSelectedBoxItem");
+        Class<?> stageButton = require(
+            "fi.bugbyte.framework.screen.StageButton");
+        Class<?> clickHandler = require(
+            "fi.bugbyte.framework.screen.StageButton$clickHandler");
+        Class<?> buttons = require("fi.bugbyte.gen.compiled.TextButtons2");
+        Class<?> worldObject = require(
+            "fi.bugbyte.spacehaven.world.elements.WorldObject");
+        Class<?> features = require(
+            "fi.bugbyte.spacehaven.world.elements.WorldObject$ObjectFeatures");
+
+        field(panel, "element", false);
+        method(boxItem, "addButton", stageButton);
+        method(buttons, "getBase");
+        method(stageButton, "setClickHandler", clickHandler);
+        method(require("fi.bugbyte.framework.screen.ScalableIconTextButton"),
+               "setText", String.class);
+        method(require("fi.bugbyte.spacehaven.world.elements.WorldElement"),
+               "getId");
+        field(worldObject, "features");
+        field(features, "stores");
+
         System.out.println();
         if (failures > 0) {
             System.out.println(failures + " target(s) missing — the mod would "
@@ -72,7 +98,11 @@ public final class VerifyTargets {
 
     private static Class<?> require(String name) {
         try {
-            Class<?> found = Class.forName(name);
+            // Sem inicializar. Classes de GUI compilada, como TextButtons2,
+            // sobem a biblioteca de assets no <clinit> e falham fora do jogo —
+            // e "nao consegui inicializar" nao e "nao existe".
+            Class<?> found = Class.forName(name, false,
+                                           VerifyTargets.class.getClassLoader());
             System.out.println("ok    class  " + name);
             return found;
         } catch (Throwable missing) {
@@ -115,12 +145,21 @@ public final class VerifyTargets {
     }
 
     private static void field(Class<?> owner, String name) {
+        field(owner, name, true);
+    }
+
+    /** `publico` falso procura tambem campos que so a reflexao alcanca. */
+    private static void field(Class<?> owner, String name, boolean publico) {
         if (owner == null) {
             failures++;
             return;
         }
         try {
-            owner.getField(name);
+            if (publico) {
+                owner.getField(name);
+            } else {
+                owner.getDeclaredField(name);
+            }
             System.out.println("ok    field  " + owner.getSimpleName() + "."
                                + name);
         } catch (Throwable missing) {

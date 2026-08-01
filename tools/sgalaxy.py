@@ -806,6 +806,30 @@ def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
     return True
 
 
+def _apply_shop_choice(room: str, game_dir: str) -> None:
+    """Leva ao servidor o armazém que a pessoa escolheu no painel do jogo.
+
+    O mod escreve o id num arquivo ao lado do jogo; o cliente o entrega e
+    apaga. Falhar aqui não pode custar a devolução — a sessão vale mais que a
+    escolha de loja, e ela se refaz com um clique.
+    """
+    caminho = os.path.join(game_dir, SHOP_FILE)
+    if not os.path.isfile(caminho):
+        return
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            escolhido = fh.read().strip()
+    except OSError:
+        return
+    os.remove(caminho)
+    try:
+        data = json_request("PUT", f"/api/v1/rooms/{room}/shop",
+                            {"storageId": escolhido or None})
+        print(f"      {data['message']}")
+    except ClientError as exc:
+        print(f"      could not set your shop: {exc}", file=sys.stderr)
+
+
 def _folder_state(pasta: str) -> tuple:
     """Assinatura barata de uma pasta de save: tamanhos e horários.
 
@@ -968,6 +992,9 @@ def cmd_play(args) -> int:
         parar.set()
         vigia.join(timeout=5)
 
+    # -- 2b. a loja escolhida dentro do jogo
+    _apply_shop_choice(args.room, game_dir)
+
     # -- 3. escolher o estado mais avancado
     print("[3/4] finding the most advanced state …")
     folder, which, age = most_advanced(target)
@@ -1001,6 +1028,11 @@ AUTOLOAD_NEW_GAME = "__new__"
 # Autosaved". Quem escreve o texto é o cliente: o mod não sabe o que é uma sala
 # nem um servidor, e não tem por que saber.
 NOTES_FILE = "sharedgalaxy.log"
+
+# O botão do mod escreve aqui o armazém que virou a loja. Fica num arquivo
+# nosso porque não pode ficar no save: o jogo regrava a partir do modelo dele e
+# um atributo inventado por nós some no próximo salvamento.
+SHOP_FILE = "sharedgalaxy.shop"
 
 # De quanto em quanto tempo olhar se apareceu autosave novo, e quanto esperar
 # para ter certeza de que o jogo terminou de gravar.

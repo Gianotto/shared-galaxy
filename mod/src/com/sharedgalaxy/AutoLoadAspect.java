@@ -286,8 +286,9 @@ public class AutoLoadAspect {
         }
     }
 
+    /** Package-private: o botao da loja tambem escreve no log do jogo. */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void log(String line) throws Exception {
+    static void log(String line) throws Exception {
         Class gameLog = Class.forName("fi.bugbyte.spacehaven.gui.GameLog");
         Class logType = Class.forName(
             "fi.bugbyte.spacehaven.gui.GameLog$LogType");
