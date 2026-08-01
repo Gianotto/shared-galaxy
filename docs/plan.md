@@ -300,6 +300,17 @@ lives, and `SingleWorldElementSelected.makeFacilityAudioOnButton` is the game
 building exactly this kind of control — a working recipe to read rather than
 invent.
 
+**Send a copy on a manual save too, not only on autosaves.** The watcher
+deliberately ignores the `save/` folder today, on the grounds that the manual
+save is what the return sends. That reasoning holds for *the return* and not
+for the copy: somebody who presses save has just decided this moment is worth
+keeping, which is exactly when a copy is worth having.
+
+It changes nothing about custody — a checkpoint never becomes the canonical —
+and it costs one upload per deliberate save. `tests/test_client_guard.py` has a
+test asserting `save/` is *not* watched; its reasoning has to change with it,
+not just its assertion.
+
 **Let a neighbour fade from the sector after a while away.** A storefront
 appears for every member in the same system and nothing takes it out again, so
 somebody who joined once and never came back sits there for good — and a room
