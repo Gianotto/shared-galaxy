@@ -300,6 +300,44 @@ def faction_tokens(faction_id: str, side: str) -> set[str]:
 # --------------------------------------------------------------------------
 
 
+def live_npc_ships(sf: SaveFile) -> list[ET.Element]:
+    """Naves NPC VIVAS do proprio save, da menor para a maior.
+
+    POR QUE NAO UM CASCO NAO EXPLORADO
+
+    Porque casco nao explorado e, no jogo, a definicao de destroco: `fog=true`,
+    `unex=1` e ninguem a bordo. Uma vitrine montada em cima disso aparece como
+    "Derelict (Unexplored)" — e o problema nao e o rotulo, e que destroco se
+    reclama e se desmonta. A loja de outro jogador nao pode ser desmontavel.
+
+    Medido no save de um jogador: `CNHS LIGHTBINDER` tem exatamente os mesmos
+    sinalizadores de nevoa e cinco tripulantes, e e uma nave cultista viva. A
+    diferenca entre viva e sucata e a tripulacao.
+
+    A EXIGENCIA DE NEVOA CADUCOU
+
+    Ela veio do E3b (`findings.md` item 10), de quando o retrato era **copia da
+    nave real do vizinho**: a nevoa escondia o layout dele. Hoje o molde sai do
+    save de DESTINO, entao nao ha nada privado para esconder — a restricao
+    sobreviveu ao motivo dela. O que continua valendo do item 10 e o resto: o
+    molde vem da instalacao da propria pessoa, entao nada do jogo e
+    redistribuido e nada da maquina de outro jogador atravessa.
+
+    Menor primeiro porque cada vitrine entra inteira no save de quem recebe, e
+    numa sala povoada isso se soma.
+    """
+    out = []
+    for _doc, ship in sf.ships():
+        settings = ship.find("settings")
+        if settings is None or settings.get("owner") in (None, "Player"):
+            continue
+        if not crew_members(ship):
+            continue
+        out.append((len(serialize(ship)), ship))
+    out.sort(key=lambda pair: pair[0])
+    return [ship for _size, ship in out]
+
+
 def unexplored_hulls(sf: SaveFile) -> list[ET.Element]:
     """Cascos do proprio save que servem de vitrine, do menor para o maior.
 

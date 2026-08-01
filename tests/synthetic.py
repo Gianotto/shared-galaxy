@@ -189,7 +189,8 @@ def npc_trader_ship(sid: int = 5001, faction: int = 462,
                     credits: int = 12309, stock=None) -> dict:
     return {
         "sid": sid, "name": "Meridian", "faction": faction, "owner": "Civilian",
-        "crew": [{"ent": 70, "name": "Wen", "fid": faction}],
+        "crew": [{"ent": 70, "name": "Wen", "fid": faction},
+                  {"ent": 71, "name": "Ilo", "fid": faction}],
         "cargo": stock if stock is not None else [
             {"element": 2053, "amount": 100}],
         "bank": {"credits": credits, "markup": [2053]},

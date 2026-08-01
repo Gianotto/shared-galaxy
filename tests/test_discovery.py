@@ -221,3 +221,66 @@ class PlacementTestCase(unittest.TestCase):
         from sgalaxy.storefront import locate_body
         with self.assertRaises(SaveError):
             locate_body(self._save(), at=("1", "2"), system_id="6")
+
+
+class StorefrontTemplateTestCase(unittest.TestCase):
+    """De que a vitrine de um vizinho é feita.
+
+    A primeira versão a montava sobre um casco não explorado, que no jogo é a
+    definição de destroço: névoa, `unex="1"` e ninguém a bordo. Ela apareceu ao
+    jogador como "Derelict (Unexplored)" — e o problema não é o rótulo, é que
+    destroço se reclama e se desmonta. A loja de outro jogador não pode ser
+    desmontável.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="vitrine-")
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def _save(self, ships) -> SaveFile:
+        return SaveFile(synthetic.write_save(
+            os.path.join(self.tmp, "s"), synthetic.build_game(ships=ships)))
+
+    def test_a_crewless_wreck_is_never_the_template(self):
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.unexplored_hull()])
+        self.assertEqual(storefront.live_npc_ships(sf), [],
+                         "escolheu um destroço como molde de vitrine")
+
+    def test_a_live_npc_ship_is(self):
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.npc_trader_ship()])
+        moldes = storefront.live_npc_ships(sf)
+        self.assertEqual(len(moldes), 1)
+        self.assertEqual(moldes[0].get("sname"), "Meridian")
+
+    def test_the_players_own_ship_is_never_the_template(self):
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship()])
+        self.assertEqual(storefront.live_npc_ships(sf), [])
+
+    def test_the_crew_comes_along_and_is_renumbered(self):
+        """Tripulação é o que separa nave viva de sucata, e entId repetido
+        é o tipo de erro que carrega e quebra depois."""
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.npc_trader_ship()])
+        molde = storefront.live_npc_ships(sf)[0]
+        antes = {c.get("entId") for c in storefront.crew_members(molde)}
+
+        rel = storefront.inject_ship(sf, molde, faction="Civilian",
+                                     name="Meridian (Vizinha)", hull_mode=True,
+                                     crew_side="Civilian",
+                                     at=("84119", "214759"), system_id="6")
+        nova = [s for _d, s in sf.ships()
+                if s.get("sid") == rel["fleet"]["createdShipId"]][0]
+        tripulacao = storefront.crew_members(nova)
+        self.assertEqual(len(tripulacao), 2, "a vitrine ficou sem tripulação")
+        depois = {c.get("entId") for c in tripulacao}
+        self.assertFalse(antes & depois, "reusou entId da nave molde")
+
+        todos = [c.get("entId") for _d, s in sf.ships()
+                 for c in storefront.crew_members(s)]
+        self.assertEqual(len(todos), len(set(todos)), "entId repetido no save")

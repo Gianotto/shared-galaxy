@@ -606,21 +606,22 @@ def _place_neighbours(conn, room_id: str, player_id: int,
             for outro in vizinhos:
                 nome = f"{outro['ship_name'] or 'ship'} ({outro['display_name']})"
                 try:
-                    cascos = storefront.unexplored_hulls(sf)
+                    # Nave NPC VIVA, nao casco de destroco: sucata aparece
+                    # como "Derelict" e, pior, se reclama e se desmonta. A
+                    # diferenca entre viva e sucata e a tripulacao, e ela vem
+                    # junto no molde.
+                    cascos = storefront.live_npc_ships(sf)
                     if not cascos:
                         relatorio["skipped"].append(
-                            f"{outro['display_name']}: no unexplored hull left")
+                            f"{outro['display_name']}: no live NPC ship to "
+                            f"build the storefront on")
                         continue
                     # Sem <asi> a nave entra sem IA de bordo, sem radio e sem
                     # postura de combate. Vitrine quebrada e pior que ausente.
-                    if storefront.find_node_donor(sf, "asi") is None:
-                        relatorio["skipped"].append(
-                            f"{outro['display_name']}: nothing to copy the "
-                            f"onboard AI from")
-                        continue
                     rel = storefront.inject_ship(
                         sf, cascos[0], faction=NEIGHBOUR_FACTION,
                         credits=NEIGHBOUR_CREDITS, name=nome, hull_mode=True,
+                        crew_side=NEIGHBOUR_FACTION,
                         at=(outro["at_x"], outro["at_y"]),
                         system_id=outro["at_system"])
                     sids.append(rel["fleet"]["createdShipId"])

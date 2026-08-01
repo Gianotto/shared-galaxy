@@ -563,6 +563,42 @@ different asteroid fields in one system are recorded as the same visit. Any
 merge of discovery between players (plan, shared discovery) has to key on
 `(systemId, x, y)`.
 
+## 24d. An unexplored hull IS a derelict, and item 10 outlived its reason
+
+A storefront built on an unexplored hull showed up in a player's game as
+**"Derelict (Unexplored)"**. That is not a cosmetic problem: a derelict can be
+claimed and salvaged, so another player's shop was dismantlable.
+
+It was not a bug in the recipe. `fog="true"` + `unex="1"` + nobody aboard is
+what a wreck IS in this game — the selector was doing exactly what it said.
+
+**Crew is what separates alive from salvage.** From one player's save, so the
+comparison is controlled:
+
+| ship | owner | fog | unex | crew | |
+|---|---|---|---|---|---|
+| the storefront | Civilian | true | 1 | 0 | derelict |
+| MFS THE YURT (the hull it copied) | Merchant | true | 1 | 0 | derelict |
+| CNHS LIGHTBINDER | Cultist | true | 1 | **5** | a live cultist ship |
+| MFS LAMMERGEIER | Merchant | false | — | 6 | live |
+
+The fleet entry carries an explicit `derelict="false"` and the game showed
+Derelict anyway, so that attribute is not what decides it.
+
+**And the fog requirement had outlived its reason.** Item 10 established that
+fog only holds if the source ship was never explored — true, and it mattered
+when the portrait was a *copy of the neighbour's own ship*, where fog hid their
+real layout. The design then changed: the template comes from the **destination**
+save. There is nothing private left to hide, so the constraint survived the
+reason for it. What still holds from item 10 is the rest: the template comes
+from the player's own installation, so no game content is redistributed and
+nothing from anybody else's machine crosses over.
+
+The storefront is now built on the smallest live NPC ship in the destination
+save. Crew, onboard AI and bank come along, because the game's own bookkeeping
+comes with them — and `inject_ship` already allocated fresh `entId`s for crew,
+so the fix was which source to hand it, not new mechanics.
+
 ## 24c. The game already has a log window, and it takes text from anyone
 
 `fi.bugbyte.spacehaven.gui.GameLog.addLog(String, LogType, Object)` is public

@@ -189,11 +189,13 @@ class ApiTestCase(unittest.TestCase):
     # -- vizinhos no setor -------------------------------------------------
 
     def _com_casco(self, **kw) -> bytes:
-        """Um save que tem um casco de NPC de onde montar uma vitrine."""
+        """Um save com uma nave NPC viva de onde montar a vitrine."""
         import io as _io, zipfile as _zip
+        # Uma NPC VIVA, com tripulação: é dela que a vitrine é feita. Um casco
+        # de destroço faria a vitrine aparecer como sucata desmontável.
         xml = synthetic.build_game(
             ships=[synthetic.default_player_ship(),
-                   synthetic.unexplored_hull()], **kw)
+                   synthetic.npc_trader_ship()], **kw)
         buf = _io.BytesIO()
         with _zip.ZipFile(buf, "w") as zf:
             zf.writestr("game", xml)
