@@ -155,13 +155,20 @@ public class ShopButtonAspect {
         String agora = current();
         String novo = id.equals(agora) ? "" : id;
         write(novo);
+        String recado = novo.isEmpty()
+            ? "Shared Galaxy — shop closed; nothing of yours is for sale"
+            : "Shared Galaxy — storage " + novo + " is your shop. It reaches "
+              + "the server when you close the game";
+        // Nos dois lugares. O log do jogo e onde a pessoa esta olhando; o
+        // terminal e onde ela procura quando desconfia que nao funcionou.
+        System.out.println("[shared-galaxy] " + recado);
         try {
-            AutoLoadAspect.log(novo.isEmpty()
-                ? "Shared Galaxy — shop closed; nothing of yours is for sale"
-                : "Shared Galaxy — storage " + novo + " is your shop. What you "
-                  + "move into it is what your neighbours can buy");
-        } catch (Throwable ignored) {
-            // the log line is a courtesy; the file is the decision
+            AutoLoadAspect.log(recado);
+        } catch (Throwable failure) {
+            // Engolir isto foi erro: uma falha silenciosa aqui parece que o
+            // clique nao fez nada, e a pessoa clica de novo — desfazendo.
+            System.err.println("[shared-galaxy] could not write to the game "
+                               + "log: " + failure);
         }
     }
 
