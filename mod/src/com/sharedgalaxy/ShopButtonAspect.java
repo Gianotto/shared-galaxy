@@ -104,9 +104,18 @@ public class ShopButtonAspect {
 
     private static void offerButton(Object panel) {
         try {
-            Object element = read(panel, "element");
-            if (element == null || !isStorage(element)) {
+            if (panel == null) {
+                System.out.println("[shared-galaxy] shop button: no panel");
                 return;
+            }
+            Object element = read(panel, "element");
+            if (element == null) {
+                System.out.println("[shared-galaxy] shop button: panel has no "
+                                   + "element");
+                return;
+            }
+            if (!isStorage(element)) {
+                return;     // nao e armazem: silencio aqui e correto
             }
             final String id = String.valueOf(
                 element.getClass().getMethod("getId").invoke(element));
@@ -141,6 +150,12 @@ public class ShopButtonAspect {
         Object jaTem = read(panel, "selectionBox");
         Object caixa = jaTem == null ? null : read(jaTem, "commandBox");
         if (contains(caixa)) {
+            // Falar tambem quando NAO faz nada. Um retorno mudo aqui produz
+            // exatamente o sintoma que estamos cacando — botao ausente e
+            // terminal calado — e foi assim que a versao anterior escondeu a
+            // propria causa.
+            System.out.println("[shared-galaxy] shop button -> storage " + id
+                               + " skipped: the box says it already has one");
             return;
         }
         final Object button = Class.forName(BUTTONS, true, loader)
