@@ -282,6 +282,21 @@ starting ship, and that is what gets uploaded. A fresh game is not day zero —
 measured across saves made minutes apart, the game starts a colony at about day
 1.3.
 
+**Let a neighbour fade from the sector after a while away.** A storefront
+appears for every member in the same system and nothing takes it out again, so
+somebody who joined once and never came back sits there for good — and a room
+open to sixty-four people from a Discord invite collects those quickly. A sector
+of ghosts is not a living room.
+
+The rule: a storefront only appears while its owner has played recently, on a
+`neighbour_ttl_hours` per room, **24 hours** by default, `null` to never fade.
+The clock is `membership.last_seen_at`, which is touched on join, on every
+checkpoint and on check-in — by playing, not by logging in.
+
+It does half the work of the item below, and the room page should show when
+each member was last seen, because an invisible rule with a visible effect is
+how someone concludes the thing is broken.
+
 **Let the room owner remove a player's ship.** A room open to sixty-four people
 from a Discord invite will eventually hold somebody who joined once and never
 came back, or somebody who has to go. Today nothing can remove them, and the map
