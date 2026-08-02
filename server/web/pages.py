@@ -363,14 +363,18 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
     else:
         table = f'<p class="sub">{t("nobody_yet", lang)}</p>'
 
-    # A receita de entrada saiu daqui. Ela ensinava a criar a partida com a
-    # seed e terminava num `python3 tools/sgalaxy.py`, que e o comando de quem
-    # tem o repositorio — nao de quem baixou um binario. Entrar numa sala tem
-    # pagina propria agora, por sistema; esta e a pagina de VER a sala.
+    # A RECEITA saiu daqui: ela ensinava a criar a partida pela seed e
+    # terminava num `python3 tools/sgalaxy.py`, comando de quem tem o
+    # repositorio e nao de quem baixou um binario. O que fica e o botao — ver a
+    # sala e o degrau 2, entrar e o 3, e a pagina de entrada e que sabe falar
+    # de cada sistema operacional.
+    entrar = (f'<p><a class="cta" href="/room/{_esc(room["id"])}/join'
+              f'?lang={lang}">{t("join_this", lang)}</a></p>')
 
-    body = f"""{banner}{map_svg}
+    body = f"""{banner}{entrar}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
-{table}"""
+{table}
+{entrar}"""
     return layout(
         room["name"], body, lang,
         f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '

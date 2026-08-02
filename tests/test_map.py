@@ -420,7 +420,14 @@ class SiteNavigationTestCase(unittest.TestCase):
         de quem baixou um binário."""
         html = pages.room_page(self.SALA, [], {}, "en")
         self.assertNotIn("tools/sgalaxy.py", html)
-        self.assertNotIn("/join", html)
+        self.assertNotIn("seed", html.lower())
+
+    def test_the_room_page_offers_the_button(self):
+        """Ver a sala é o degrau 2; entrar é o 3, e a página de entrada é que
+        sabe falar de cada sistema operacional."""
+        html = pages.room_page(self.SALA, [], {}, "en")
+        self.assertIn("/room/6359GV/join", html)
+        self.assertIn("cta", html)
 
     def test_privacy_offers_a_page_instead_of_a_curl_line(self):
         """Uma promessa de apagar dados que exige saber o que é um cabeçalho

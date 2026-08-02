@@ -23,3 +23,32 @@ mod/build/
 
 # Binário do cliente: sai de client/build.sh e do CI. O fonte é que é a verdade.
 client/dist/
+
+# Caches de ferramenta. Nenhum deles existe hoje no repositório; estão aqui
+# para não passarem a existir sem alguém reparar.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+*.egg-info/
+build/
+dist/
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Saídas de execução: log do cliente, save empacotado, pasta de sala baixada.
+# Um zip de save é a partida de alguém; commitá-lo por engano publicaria o
+# jogo de uma pessoa num repositório aberto.
+*.log
+*.zip
+savegames/
+sharedgalaxy.log
+sharedgalaxy.ships
+sharedgalaxy.shop
