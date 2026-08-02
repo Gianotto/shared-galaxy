@@ -63,7 +63,7 @@ def icon(chave: str) -> str:
 
 
 def layout(title: str, body: str, lang: str, subtitle: str = "",
-           path: str = "/") -> str:
+           path: str = "/", action: str = "") -> str:
     """The shared shell.
 
     ESCAPES the title. Callers pass raw text — escaping on both sides produced
@@ -95,7 +95,13 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
   :root {{ --bg:#0b1020; --fg:#e8ecf8; --dim:#8b93ad; --line:#232a45;
            --me:#6ee7b7; --on:#fbbf24; }}
   a.cta {{ display:inline-block; padding:.6rem 1.1rem; border-radius:.35rem;
-    background:#3b6fd4; color:#fff; text-decoration:none; font-weight:600; }}
+    background:#3b6fd4; color:#fff; text-decoration:none; font-weight:600;
+    white-space:nowrap; }}
+  /* O titulo e a acao na mesma linha, a acao encostada a direita. Quebra para
+     duas linhas sozinha quando a tela e estreita, sem media query. */
+  .titlebar {{ display:flex; flex-wrap:wrap; gap:.8rem 1.2rem;
+    align-items:flex-start; justify-content:space-between; }}
+  .titlebar .sub {{ margin-bottom:1.2rem; }}
   header.nav {{ display:flex; flex-wrap:wrap; gap:.6rem 1.4rem;
     align-items:baseline; justify-content:space-between;
     padding:.9rem 0 1rem; margin-bottom:1.4rem;
@@ -144,8 +150,10 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
   <nav>{menu}</nav>
   <span class="lang">{switch}</span>
 </header>
-<h1>{_esc(title)}</h1>
-<p class="sub">{subtitle}</p>
+<div class="titlebar">
+  <div><h1>{_esc(title)}</h1><p class="sub">{subtitle}</p></div>
+  {action}
+</div>
 {body}
 <footer>
 <p>{t("disclaimer", lang)}</p>
@@ -368,19 +376,21 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
     # repositorio e nao de quem baixou um binario. O que fica e o botao — ver a
     # sala e o degrau 2, entrar e o 3, e a pagina de entrada e que sabe falar
     # de cada sistema operacional.
-    entrar = (f'<p><a class="cta" href="/room/{_esc(room["id"])}/join'
-              f'?lang={lang}">{t("join_this", lang)}</a></p>')
+    # Na mesma linha do nome da sala, encostado a direita: e a unica coisa que
+    # uma pessoa de fora pode FAZER nesta tela, e no corpo ela ficava separada
+    # do que a identifica.
+    entrar = (f'<a class="cta" href="/room/{_esc(room["id"])}/join'
+              f'?lang={lang}">{t("join_this", lang)}</a>')
 
-    body = f"""{banner}{entrar}{map_svg}
+    body = f"""{banner}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
-{table}
-{entrar}"""
+{table}"""
     return layout(
         room["name"], body, lang,
         f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '
         f'{len(roster)}/{room["max_players"]} {t("players", lang)} · '
         f'{t("lease_of", lang)} {room["lease_hours"]}h',
-        f'/room/{room["id"]}')
+        f'/room/{room["id"]}', entrar)
 
 
 # ---------------------------------------------------------------------------

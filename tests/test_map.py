@@ -422,12 +422,16 @@ class SiteNavigationTestCase(unittest.TestCase):
         self.assertNotIn("tools/sgalaxy.py", html)
         self.assertNotIn("seed", html.lower())
 
-    def test_the_room_page_offers_the_button(self):
-        """Ver a sala é o degrau 2; entrar é o 3, e a página de entrada é que
-        sabe falar de cada sistema operacional."""
+    def test_the_room_page_offers_the_button_once_beside_the_name(self):
+        """Ver a sala é o degrau 2; entrar é o 3. O botão fica na linha do
+        nome porque é a única coisa que uma pessoa de fora pode FAZER ali —
+        e uma vez só: dois iguais na mesma página é ruído."""
         html = pages.room_page(self.SALA, [], {}, "en")
         self.assertIn("/room/6359GV/join", html)
-        self.assertIn("cta", html)
+        self.assertEqual(html.count('class="cta"'), 1)
+        barra = html.split('<div class="titlebar">')[1].split("</div>")[0]
+        self.assertIn("<h1>", barra)
+        self.assertIn("cta", html.split('<div class="titlebar">')[1][:400])
 
     def test_privacy_offers_a_page_instead_of_a_curl_line(self):
         """Uma promessa de apagar dados que exige saber o que é um cabeçalho
