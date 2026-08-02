@@ -96,9 +96,9 @@ def find_game() -> str:
     pasta = steamfind.game_dir()
     if pasta:
         return pasta
-    raise ModError("não achei a pasta do Space Haven. Se ele está instalado "
-                   "fora do Steam, ou em duas cópias, aponte SPACEHAVEN_DIR "
-                   "para a pasta que tem spacehaven.jar")
+    raise ModError("could not find the Space Haven folder. If it lives "
+                   "outside Steam, or you have two copies, point "
+                   "SPACEHAVEN_DIR at the folder holding spacehaven.jar")
 
 
 def find_weaver() -> str:
@@ -114,9 +114,10 @@ def find_weaver() -> str:
             if re.fullmatch(r"aspectjweaver-[\d.]+\.jar", name):
                 return os.path.join(path, name)
     raise ModError(
-        "não achei o aspectjweaver. Ele vem com o SpaceHaven Mod Loader: "
-        "assine em steamcommunity.com/sharedfiles/filedetails/?id=3703674043 "
-        "e deixe o Steam baixar, ou aponte SPACEHAVEN_MODLOADER para a pasta")
+        "could not find aspectjweaver. It ships with the SpaceHaven Mod "
+        "Loader: subscribe at "
+        "steamcommunity.com/sharedfiles/filedetails/?id=3703674043 and let "
+        "Steam download it, or point SPACEHAVEN_MODLOADER at the folder")
 
 
 def find_mod_jar() -> str:
@@ -135,13 +136,14 @@ def find_mod_jar() -> str:
     for caminho in candidatos:
         if os.path.isfile(caminho):
             return caminho
-    raise ModError(f"{MOD_JAR} não foi compilado ainda. Rode mod/build.sh")
+    raise ModError(f"{MOD_JAR} has not been built yet. Run mod/build.sh")
 
 
 def read_config(game: str) -> dict:
     path = os.path.join(game, "config.json")
     if not os.path.isfile(path):
-        raise ModError(f"{path} não existe; esta pasta não parece o jogo")
+        raise ModError(f"{path} does not exist, so this does not look like the "
+                       f"game folder")
     with open(path, encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -206,9 +208,10 @@ def install(game: str, dry_run: bool) -> int:
     aberto = game_is_running()
     if aberto and not dry_run:
         raise ModError(
-            f"o Space Haven está aberto ({aberto}). A JVM carrega o mod ao "
-            f"iniciar, então instalar agora não mudaria nada nesta sessão — e "
-            f"você testaria a versão antiga. Feche o jogo e rode de novo")
+            f"Space Haven is open ({aberto}). The JVM loads the mod at "
+            f"startup, so installing now would change nothing this session, "
+            f"and you would test the old version. Close the game and try "
+            f"again")
 
     weaver = find_weaver()
     mod_jar = find_mod_jar()
@@ -217,16 +220,16 @@ def install(game: str, dry_run: bool) -> int:
     weaver_name = os.path.basename(weaver)
     novo = plan_install(config, weaver_name, MOD_JAR)
 
-    print(f"jogo:   {game}")
+    print(f"game:   {game}")
     print(f"weaver: {weaver}")
     print(f"mod:    {mod_jar}")
     print()
-    print("config.json ficaria assim:")
+    print("config.json would end up like this:")
     print(f"  vmArgs:    {novo['vmArgs']}")
     print(f"  classPath: {novo['classPath']}")
 
     if dry_run:
-        print("\n(--dry-run: nada foi escrito)")
+        print("\n(--dry-run: nothing was written)")
         return 0
 
     for origem in (weaver, mod_jar):
@@ -234,11 +237,11 @@ def install(game: str, dry_run: bool) -> int:
         if not (os.path.isfile(destino)
                 and os.path.getsize(destino) == os.path.getsize(origem)):
             shutil.copy2(origem, destino)
-            print(f"copiado {os.path.basename(origem)}")
+            print(f"copied {os.path.basename(origem)}")
 
     write_config(game, novo)
-    print(f"\ninstalado. O backup do config original está em {BACKUP}.")
-    print(f"Para desfazer: {como_chamar()} --uninstall")
+    print(f"\ninstalled. The original config is backed up as {BACKUP}.")
+    print(f"To undo it: {como_chamar()} --uninstall")
     return 0
 
 
@@ -248,15 +251,15 @@ def uninstall(game: str, dry_run: bool) -> int:
 
     restantes = other_code_mods(novo, MOD_JAR)
     if restantes:
-        print(f"atenção: ainda há outros jars no classPath ({restantes}).")
-        print("O -javaagent foi removido e eles vão parar de funcionar.")
-        print("Rode o Mod Loader depois, ou reinstale-os.")
+        print(f"warning: other jars remain on the classPath ({restantes}).")
+        print("The -javaagent is gone, so they will stop working.")
+        print("Run the Mod Loader afterwards, or reinstall them.")
 
-    print("config.json ficaria assim:")
+    print("config.json would end up like this:")
     print(f"  vmArgs:    {novo['vmArgs']}")
     print(f"  classPath: {novo['classPath']}")
     if dry_run:
-        print("\n(--dry-run: nada foi escrito)")
+        print("\n(--dry-run: nothing was written)")
         return 0
 
     write_config(game, novo)
@@ -264,8 +267,8 @@ def uninstall(game: str, dry_run: bool) -> int:
     if os.path.isfile(alvo):
         os.remove(alvo)
         print(f"removido {MOD_JAR}")
-    print("\ndesinstalado. O aspectjweaver.jar foi deixado onde estava: "
-          "ele é do Mod Loader, não nosso.")
+    print("\nuninstalled. aspectjweaver.jar was left where it was, because "
+          "it belongs to the Mod Loader.")
     return 0
 
 
@@ -275,9 +278,9 @@ def status(game: str) -> int:
                      for a in (config.get("vmArgs") or []))
     tem_mod = any(os.path.basename(c) == MOD_JAR
                   for c in (config.get("classPath") or []))
-    print(f"jogo:      {game}")
-    print(f"javaagent: {'sim' if tem_agente else 'não'}")
-    print(f"mod:       {'sim' if tem_mod else 'não'}")
+    print(f"game:      {game}")
+    print(f"javaagent: {'yes' if tem_agente else 'no'}")
+    print(f"mod:       {'yes' if tem_mod else 'no'}")
     print(f"vmArgs:    {config.get('vmArgs')}")
     print(f"classPath: {config.get('classPath')}")
     return 0 if (tem_agente and tem_mod) else 1
@@ -285,12 +288,12 @@ def status(game: str) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="instala o mod do Shared Galaxy no Space Haven")
-    ap.add_argument("--game", help="pasta do jogo (senão procura sozinho)")
+        description="install the Shared Galaxy mod into Space Haven")
+    ap.add_argument("--game", help="game folder (found on its own otherwise)")
     ap.add_argument("--dry-run", action="store_true",
-                    help="mostra o que faria, sem escrever")
-    ap.add_argument("--uninstall", action="store_true", help="desfaz")
-    ap.add_argument("--status", action="store_true", help="só informa")
+                    help="show what it would do, without writing")
+    ap.add_argument("--uninstall", action="store_true", help="undo it")
+    ap.add_argument("--status", action="store_true", help="report only")
     args = ap.parse_args()
 
     try:
@@ -301,7 +304,7 @@ def main() -> int:
             return uninstall(game, args.dry_run)
         return install(game, args.dry_run)
     except ModError as erro:
-        print(f"erro: {erro}", file=sys.stderr)
+        print(f"error: {erro}", file=sys.stderr)
         return 1
 
 

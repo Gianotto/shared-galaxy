@@ -456,7 +456,7 @@ def cmd_configure_room(args) -> int:
         payload["leaseHours"] = args.lease_hours
     if not payload:
         raise ClientError("nothing to change. Use --ship, --difficulty, "
-                          "--opcao chave=valor, --name ou --deadline")
+                          "--option KEY=VALUE, --name or --lease-hours")
     json_request("PATCH", f"/api/v1/rooms/{args.room}", payload)
     print(f"room {args.room} updated")
     return cmd_how_to_join(args)
@@ -526,7 +526,7 @@ def cmd_join(args) -> int:
         return 0
 
     folder = resolve_save(args.save)
-    print(f"subindo {folder} …")
+    print(f"uploading {folder} …")
     _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/join",
                           pack(folder),
                           {"Content-Type": "application/zip",
@@ -534,9 +534,9 @@ def cmd_join(args) -> int:
     data = json.loads(raw)
     galaxia = data["galaxy"]
     print(f"joined room {args.room}")
-    print(f"  galáxia:    {galaxia['digest']} "
-          f"({galaxia['systems']} sistemas, {galaxia['bodies']} corpos)")
-    print(f"  age:     {data['ageDays']} days")
+    print(f"  galaxy:     {galaxia['digest']} "
+          f"({galaxia['systems']} systems, {galaxia['bodies']} bodies)")
+    print(f"  age:        {data['ageDays']} days")
     print(f"  your ship:  {data['presence']['shipName']}")
     print()
     print("  The server owns this save now. Use `play` to start a session.")
@@ -617,7 +617,7 @@ def cmd_return_save(args) -> int:
             f"the save may not be fully written yet")
     folder, which, age = _best_state(args.save)
     if which:
-        print(f"devolvendo {which} (age {age:.2f}) de {args.save} …")
+        print(f"returning {which} (age {age:.2f}) from {args.save} …")
     else:
         print(f"returning {folder} …")
     _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
@@ -1382,7 +1382,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-players", type=int, default=8)
     p.add_argument("--ship", help="starting ship everyone must pick")
     p.add_argument("--difficulty")
-    p.add_argument("--option", action="append", metavar="CHAVE=VALOR",
+    p.add_argument("--option", action="append", metavar="KEY=VALUE",
                    help="scenario option; repeatable")
     p.set_defaults(func=cmd_create_room)
 
@@ -1391,7 +1391,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("room")
     p.add_argument("--ship", help="starting ship everyone must pick")
     p.add_argument("--difficulty")
-    p.add_argument("--option", action="append", metavar="CHAVE=VALOR",
+    p.add_argument("--option", action="append", metavar="KEY=VALUE",
                    help="scenario option; repeatable")
     p.add_argument("--name")
     p.add_argument("--lease-hours", type=int)
@@ -1441,7 +1441,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_play)
 
     p = sub.add_parser("install-mod",
-                       help="open the game straight into the room's save")
+                       help="install the mod into your copy of the game")
     p.add_argument("--game", help="the game folder (found on its own by default)")
     p.add_argument("--dry-run", action="store_true",
                    help="show what it would change, without writing")
