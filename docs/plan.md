@@ -475,6 +475,23 @@ Out of the queue, blocking nothing: the minimal mod from 2.9 and live injection.
   already have left the window by the time someone looks.
 - **Vendoring the fingerprint creates two copies of the same logic.** The
   cross-test is what stops silent drift.
+- **A storefront can be sold INTO, and the credits come from nowhere.** The
+  storefront carries a shipBank the server invented (5000 credits). Settlement
+  deliberately ignores that direction — debiting somebody for a purchase they
+  never made, with money they never had, is worse than losing the trade. But
+  the visitor keeps the credits, so a person who understands this can mint
+  money by dumping cargo on a neighbour. The candidate fix is a storefront born
+  with an empty bank; whether the trade dialog still works that way has NOT
+  been tested in game, and guessing is how the derelict and the fog were got
+  wrong before. `inbound` is recorded on every settlement so the first
+  occurrence is visible rather than inferred.
+- **The shop toggle is intermittent.** It appears more often than not, and
+  always on the first click on a storage. Four real causes have been found and
+  fixed (class missing from the weave list, writing under MenuSystem instead of
+  through it, copying another mod's button reuse without its reason, two
+  implementations live at once); whatever remains is unmeasured. The route that
+  does not depend on the UI at all — the mod logging the storage id and the
+  choice made from the terminal — is proven machinery and is the fallback.
 - **A game update puts everything up for re-verification.** Worth anchoring the
   game version per room from phase 0, so the server refuses a save from a
   different version instead of accepting it and corrupting it.
