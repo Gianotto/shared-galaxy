@@ -382,6 +382,27 @@ public class ShopButtonAspect {
         }
         hold(button, id);
 
+        // ESTAR NA LISTA NAO E ESTAR DESENHADO.
+        //
+        // A caixa termina com quatro botoes em toda selecao, o nosso incluido,
+        // e ele ainda assim some as vezes. `StageButton` tem um campo `draw` e
+        // um `load()`: o primeiro decide se ele se desenha, o segundo prepara o
+        // que ele desenha. Um botao reaproveitado atravessa aberturas de painel
+        // sem ninguem os refazer por ele.
+        try {
+            button.getClass().getMethod("load").invoke(button);
+        } catch (Throwable semLoad) {
+            System.err.println("[shared-galaxy] button load() failed: "
+                               + semLoad);
+        }
+        try {
+            button.getClass().getMethod("setDraw", boolean.class)
+                .invoke(button, Boolean.TRUE);
+        } catch (Throwable semDraw) {
+            System.err.println("[shared-galaxy] button setDraw() failed: "
+                               + semDraw);
+        }
+
         Class<?> click = Class.forName(CLICK, true, loader);
         Object handler = Proxy.newProxyInstance(
             loader, new Class<?>[]{click}, new InvocationHandler() {
@@ -427,7 +448,9 @@ public class ShopButtonAspect {
             .invoke(menuSystem, button);
 
         trace(hook, id, "box now " + tamanho(read(commandBox, "buttons"))
-                       + (reaproveitado != null ? " (reused)" : " (new)"),
+                       + (reaproveitado != null ? " (reused)" : " (new)")
+                       + " draw=" + read(button, "draw")
+                       + " loaded=" + read(button, "loaded"),
               panel);
     }
 
