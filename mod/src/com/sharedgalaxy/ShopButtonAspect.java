@@ -121,13 +121,22 @@ public class ShopButtonAspect {
         if (!args[0].getClass().getName().endsWith("SingleWorldElementSelected")) {
             return;
         }
-        offerButton(args[0], joinPoint.getSignature().getName());
+        // A CAIXA VEM DO PROPRIO JOINPOINT.
+        //
+        // Este conselho e em `SelectionBox.setSelectedItem`, entao o alvo E a
+        // caixa. Eu vinha lendo `panel.selectionBox`, que ainda esta vazio
+        // neste instante — o painel so e preso a caixa depois. Resultado: as
+        // selecoes em que o `open()` nao dispara nao tinham quem fizesse o
+        // trabalho, e voltavam caladas. E a explicacao de "nao mostra nada no
+        // log quando o botao nao aparece".
+        offerButton(args[0], joinPoint.getSignature().getName(),
+                    joinPoint.getTarget());
     }
 
     @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystemItems"
            + "$SingleWorldElementSelected.open(..))")
     public void afterPanelOpened(JoinPoint joinPoint) {
-        offerButton(joinPoint.getTarget(), "open");
+        offerButton(joinPoint.getTarget(), "open", null);
     }
 
     /**
@@ -156,14 +165,15 @@ public class ShopButtonAspect {
                     .endsWith("SingleWorldElementSelected")) {
                 return;
             }
-            offerButton(item, "afterClear");
+            offerButton(item, "afterClear", box);
         } catch (Throwable failure) {
             System.err.println("[shared-galaxy] could not restore the shop "
                                + "toggle: " + failure);
         }
     }
 
-    private static void offerButton(Object panel, String hook) {
+    private static void offerButton(Object panel, String hook,
+                                    Object boxFromHook) {
         try {
             if (panel == null) {
                 trace(hook, "-", "no panel", null);
@@ -179,7 +189,7 @@ public class ShopButtonAspect {
             }
             selected = String.valueOf(
                 element.getClass().getMethod("getId").invoke(element));
-            addButton(panel, selected, hook);
+            addButton(panel, selected, hook, boxFromHook);
         } catch (Throwable failure) {
             // A panel without our button is a small loss; a crash while
             // somebody clicks a crate is not.
@@ -350,7 +360,7 @@ public class ShopButtonAspect {
     }
 
     private static void addButton(final Object panel, final String id,
-                                  final String hook)
+                                  final String hook, Object boxFromHook)
             throws Exception {
         ClassLoader loader = panel.getClass().getClassLoader();
 
@@ -361,9 +371,12 @@ public class ShopButtonAspect {
         // que consertar: o `open(SelectionBox)` chega logo depois com a caixa
         // pronta, e e ele que poe o botao. Tratar isto como falha enchia o
         // terminal de excecoes numa sequencia que funciona.
-        Object selectionBox = read(panel, "selectionBox");
+        Object selectionBox = boxFromHook != null
+            ? boxFromHook : read(panel, "selectionBox");
         if (selectionBox == null) {
-            return;     // cedo demais; o `open()` cobre logo depois
+            trace(hook, id, "no box on the panel and none from the hook",
+                  panel);
+            return;
         }
 
         Object caixa = read(selectionBox, "commandBox");
