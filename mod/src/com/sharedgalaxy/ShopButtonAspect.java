@@ -83,6 +83,10 @@ public class ShopButtonAspect {
     /** O que o nosso proxy responde a `toString`, para reconhecer o botao. */
     static final String MARKER = "sharedGalaxyShopButton";
 
+    /** Liga o rastro por selecao. `-Dsharedgalaxy.debug=true` no vmArgs. */
+    private static final boolean DEBUG =
+        Boolean.getBoolean("sharedgalaxy.debug");
+
     /**
      * A troca de selecao, que e o que realmente acontece sempre.
      *
@@ -118,11 +122,9 @@ public class ShopButtonAspect {
                     joinPoint.getTarget());
     }
 
-    @After("execution(* fi.bugbyte.spacehaven.gui.MenuSystemItems"
-           + "$SingleWorldElementSelected.open(..))")
-    public void afterPanelOpened(JoinPoint joinPoint) {
-        offerButton(joinPoint.getTarget(), "open", null);
-    }
+    // O gancho em `open()` foi removido. Medido: com os dois, a caixa termina
+    // com CINCO botoes — dois nossos, um por gancho, porque cada um cria o
+    // seu. `setSelectedItem` dispara em toda selecao, entao sozinho basta.
 
     /**
      * A caixa de comandos acabou de ser esvaziada; se um armazem esta
@@ -449,10 +451,13 @@ public class ShopButtonAspect {
             .getMethod("addCommandButtonAsFirst", stageButton)
             .invoke(menuSystem, button);
 
-        trace(hook, id, "box now " + tamanho(read(commandBox, "buttons"))
-                       + " draw=" + read(button, "draw")
-                       + " loaded=" + read(button, "loaded"),
-              panel);
+        // Silencio no caminho feliz. O diagnostico inteiro continua aqui, a
+        // uma linha de ser religado, e foi ele que mostrou o botao duplicado.
+        if (DEBUG) {
+            trace(hook, id, "box now " + tamanho(read(commandBox, "buttons"))
+                           + " draw=" + read(button, "draw")
+                           + " loaded=" + read(button, "loaded"), panel);
+        }
     }
 
     private static int tamanho(Object lista) {
