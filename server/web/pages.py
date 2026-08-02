@@ -832,12 +832,15 @@ chmod +x sgalaxy</pre>
     {commands('register --recover "YOUR-RECOVERY-CODE"', lang)}
   </li>
   <li>
-    <h3>{t("step_join", lang)}</h3>
-    <p class="note">{t("step_join_help", lang)}</p>
-    {commands(f"join {rid}", lang)}
+    <h3>{t("step_mod", lang)}</h3>
     <p class="note">{t("mod_optional_here", lang)}
        <a href="/client?lang={lang}">{t("client_title", lang)}</a></p>
     {commands("install-mod", lang)}
+  </li>
+  <li>
+    <h3>{t("step_join", lang)}</h3>
+    <p class="note">{t("step_join_help", lang)}</p>
+    {commands(f"join {rid}", lang)}
   </li>
   <li>
     <h3>{t("step_play", lang)}</h3>

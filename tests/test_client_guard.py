@@ -545,3 +545,27 @@ class WatcherTestCase(unittest.TestCase):
             fh.write("<mais/>")
         self.assertNotEqual(client._folder_state(pasta), assinatura,
                             "a assinatura não percebeu a pasta mudando")
+
+
+class JoinWithoutASaveTestCase(unittest.TestCase):
+    """`join` exigia `--save`, e a página do site manda rodar `join` antes de
+    `play`. Quem chega pela primeira vez não tem save nenhum para apontar: a
+    criação pelo New Game já estava escrita, presa dentro do `play`."""
+
+    def test_save_is_optional(self):
+        parser = client.build_parser()
+        args = parser.parse_args(["join", "6359GV"])
+        self.assertIsNone(args.save)
+
+    def test_join_takes_the_flags_the_first_access_needs(self):
+        args = client.build_parser().parse_args(
+            ["join", "6359GV", "--game", "/tmp/x", "-y"])
+        self.assertEqual(args.game, "/tmp/x")
+        self.assertTrue(args.yes)
+
+    def test_without_a_game_it_says_what_to_do(self):
+        args = client.build_parser().parse_args(
+            ["join", "6359GV", "--game", "/nao/existe"])
+        with self.assertRaises(client.ClientError) as erro:
+            client.cmd_join(args)
+        self.assertIn("--save", str(erro.exception))

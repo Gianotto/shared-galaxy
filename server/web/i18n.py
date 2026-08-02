@@ -264,14 +264,24 @@ STRINGS: dict = {
         "en": "If you do not have an account yet, make one. It takes a name "
               "and gives back a recovery code, which is what the client uses.",
     },
-    "step_join": {"pt": "3. Entre na sala", "en": "3. Join the room"},
+    "step_mod": {"pt": "3. Instale o mod (opcional)",
+                 "en": "3. Install the mod (optional)"},
+    "step_join": {"pt": "4. Entre na sala", "en": "4. Join the room"},
     "step_join_help": {
-        "pt": "Uma vez só. O jogo abre para você criar a sua nave, e a partir "
-              "daí o servidor é o dono do save.",
-        "en": "Once only. The game opens so you can create your ship, and from "
-              "then on the server owns the save.",
+        "pt": "Uma vez só. O jogo abre para você criar a sua nave em NEW GAME, "
+              "o cliente sobe a partida e o servidor enxerta a galáxia da sala "
+              "nela. Feche o jogo quando a nave estiver criada.",
+        "en": "Once only. The game opens so you can create your ship in NEW "
+              "GAME, the client uploads it, and the server grafts the room's "
+              "galaxy into it. Close the game once the ship exists.",
     },
-    "step_play": {"pt": "4. Jogue", "en": "4. Play"},
+    "mod_first": {
+        "pt": "Instale o mod antes deste passo, se for instalar: com ele o "
+              "jogo já abre no lugar certo.",
+        "en": "Install the mod before this step if you are going to: with it "
+              "the game opens where it should on its own.",
+    },
+    "step_play": {"pt": "5. Jogue", "en": "5. Play"},
     "step_play_help": {
         "pt": "Retira o save, abre o jogo e devolve quando você fecha. É o "
               "único comando de que você precisa depois disso.",

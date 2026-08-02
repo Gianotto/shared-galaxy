@@ -503,6 +503,28 @@ def cmd_how_to_join(args) -> int:
 
 
 def cmd_join(args) -> int:
+    """Entra numa sala. Sem `--save`, cria a partida abrindo o jogo.
+
+    A PRIMEIRA VERSAO EXIGIA `--save` SEMPRE, e a pagina do site manda rodar
+    `join` antes de `play`. Quem chegava sem save nenhum, que e todo mundo que
+    chega pela primeira vez, batia num pedido de arquivo que ainda nao existia.
+    A criacao pelo New Game ja estava escrita; so estava presa dentro do
+    `play`.
+    """
+    if not args.save:
+        exe = args.game or find_game()
+        if not exe or not os.path.isfile(exe):
+            raise ClientError(
+                "could not find Space Haven, and without it I cannot open the "
+                "game for you to create a ship. Pass --game PATH, or point "
+                "--save at a game you already have")
+        if not first_join(args.room, None, args.yes, args.password or "", exe):
+            return 1
+        print()
+        print(f"  The server owns this save now. Play with: "
+              f"{prog()} play {args.room}")
+        return 0
+
     folder = resolve_save(args.save)
     print(f"subindo {folder} …")
     _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/join",
@@ -1328,7 +1350,14 @@ def cmd_delete_account(args) -> int:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Os comandos, separados de `main` para poderem ser conferidos.
+
+    Um `required=True` num argumento e uma decisao de produto escondida numa
+    linha de configuracao: foi assim que `join --save` passou a exigir um save
+    de quem ainda nao tinha nenhum, e ninguem notou porque nao havia como
+    testar o parser sem rodar o programa.
+    """
     ap = argparse.ArgumentParser(
         description="Shared Galaxy client",
         epilog=f"server: {base_url()} (change with SGALAXY_URL)")
@@ -1377,9 +1406,14 @@ def main() -> int:
     p.add_argument("--password")
     p.set_defaults(func=cmd_how_to_join)
 
-    p = sub.add_parser("join", help="upload your first save and join a room")
+    p = sub.add_parser("join", help="join a room, creating your ship")
     p.add_argument("room")
-    p.add_argument("--save", required=True, help="savegame folder")
+    # Sem `--save` o jogo abre para a pessoa criar a nave. Era obrigatorio, e
+    # quem chega pela primeira vez nao tem save nenhum para apontar.
+    p.add_argument("--save", help="a game you already have; omit to create one")
+    p.add_argument("--game", help="path to the Space Haven executable")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="do not ask before uploading")
     p.add_argument("--password")
     p.set_defaults(func=cmd_join)
 
@@ -1434,7 +1468,11 @@ def main() -> int:
     p = sub.add_parser("delete-account", help="delete account and saves, no undo")
     p.set_defaults(func=cmd_delete_account)
 
-    args = ap.parse_args()
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
     try:
         return args.func(args)
     except ClientError as exc:
