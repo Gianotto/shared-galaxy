@@ -77,8 +77,6 @@ public final class VerifyTargets {
         field(panel, "element", false);
         field(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"),
               "commandBox", false);
-        method(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionCommandBox"),
-               "addButton", stageButton);
         method(buttons, "getBaseCheckBox1");
         method(require("fi.bugbyte.framework.screen.ScalableToggleIconButton"),
                "setHoldDown", boolean.class);
@@ -88,20 +86,7 @@ public final class VerifyTargets {
         method(menuSystem, "addCommandButtonAsFirst", stageButton);
         method(menuSystem, "clearCommandButtons");
 
-        // O controle do armazem no OVERVIEW, vizinho do "allow food
-        // consumption" — onde ser loja pertence, por ser configuracao.
-        Class<?> storageControl = require(
-            "fi.bugbyte.spacehaven.gui.WorldElementInfos$StorageControl");
-        Class<?> screen = require("fi.bugbyte.framework.screen.Screen");
-        method(storageControl, "open", screen,
-               require("fi.bugbyte.framework.screen.GuiSkin"));
-        method(storageControl, "close", screen);
-        method(storageControl, "setPos", float.class, float.class);
-        field(storageControl, "toggleEatingAllowed", false);
-        method(screen, "addButton", stageButton);
-        method(screen, "removeButton", stageButton);
         field(menuSystem, "selectionBox", false);
-        method(menuSystem, "removeCommandButton", stageButton);
         field(require("fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBox"),
               "menuSystem", false);
         Class<?> selBox = require(
@@ -110,7 +95,6 @@ public final class VerifyTargets {
             "fi.bugbyte.spacehaven.gui.MenuSystem$SelectionBoxItem");
         method(selBox, "setSelectedItem", boxItem);
         method(selBox, "setNewSelectedItem", boxItem);
-        method(stageButton, "getClickHandler");
         method(stageButton, "setClickHandler", clickHandler);
         method(require("fi.bugbyte.framework.screen.ScalableIconTextButton"),
                "setText", String.class);

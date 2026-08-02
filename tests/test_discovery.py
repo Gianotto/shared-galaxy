@@ -261,6 +261,35 @@ class StorefrontTemplateTestCase(unittest.TestCase):
         sf = self._save([synthetic.default_player_ship()])
         self.assertEqual(storefront.live_npc_ships(sf), [])
 
+    def test_the_sellers_shuttle_does_not_travel_with_the_storefront(self):
+        """Medido num save real: a vitrine era a única nave do setor com um
+        `<c>` em `<crafts>`, com coordenadas de voo próprias. É a lancha de
+        outra pessoa voando na partida de um terceiro, e ela fica órfã se a
+        nave-mãe sair do setor antes do checkin."""
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.npc_trader_ship()])
+        molde = storefront.live_npc_ships(sf)[0]
+        crafts = molde.find("crafts")
+        if crafts is None:
+            crafts = ET.SubElement(molde, "crafts")
+        ET.SubElement(crafts, "c", {"id": "1702", "cid": "20",
+                                    "x": "207.1", "y": "291.1"})
+        self.assertEqual(len(molde.findall("crafts/c")), 1,
+                         "o molde deveria ter o shuttle, senão o teste é vazio")
+
+        rel = storefront.inject_ship(sf, molde, faction="Civilian",
+                                     name="Meridian (Vizinha)", hull_mode=True,
+                                     crew_side="Civilian",
+                                     at=("84119", "214759"), system_id="6")
+        self.assertEqual(rel["crafts"]["removed"], 1)
+        nova = [s for _d, s in sf.ships()
+                if s.get("sid") == rel["fleet"]["createdShipId"]][0]
+        self.assertEqual(nova.findall("crafts/c"), [],
+                         "a vitrine levou o shuttle do vendedor junto")
+        self.assertEqual(len(molde.findall("crafts/c")), 1,
+                         "estragou o molde: a cópia é que devia perder a lancha")
+
     def test_the_crew_comes_along_and_is_renumbered(self):
         """Tripulação é o que separa nave viva de sucata, e entId repetido
         é o tipo de erro que carrega e quebra depois."""

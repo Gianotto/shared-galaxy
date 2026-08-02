@@ -978,6 +978,30 @@ def apply_hostmap_permissions(sf: SaveFile, faction_id: str, side: str,
 # --------------------------------------------------------------------------
 
 
+def strip_crafts(ship: ET.Element) -> dict:
+    """Tira os shuttles da nave antes de ela virar vitrine.
+
+    POR QUE
+
+    A vitrine e uma copia da nave do vendedor, e a copia vem com o complemento
+    de bordo dele: `<crafts>`. Medido num save de verdade — a vitrine era a
+    UNICA nave do setor com um `<c>` ali dentro, com coordenadas de voo
+    proprias.
+
+    Um shuttle nao fica parado. A IA o lanca, ele cruza o setor, e ele nao
+    pertence a ninguem que esteja jogando: e a copia da lancha de outra pessoa,
+    voando na partida de um terceiro. Se a nave-mae sai do setor antes do
+    `checkin`, ele fica orfao — e orfao vira permanente, porque
+    `remove_storefronts` procura por `sid` de nave e um `<c>` nao tem sid.
+
+    Uma vitrine e uma prateleira. Prateleira nao tem lancha.
+    """
+    crafts = ship.find("crafts")
+    if crafts is None:
+        return {"removed": 0}
+    return {"removed": clear_children(crafts)}
+
+
 def remove_storefronts(dest: SaveFile, sids) -> dict:
     """Tira do save as vitrines que o servidor montou.
 
@@ -1051,6 +1075,7 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
 
     ship = copy.deepcopy(source_ship)
     ship.tail = None
+    report["crafts"] = strip_crafts(ship)
     old_sid = ship.get("sid")
     if old_sid is None:
         raise SaveError("a nave de origem não tem @sid; ela não é uma <ship> válida")
