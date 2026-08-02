@@ -11,7 +11,18 @@
 #   deploy/safe-deploy.sh --force    para quando voce sabe o que esta fazendo
 set -euo pipefail
 
-HOST="${SGALAXY_HOST:-essentia}"
+# O destino nao vive no repositorio: e o nome de uma maquina, e o repositorio e
+# publico. `deploy/local.env` fica no disco de quem hospeda e o git o ignora.
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/local.env" ]; then
+    # shellcheck disable=SC1090
+    . "$(dirname "${BASH_SOURCE[0]}")/local.env"
+fi
+HOST="${SGALAXY_HOST:-}"
+if [ -z "$HOST" ]; then
+    echo "defina SGALAXY_HOST, ou escreva-o em deploy/local.env:" >&2
+    echo "  echo 'SGALAXY_HOST=meu-servidor' > deploy/local.env" >&2
+    exit 2
+fi
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Uma consulta so, numa viagem so. Com duas, a devolucao de alguem cai entre

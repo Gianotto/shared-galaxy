@@ -410,19 +410,18 @@ PRIVACY = {
     "en": """
 <h2>What is uploaded</h2>
 <p><b>The entire savegame</b>, zipped: the <code>game</code> file, the ships, the
-sectors and the binaries the game writes alongside them. Not a summary — your
-whole run.</p>
+sectors and the binaries the game writes alongside them. It is your whole run,
+not a summary of it.</p>
 
 <h2>Where to</h2>
 <p>To this server, run by a private individual. There is no company behind it,
 no third party receiving a copy, and nothing is forwarded to another service.</p>
 
 <h2>Who can see it</h2>
-<p>Whoever administers the server has technical access to the files — no
+<p>Whoever administers the server has technical access to the files. No
 encryption prevents that, and saying otherwise would be a lie. Other players in
-the same room will see, once the next stage exists, only a <b>storefront</b>: a
-shop with the name you choose and only the goods you consign. Your actual hold
-is not in that copy.</p>
+the same room see a <b>storefront</b>: a shop with the name you choose, holding
+the goods you consign. Your actual hold stays out of that copy.</p>
 
 <h2>For how long</h2>
 <p>The last 20 versions of each save, per room. Older ones are deleted
@@ -438,13 +437,14 @@ no recovery.</p>
 Because registration asks for a name and nothing else, a script could create
 accounts without limit, so the server allows <b>one account per connection</b>.
 To answer "has this address registered before" it stores an <b>HMAC</b> of the
-address — not the address, and not a plain hash of it either: a plain SHA-256 of
-an IPv4 is four billion candidates and falls to brute force in seconds. What is
-stored answers that one question and nothing else. It cannot place you, and it
-goes with the rest when you delete your account.</p>
-<p>If you share a connection with somebody who already joined — a house, a hall
-of residence, or any mobile carrier — you will be turned away for a reason that
-is not your fault. Ask whoever runs the room; lifting it takes one line.</p>
+address. Not the address itself, and not a plain hash of it either: a plain
+SHA-256 of an IPv4 has four billion candidates and falls to brute force in
+seconds. What is stored answers that one question and goes with the rest when
+you delete your account. It cannot place you anywhere.</p>
+<p>If you share a connection with somebody who already joined, say a house, a
+hall of residence, or any mobile carrier, you will be turned away for a reason
+that has nothing to do with you. Ask whoever runs the room. Lifting it takes one
+line.</p>
 
 <h2>What the client writes on your machine</h2>
 <p>One file, and only one:</p>
@@ -453,15 +453,16 @@ is not your fault. Ask whoever runs the room; lifting it takes one line.</p>
 <code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. It holds your
 access code, created mode 600 so only your user can read it. The code is stored
 in the clear because it <b>is</b> your account: anybody who reads that file signs
-in as you. Deleting it does not delete the account — it disconnects this machine
-from it. Nothing else is installed, and no service is left running.</p>
+in as you. Deleting it disconnects this machine, and the account stays alive on
+the server. Nothing else is installed, and no service keeps running.</p>
 
 <h2>How to delete everything and leave</h2>
 <p>There is a page for it, and there is no second-guessing step:</p>
 <p><a class="cta" href="/account/delete">Delete your account and leave</a></p>
 <p>It deletes your account and all your saves. Rooms you created that still have
-other players stay up — erasing them would destroy the saves of people who asked
-for nothing — but they leave the public listing and your code is invalidated.</p>
+other players stay up, because erasing them would destroy the saves of people
+who asked for nothing. Those rooms leave the public listing, and your code stops
+working.</p>
 
 <h2>What cannot be promised</h2>
 <p>The game runs on your machine, on files you can edit. There is no way to stop
@@ -472,15 +473,15 @@ guesses. Anyone promising absolute security hasn't thought about it.</p>
     "pt": """
 <h2>O que sobe</h2>
 <p><b>O savegame inteiro</b>, compactado: o arquivo <code>game</code>, as naves,
-os setores e os binários que o jogo grava junto. Não é um resumo — é a sua
-partida completa.</p>
+os setores e os binários que o jogo grava junto. É a sua partida completa, e
+não um resumo dela.</p>
 
 <h2>Para onde</h2>
 <p>Para este servidor, mantido por um particular. Não há empresa por trás, não há
 terceiro recebendo cópia, e nada é enviado para outro serviço.</p>
 
 <h2>Quem enxerga</h2>
-<p>Quem administra o servidor tem acesso técnico aos arquivos — não há
+<p>Quem administra o servidor tem acesso técnico aos arquivos. Não há
 criptografia que impeça isso, e dizer o contrário seria mentira. Outros jogadores
 da mesma sala verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
 uma loja com o nome que você escolher e só a mercadoria que você consignar. O seu
@@ -494,13 +495,13 @@ sozinhas. Se você sair, apaga tudo na hora.</p>
 <p>Uma coisa é guardada, e omitir seria desonesto. Como o cadastro pede um nome
 e mais nada, um script criaria contas sem limite, então o servidor permite
 <b>uma conta por conexão</b>. Para responder "este endereço já se cadastrou" ele
-guarda um <b>HMAC</b> do endereço — não o endereço, e nem um hash simples dele:
-um SHA-256 puro de um IPv4 são quatro bilhões de candidatos e cai por força
-bruta em segundos. O que fica responde só essa pergunta. Não localiza ninguém, e
-vai junto com o resto quando você apaga a conta.</p>
-<p>Se você divide a conexão com quem já entrou — uma casa, um alojamento, ou
-qualquer operadora de celular — vai ser barrado por um motivo que não é culpa
-sua. Fale com quem administra a sala; liberar é uma linha.</p>
+guarda um <b>HMAC</b> do endereço. Não o endereço em si, e nem um hash simples
+dele: um SHA-256 puro de um IPv4 são quatro bilhões de candidatos e cai por
+força bruta em segundos. O que fica responde só essa pergunta e vai junto com o
+resto quando você apaga a conta. Localizar alguém, ele não localiza.</p>
+<p>Se você divide a conexão com quem já entrou, seja uma casa, um alojamento ou
+qualquer operadora de celular, vai ser barrado por um motivo que nada tem a ver
+com você. Fale com quem administra a sala. Liberar é uma linha.</p>
 <p><b>Fora isso, nenhum.</b> Não pedimos e-mail, nome real, senha ou login de
 Steam. A sua
 identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
@@ -514,15 +515,16 @@ perde a conta</b>, e não há como recuperar.</p>
 <code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. Ele guarda o seu
 código de acesso, criado com permissão 600 para que só o seu usuário leia. O
 código fica em claro porque ele <b>é</b> a sua conta: quem ler esse arquivo
-entra como você. Apagá-lo não apaga a conta — desconecta este computador dela.
-Nada mais é instalado, e nenhum serviço fica rodando.</p>
+entra como você. Apagá-lo desconecta este computador, e a conta segue viva no
+servidor. Nada mais é instalado, e nenhum serviço fica rodando.</p>
 
 <h2>Como apagar tudo e sair</h2>
 <p>Existe uma página para isso, e não há etapa de arrependimento:</p>
 <p><a class="cta" href="/account/delete?lang=pt">Apagar a conta e sair</a></p>
 <p>Apaga a sua conta e todos os seus saves. Salas que você criou e que ainda têm
-outras pessoas dentro continuam de pé — apagá-las destruiria o save de quem não
-pediu nada — mas saem da listagem pública e o seu código deixa de valer.</p>
+outras pessoas dentro continuam de pé, porque apagá-las destruiria o save de
+quem não pediu nada. Essas salas saem da listagem pública, e o seu código deixa
+de valer.</p>
 
 <h2>O que não dá para prometer</h2>
 <p>O jogo roda na sua máquina, em arquivos que você consegue editar. Não há como
@@ -559,10 +561,10 @@ and merging them is not a problem with an honest solution.</p>
 
 <h2>What the server checks, and what it does not</h2>
 <p>Every arriving save is fingerprinted by its stars. If the galaxy is not the
-room's, the save is refused — it is another universe, not this one. What the
-server does <b>not</b> do is police your run: it does not audit your resources,
-your ship or your crew. The game runs on your machine, on files you can edit,
-and pretending otherwise would be theatre.</p>
+room's, the save is refused, because it belongs to another universe. Beyond
+that the server leaves your run alone. It never audits your resources, your ship
+or your crew. The game runs on your machine, on files you can edit, and
+pretending otherwise would be theatre.</p>
 
 <h2>What travels between players</h2>
 <p>Three things, and no more:</p>
@@ -572,23 +574,24 @@ and pretending otherwise would be theatre.</p>
 everyone, including people who join later. Visited stays yours; visible is
 shared.</li>
 <li><b>What you sell.</b> One storage on your ship can be marked as your shop.
-Its contents — and only its contents — are copied into a storefront that
+Its contents, and only its contents, are copied into a storefront that
 appears in your neighbours' sectors.</li>
 </ul>
-<p>Your hold, your blueprints and your colony are not in that copy.</p>
+<p>Your hold, your blueprints and your colony stay out of that copy.</p>
 
 <h2>The storefront, and how a sale reaches you</h2>
-<p>A neighbour in your system shows up as a ship you can trade with. That ship
-is not their game reaching into yours: it is a copy the server assembles from a
-ship already present in <i>your</i> save, carrying only what they consigned.</p>
-<p>When somebody buys from it, the game charges them and pays the ship — a ship
-that, from the game's point of view, belongs to a faction. So the server
-photographs the shelf when it hands the save out, compares it when the save
-comes back, and records what was sold. You collect at your next check out:
-credits into your bank, goods out of your shop storage. The price is the one the
-game itself charged.</p>
-<p>The storefront is removed from the save when it comes back. It never becomes
-part of your game.</p>
+<p>A neighbour in your system shows up as a ship you can trade with. The server
+assembles that ship inside your own save, from their ship as it stood when they
+last returned it, carrying the goods they consigned. Their game never touches
+yours.</p>
+<p>When somebody buys from it, the game charges them and pays the ship, which
+as far as the game knows belongs to a faction. So the server photographs the
+shelf when it hands the save out, compares it when the save comes back, and
+records what was sold. You collect at your next check out: credits into your
+bank, goods out of your shop storage. The price is the one the game itself
+charged.</p>
+<p>The storefront is removed from the save when it comes back, so it stays out
+of your own game for good.</p>
 
 <h2>The mod</h2>
 <p>The mod is optional. Everything above works without it; it removes the
@@ -603,20 +606,20 @@ run.</li>
 is done in the game rather than in a terminal.</li>
 <li><b>It silences the automatic hails</b> from storefronts. Left alone, the
 game's AI would have your neighbours' shops calling you to trade on their own
-initiative — an economy moving without anybody deciding it should.</li>
+initiative, moving an economy that nobody decided to move.</li>
 </ul>
-<p>Technically it is a Java agent woven into the running game with AspectJ. It
-does not patch the game's files: the game jar is untouched, and uninstalling is
-undoing three lines in a config file.</p>
+<p>Technically it is a Java agent woven into the running game with AspectJ. The
+game jar stays as it was, and uninstalling means undoing three lines in a config
+file.</p>
 
 <h2>What is stored, and for how long</h2>
 <p>The last three versions of each save, per room. Older ones are deleted
 automatically, and everything goes at once if you leave.</p>
-<p><b>There is no rollback.</b> Nothing restores an old version — not for you,
-not for the room owner, not for anybody. A session that went badly went badly,
-and a mistake that costs a crew costs it. The short history exists to protect
-you from <i>this server</i>: a bad graft or a storefront removed wrongly is our
-fault, not yours, and the previous version is what makes that recoverable.</p>
+<p><b>There is no rollback.</b> Nothing restores an old version, for you, for
+the room owner, or for anybody. A session that went badly went badly, and a
+mistake that costs a crew costs it. The short history is there to protect you
+from <i>this server</i>: a bad graft or a storefront removed wrongly is our
+fault, and the previous version is what makes it recoverable.</p>
 """, "pt": """
 <h2>A ideia</h2>
 <p>Space Haven é um jogo de um jogador só, e isto não muda isso. Ninguém joga
@@ -644,10 +647,10 @@ e juntá-las não é um problema com solução honesta.</p>
 
 <h2>O que o servidor confere, e o que não confere</h2>
 <p>Todo save que chega é identificado pelas suas estrelas. Se a galáxia não for
-a da sala, o save é recusado — é outro universo, não este. O que o servidor
-<b>não</b> faz é fiscalizar a sua partida: não audita recursos, nave nem
-tripulação. O jogo roda na sua máquina, sobre arquivos que você pode editar, e
-fingir o contrário seria teatro.</p>
+a da sala, o save é recusado, porque pertence a outro universo. Fora isso o
+servidor deixa a sua partida em paz: recursos, nave e tripulação ficam por sua
+conta. O jogo roda na sua máquina, sobre arquivos que você pode editar, e fingir
+o contrário seria teatro.</p>
 
 <h2>O que viaja entre jogadores</h2>
 <p>Três coisas, e nada além:</p>
@@ -657,23 +660,23 @@ fingir o contrário seria teatro.</p>
 para todos, inclusive para quem entrar depois. Visitado continua seu; visível é
 compartilhado.</li>
 <li><b>O que você vende.</b> Um depósito da sua nave pode ser marcado como a sua
-loja. O conteúdo dele — e só ele — é copiado para uma vitrine que aparece nos
+loja. O conteúdo dele, e só ele, é copiado para uma vitrine que aparece nos
 setores dos seus vizinhos.</li>
 </ul>
-<p>O seu porão, os seus projetos e a sua colônia não estão nessa cópia.</p>
+<p>O seu porão, os seus projetos e a sua colônia ficam de fora dessa cópia.</p>
 
 <h2>A vitrine, e como uma venda chega até você</h2>
 <p>Um vizinho no seu sistema aparece como uma nave com quem dá para comerciar.
-Essa nave não é o jogo dele alcançando o seu: é uma cópia que o servidor monta a
-partir de uma nave que já estava no <i>seu</i> save, carregando só o que ele
-consignou.</p>
-<p>Quando alguém compra dela, o jogo cobra e paga a nave — uma nave que, para o
-jogo, pertence a uma facção. Então o servidor fotografa a prateleira quando
-entrega o save, compara quando ele volta, e registra o que foi vendido. Você
-recebe na sua próxima retirada: créditos no banco, mercadoria fora do depósito.
-O preço é o que o próprio jogo cobrou.</p>
-<p>A vitrine é removida do save quando ele volta. Ela nunca vira parte da sua
-partida.</p>
+O servidor monta essa nave dentro do seu próprio save, a partir da nave dele
+como estava na última devolução, carregando o que ele consignou. O jogo dele
+nunca encosta no seu.</p>
+<p>Quando alguém compra dela, o jogo cobra e paga a nave, que para ele pertence
+a uma facção. Então o servidor fotografa a prateleira quando entrega o save,
+compara quando ele volta, e registra o que foi vendido. Você recebe na sua
+próxima retirada: créditos no banco, mercadoria fora do depósito. O preço é o
+que o próprio jogo cobrou.</p>
+<p>A vitrine é removida do save quando ele volta, então fica de fora da sua
+partida para sempre.</p>
 
 <h2>O mod</h2>
 <p>O mod é opcional. Tudo acima funciona sem ele; o que ele tira são as partes
@@ -687,21 +690,21 @@ local.</li>
 <li><b>Acrescenta um botão SHOP</b> ao painel de um depósito, para escolher o
 que você vende ser coisa de dentro do jogo, e não de terminal.</li>
 <li><b>Cala os chamados automáticos</b> das vitrines. Sem isso, a IA do jogo põe
-as lojas dos seus vizinhos ligando para negociar por conta própria — uma
-economia se movendo sem ninguém ter decidido isso.</li>
+as lojas dos seus vizinhos ligando para negociar por conta própria, movendo
+uma economia que ninguém decidiu mover.</li>
 </ul>
-<p>Tecnicamente é um agente Java tecido no jogo em execução com AspectJ. Ele não
-altera os arquivos do jogo: o jar continua intacto, e desinstalar é desfazer
-três linhas num arquivo de configuração.</p>
+<p>Tecnicamente é um agente Java tecido no jogo em execução com AspectJ. O jar
+do jogo continua como estava, e desinstalar é desfazer três linhas num arquivo
+de configuração.</p>
 
 <h2>O que fica guardado, e por quanto tempo</h2>
 <p>As últimas três versões de cada save, por sala. As mais antigas são apagadas
 sozinhas, e tudo vai junto se você sair.</p>
-<p><b>Não existe rollback.</b> Nada restaura uma versão antiga — nem para você,
-nem para quem administra a sala, nem para ninguém. Uma sessão que deu errado deu
-errado, e um engano que custa uma tripulação custa. O histórico curto existe
-para te proteger <i>deste servidor</i>: um enxerto malfeito ou uma vitrine
-removida errado é culpa nossa, não sua, e a versão anterior é o que torna isso
+<p><b>Não existe rollback.</b> Nada restaura uma versão antiga, para você, para
+quem administra a sala, ou para quem quer que seja. Uma sessão que deu errado
+deu errado, e um engano que custa uma tripulação custa. O histórico curto está
+lá para te proteger <i>deste servidor</i>: um enxerto malfeito ou uma vitrine
+removida errado é culpa nossa, e a versão anterior é o que torna isso
 recuperável.</p>
 """}
 

@@ -1,8 +1,8 @@
 """
 Page strings, in English and Portuguese.
 
-The pages are the front door — step 2 of section 2.11, where someone sees a
-living room and decides whether to join — so serving a single language shuts the
+The pages are the front door, step 2 of section 2.11, where someone sees a
+living room and decides whether to join. Serving a single language shuts that
 door on half of whoever arrives.
 
 No translation library: a few dozen phrases fit in a dict. gettext would add a
@@ -55,10 +55,10 @@ STRINGS: dict = {
     },
     "windows_note": {
         "pt": "Abra o PowerShell na pasta onde baixou. O Windows pode avisar "
-              "que o arquivo veio da internet — é um binário sem assinatura "
+              "que o arquivo veio da internet. É um binário sem assinatura "
               "paga, e o código está aberto para conferência.",
         "en": "Open PowerShell in the folder you downloaded to. Windows may "
-              "warn that the file came from the internet — it is an unsigned "
+              "warn that the file came from the internet. It is an unsigned "
               "binary, and the source is open to inspection.",
     },
     "what_it_writes": {"pt": "O que ele cria no seu computador",
@@ -78,11 +78,11 @@ STRINGS: dict = {
     },
     "mod_needs_loader": {
         "pt": "Ele precisa do <b>SpaceHaven Mod Loader</b>, que é um item do "
-              "Workshop. Assine-o e deixe o Steam baixar — é de onde vem o "
+              "Workshop. Assine-o e deixe o Steam baixar. É de onde vem o "
               "AspectJ, que é o que permite um mod de código existir neste "
               "jogo.",
         "en": "It needs the <b>SpaceHaven Mod Loader</b>, a Workshop item. "
-              "Subscribe and let Steam download it — that is where AspectJ "
+              "Subscribe and let Steam download it. That is where AspectJ "
               "comes from, and AspectJ is what makes a code mod possible in "
               "this game at all.",
     },
@@ -95,11 +95,11 @@ STRINGS: dict = {
     "mod_closed_why": {
         "pt": "Com o jogo aberto ele recusa, de propósito: a JVM lê o jar uma "
               "vez, ao iniciar, então trocar o arquivo durante a partida não "
-              "muda nada — e faria você testar a versão antiga achando que "
+              "muda nada, e faria você testar a versão antiga achando que "
               "testa a nova.",
         "en": "With the game open it refuses, on purpose: the JVM reads the "
               "jar once, at startup, so swapping the file mid-session changes "
-              "nothing — and would have you testing the old version believing "
+              "nothing, and would have you testing the old version believing "
               "it is the new one.",
     },
     "mod_uninstall": {"pt": "Para desfazer:", "en": "To undo it:"},
@@ -122,16 +122,16 @@ STRINGS: dict = {
         "pt": "No Windows o caminho equivalente é "
               "<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. "
               "O arquivo é criado com permissão 600 (só o seu usuário lê) e "
-              "guarda o código em claro — ele <b>é</b> a sua conta, então quem "
-              "ler o arquivo entra como você. Apagar o arquivo não apaga a "
-              "conta no servidor; desconecta este computador dela.",
+              "guarda o código em claro, porque ele <b>é</b> a sua conta: quem "
+              "ler o arquivo entra como você. Apagar o arquivo desconecta "
+              "este computador da conta, e a conta segue viva no servidor.",
         "en": "On Windows the equivalent path is "
               "<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. "
               "The file is created mode 600 (only your user can read it) and "
-              "holds the code in the clear — it <b>is</b> your account, so "
+              "holds the code in the clear, because it <b>is</b> your account: "
               "anybody who reads the file signs in as you. Deleting the file "
-              "does not delete the account; it disconnects this machine from "
-              "it.",
+              "disconnects this machine, and the account stays alive on the "
+              "server.",
     },
 
     # -- codigo de recuperacao
@@ -245,10 +245,10 @@ STRINGS: dict = {
     "step_account": {"pt": "2. Entre na sua conta",
                      "en": "2. Sign in to your account"},
     "step_account_help": {
-        "pt": "Se ainda não tem conta, crie uma — leva um nome e devolve um "
-              "código de recuperação. É esse código que o cliente usa.",
-        "en": "If you do not have an account yet, make one — it takes a name and "
-              "gives back a recovery code. That code is what the client uses.",
+        "pt": "Se ainda não tem conta, crie uma. Ela leva um nome e devolve "
+              "um código de recuperação, que é o que o cliente usa.",
+        "en": "If you do not have an account yet, make one. It takes a name "
+              "and gives back a recovery code, which is what the client uses.",
     },
     "step_join": {"pt": "3. Entre na sala", "en": "3. Join the room"},
     "step_join_help": {
@@ -321,7 +321,7 @@ STRINGS: dict = {
     "map_later": {
         "pt": "O mapa aparece quando o primeiro jogador entrar: é o save dele "
               "que define a galáxia da sala.",
-        "en": "The map appears once the first player joins — their save is "
+        "en": "The map appears once the first player joins, because their save is "
               "what defines the room's galaxy.",
     },
     "th_player": {"pt": "jogador", "en": "player"},
@@ -348,10 +348,10 @@ STRINGS: dict = {
     "how_intro": {
         "pt": "Crie uma partida no Space Haven com esta seed e estas opções. A "
               "seed reproduz a galáxia inteira, mas não a sua tripulação nem a "
-              "sua nave — mesmo universo, gente diferente.",
+              "sua nave. Mesmo universo, gente diferente.",
         "en": "Create a game in Space Haven with this seed and these options. "
               "The seed reproduces the whole galaxy, but not your crew or your "
-              "ship — same universe, different people.",
+              "ship. Same universe, different people.",
     },
     "seed": {"pt": "seed", "en": "seed"},
     "no_options_yet": {
@@ -362,9 +362,9 @@ STRINGS: dict = {
                     "en": "Then upload your save:"},
     "wrong_options": {
         "pt": "Opção de criação diferente dá outra galáxia, e o servidor "
-              "recusa o save — com o motivo.",
+              "recusa o save, dizendo o motivo.",
         "en": "A different creation option yields a different galaxy, and the "
-              "server refuses the save — telling you why.",
+              "server refuses the save and tells you why.",
     },
     "locked_room": {
         "pt": "Esta sala tem senha. Peça ao dono a seed e as opções de criação.",
@@ -402,11 +402,11 @@ STRINGS: dict = {
     "room_name": {"pt": "Nome da sala", "en": "Room name"},
     "room_seed_help": {
         "pt": "A seed que você usou ao criar a sua partida. O servidor não "
-              "consegue gerar uma galáxia — quem cria é o jogo, na sua "
+              "consegue gerar uma galáxia. Quem cria é o jogo, na sua "
               "máquina. Você cria a partida uma vez, sobe o save, e a partir "
               "daí o servidor entrega essa galáxia a quem entrar.",
         "en": "The seed you used when creating your game. The server cannot "
-              "generate a galaxy — the game does, on your machine. You create "
+              "generate a galaxy. The game does, on your machine. You create "
               "the game once, upload the save, and from then on the server "
               "hands that galaxy to whoever joins.",
     },

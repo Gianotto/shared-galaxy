@@ -52,3 +52,12 @@ savegames/
 sharedgalaxy.log
 sharedgalaxy.ships
 sharedgalaxy.shop
+
+# Configuração desta instalação: nginx, túnel e o passo a passo com o domínio
+# e os caminhos da máquina onde isto roda. Os arquivos continuam no disco de
+# quem hospeda, e a topologia está descrita em deploy/README.md sem nomear
+# servidor nenhum.
+deploy/*.conf
+deploy/cloudflared-ingress.txt
+deploy/APLICAR.md
+deploy/local.env
