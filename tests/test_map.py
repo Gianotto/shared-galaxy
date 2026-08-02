@@ -17,6 +17,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from server.web import pages  # noqa: E402
 from server.web.pages import starmap_svg  # noqa: E402
 
 GALAXY = {
@@ -286,3 +287,63 @@ class RosterColumnsTestCase(unittest.TestCase):
 
     def test_nowhere_is_a_dash(self):
         self.assertIn("—", self._pagina(None))
+
+
+class JoinPageTestCase(unittest.TestCase):
+    """A página que leva de "vi a sala" a "estou jogando".
+
+    Quem chega por um convite no Discord não tem como adivinhar que existe um
+    cliente, onde ele está, nem que entrar é uma coisa que se faz uma vez só.
+    """
+
+    SALA = {"id": "6359GV", "name": "Sala", "max_players": 64,
+            "password_hash": None, "max_join_age_days": 5}
+
+    def test_the_command_carries_the_room_id(self):
+        """Um comando que não cola é o mesmo que não existir."""
+        html = pages.join_page(self.SALA, "en", 3, False)
+        self.assertIn("join 6359GV", html)
+
+    def test_every_platform_gets_its_own_file_name(self):
+        html = pages.join_page(self.SALA, "en", 3, False)
+        for arquivo in ("sgalaxy-linux-x86_64", "sgalaxy-windows-x86_64.exe",
+                        "sgalaxy-macos-arm64"):
+            self.assertIn(arquivo, html)
+
+    def test_a_locked_room_says_so_before_the_download(self):
+        html = pages.join_page(dict(self.SALA, password_hash="x"), "en", 3, False)
+        self.assertIn("password", html.lower())
+
+    def test_a_full_room_says_so(self):
+        html = pages.join_page(self.SALA, "en", 64, True)
+        self.assertIn("full", html.lower())
+
+    def test_the_fresh_start_rule_is_stated_before_anybody_downloads(self):
+        """Chegar com uma colônia madura e ser recusado depois de instalar
+        tudo é a pior ordem possível de descobrir a regra."""
+        html = pages.join_page(self.SALA, "en", 3, False)
+        self.assertIn("than 5 in-game days", html)
+
+    def test_the_age_rule_reads_like_days_not_like_a_spreadsheet(self):
+        """`numeric` vira "5.00" e ninguém conta dias assim."""
+        from decimal import Decimal
+        html = pages.join_page(dict(self.SALA, max_join_age_days=Decimal("5.00")),
+                               "en", 3, False)
+        self.assertIn("than 5 in-game days", html)
+        self.assertNotIn("5.00", html)
+
+    def test_both_languages_render(self):
+        for lang in ("en", "pt"):
+            self.assertIn("6359GV", pages.join_page(self.SALA, lang, 3, False))
+
+    def test_the_room_page_offers_the_way_in(self):
+        completa = dict(self.SALA, seed="123", lease_hours=12, retention_n=20)
+        html = pages.room_page(completa, [], {}, "en")
+        self.assertIn("/room/6359GV/join", html)
+
+    def test_the_recovery_code_page_names_the_binary_not_the_repo(self):
+        """Quem chega pelo Discord tem um binário, não um checkout do
+        projeto: `python3 tools/sgalaxy.py` não existe na máquina dele."""
+        html = pages.registered_page("Eu", "ABCD-1234", "en")
+        self.assertIn("./sgalaxy register", html)
+        self.assertNotIn("tools/sgalaxy.py", html)

@@ -1221,6 +1221,24 @@ def room_web(room_id: str, request: Request, lang: str = "",
                            idioma, visits, just_made=bool(new))
 
 
+@app.get("/room/{room_id}/join", response_class=HTMLResponse)
+def join_web(room_id: str, request: Request, lang: str = ""):
+    """Como entrar nesta sala, para quem chegou por um convite.
+
+    O resto do site mostra a sala viva e depois deixa a pessoa sozinha. Quem
+    chega por um link no Discord nao tem como adivinhar que existe um cliente,
+    onde ele esta, nem que entrar e uma coisa que se faz uma vez so.
+    """
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    with db.pool().connection() as conn:
+        room = db.get_room(conn, room_id)
+        if room is None:
+            raise HTTPException(404, f"no room {room_id}")
+        quantos = db.count_players(conn, room_id)
+    return pages.join_page(dict(room), idioma, quantos,
+                           quantos >= room["max_players"])
+
+
 # O caminho antigo, para links já compartilhados não morrerem.
 @app.get("/sala/{room_id}", response_class=HTMLResponse)
 def room_web_pt(room_id: str, request: Request):

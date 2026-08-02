@@ -28,6 +28,68 @@ STRINGS: dict = {
               "their own game.",
     },
     "rooms": {"pt": "salas", "en": "rooms"},
+
+    # -- entrar numa sala
+    "join_this": {"pt": "Entrar nesta sala", "en": "Join this room"},
+    "join_title": {"pt": "Entrar em %s", "en": "Join %s"},
+    "join_intro": {
+        "pt": "O jogo continua sendo o seu, no seu computador. O que este "
+              "servidor faz é guardar o save entre as sessões e emprestá-lo "
+              "de volta com a galáxia atualizada pelas outras pessoas.",
+        "en": "The game stays yours, on your machine. What this server does is "
+              "keep the save between sessions and hand it back with the galaxy "
+              "as the others left it.",
+    },
+    "step_download": {"pt": "1. Baixe o cliente",
+                      "en": "1. Download the client"},
+    "step_download_help": {
+        "pt": "Um arquivo só, sem instalador e sem Python. No Linux e no macOS, "
+              "dê permissão de execução depois de baixar.",
+        "en": "One file, no installer and no Python. On Linux and macOS, make it "
+              "executable after downloading.",
+    },
+    "step_account": {"pt": "2. Entre na sua conta",
+                     "en": "2. Sign in to your account"},
+    "step_account_help": {
+        "pt": "Se ainda não tem conta, crie uma — leva um nome e devolve um "
+              "código de recuperação. É esse código que o cliente usa.",
+        "en": "If you do not have an account yet, make one — it takes a name and "
+              "gives back a recovery code. That code is what the client uses.",
+    },
+    "step_join": {"pt": "3. Entre na sala", "en": "3. Join the room"},
+    "step_join_help": {
+        "pt": "Uma vez só. O jogo abre para você criar a sua nave, e a partir "
+              "daí o servidor é o dono do save.",
+        "en": "Once only. The game opens so you can create your ship, and from "
+              "then on the server owns the save.",
+    },
+    "step_play": {"pt": "4. Jogue", "en": "4. Play"},
+    "step_play_help": {
+        "pt": "Retira o save, abre o jogo e devolve quando você fecha. É o "
+              "único comando de que você precisa depois disso.",
+        "en": "Checks the save out, opens the game, and gives it back when you "
+              "close it. It is the only command you need after this.",
+    },
+    "room_full": {"pt": "Esta sala está cheia.", "en": "This room is full."},
+    "room_locked": {
+        "pt": "Esta sala pede senha. Peça a quem te convidou e informe com "
+              "<code>--password</code>.",
+        "en": "This room asks for a password. Ask whoever invited you and pass "
+              "it with <code>--password</code>.",
+    },
+    "join_age_rule": {
+        "pt": "Partidas com mais de %s dias de jogo não entram: a sala começa "
+              "junta, e uma colônia madura chegaria pronta numa galáxia que "
+              "ninguém desbravou ainda.",
+        "en": "Games older than %s in-game days cannot join: the room starts "
+              "together, and a mature colony would arrive finished in a galaxy "
+              "nobody has opened yet.",
+    },
+    "download_linux": {"pt": "Linux", "en": "Linux"},
+    "download_windows": {"pt": "Windows", "en": "Windows"},
+    "download_macos": {"pt": "macOS (Apple Silicon)", "en": "macOS (Apple Silicon)"},
+    "have_account": {"pt": "Já tenho conta", "en": "I already have an account"},
+    "no_account_yet": {"pt": "Criar uma conta", "en": "Create an account"},
     "privacy_link": {"pt": "o que acontece com o seu save",
                      "en": "what happens to your save"},
     "code": {"pt": "o código", "en": "the code"},

@@ -48,6 +48,8 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
 <style>
   :root {{ --bg:#0b1020; --fg:#e8ecf8; --dim:#8b93ad; --line:#232a45;
            --me:#6ee7b7; --on:#fbbf24; }}
+  a.cta {{ display:inline-block; padding:.6rem 1.1rem; border-radius:.35rem;
+    background:#3b6fd4; color:#fff; text-decoration:none; font-weight:600; }}
   * {{ box-sizing: border-box; }}
   body {{ margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }}
@@ -107,6 +109,8 @@ def room_list(rooms: list, lang: str) -> str:
       {r['players']}/{r['max_players']} {t("players", lang)}
       {f'· <span class="tag">{t("has_password", lang)}</span>' if r['has_password'] else ''}
     </p>
+    <p style="margin:.6rem 0 0"><a href="/room/{_esc(r['id'])}/join?lang={lang}"
+       >{t("join_this", lang)}</a></p>
   </div>""" for r in rooms)
         body = f'<div class="cards">{cards}</div>'
     body += (f'<p style="margin-top:2rem">'
@@ -270,6 +274,12 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
               f'padding:.8rem;border-radius:.4rem">'
               f'{t("owner_next", lang)}</p>' if just_made else '')
 
+    # Ver a sala viva e o degrau 2; este e o degrau 3, e sem ele a pagina
+    # termina em admiracao. Fica no topo porque e a unica coisa que uma
+    # pessoa de fora pode FAZER nesta tela.
+    entrar = (f'<p><a class="cta" href="/room/{_esc(room["id"])}/join'
+              f'?lang={lang}">{t("join_this", lang)}</a></p>')
+
     # O nome do sistema, que e o que o jogador ve no mapa estelar do jogo. O
     # `at_system` e um id interno e o `at_body` e um nome de tipo — nenhum dos
     # dois aparece na tela dele, e uma tabela cheia de vocabulario nosso nao
@@ -318,7 +328,7 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
 <pre>python3 tools/sgalaxy.py join {_esc(room['id'])} --save PATH/TO/GAME</pre>
 <p class="sub">{t("wrong_options", lang)}</p>"""
 
-    body = f"""{banner}{map_svg}
+    body = f"""{banner}{entrar}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
 {table}
 {how}"""
@@ -463,6 +473,96 @@ FORM_CSS = """
 """
 
 
+# Onde o binario mora. `releases/latest/download/<nome>` sempre aponta para a
+# publicacao mais recente, entao a pagina nao envelhece a cada versao.
+RELEASES = "https://github.com/Gianotto/shared-galaxy/releases"
+BINARIES = (
+    ("download_linux", "sgalaxy-linux-x86_64", "./sgalaxy"),
+    ("download_windows", "sgalaxy-windows-x86_64.exe", "sgalaxy.exe"),
+    ("download_macos", "sgalaxy-macos-arm64", "./sgalaxy"),
+)
+
+JOIN_CSS = """
+  ol.steps {{ list-style:none; padding:0; counter-reset:none; }}
+  ol.steps > li {{ margin:2rem 0; }}
+  ol.steps h3 {{ margin:0 0 .3rem; }}
+  .dl {{ display:flex; flex-wrap:wrap; gap:.6rem; margin:.8rem 0; }}
+  .dl a {{ padding:.5rem .9rem; border-radius:.35rem; border:1px solid var(--line);
+    background:#161d38; text-decoration:none; }}
+  pre {{ background:#0f1730; border:1px solid var(--line); border-radius:.4rem;
+    padding:.8rem; overflow-x:auto; }}
+  .note {{ color:var(--dim); font-size:.92rem; }}
+  .warn {{ border-left:3px solid #c9a227; padding-left:.9rem; }}
+"""
+
+
+def join_page(room: dict, lang: str, players: int, full: bool) -> str:
+    """Como sair de \"vi a sala\" para \"estou jogando\".
+
+    Existe porque o resto do site mostra a sala viva e depois deixa a pessoa
+    sozinha. Quem chega por um convite no Discord nao tem como adivinhar que ha
+    um cliente, onde ele esta, nem que entrar e uma coisa que se faz uma vez.
+
+    Os comandos saem por sistema operacional em vez de um exemplo generico: o
+    nome do arquivo muda, e um comando que nao cola e o mesmo que nao existir.
+    """
+    nome = _esc(room["name"])
+    rid = _esc(room["id"])
+
+    baixar = "".join(
+        f'<a href="{RELEASES}/latest/download/{arquivo}">{t(chave, lang)}</a>'
+        for chave, arquivo, _cmd in BINARIES)
+
+    comandos = "".join(f"""
+  <p class="note">{t(chave, lang)}</p>
+  <pre>{_esc(cmd)} join {rid}</pre>""" for chave, _a, cmd in BINARIES)
+
+    avisos = ""
+    if full:
+        avisos += f'<p class="warn">{t("room_full", lang)}</p>'
+    if room.get("has_password") or room.get("password_hash"):
+        avisos += f'<p class="warn">{t("room_locked", lang)}</p>'
+    idade = room.get("max_join_age_days")
+    if idade:
+        # O banco devolve `numeric`, e "5.00 dias" e vocabulario de planilha,
+        # nao de quem esta lendo quantos dias de jogo pode ter.
+        legivel = f"{float(idade):g}"
+        avisos += (f'<p class="warn">'
+                   f'{t("join_age_rule", lang) % _esc(legivel)}</p>')
+
+    body = f"""
+<p>{t("join_intro", lang)}</p>
+{avisos}
+<ol class="steps">
+  <li>
+    <h3>{t("step_download", lang)}</h3>
+    <p class="note">{t("step_download_help", lang)}</p>
+    <div class="dl">{baixar}</div>
+    <pre>chmod +x sgalaxy-*</pre>
+  </li>
+  <li>
+    <h3>{t("step_account", lang)}</h3>
+    <p class="note">{t("step_account_help", lang)}</p>
+    <p><a href="/register?lang={lang}">{t("no_account_yet", lang)}</a></p>
+    <pre>./sgalaxy register --recover "YOUR-RECOVERY-CODE"</pre>
+  </li>
+  <li>
+    <h3>{t("step_join", lang)}</h3>
+    <p class="note">{t("step_join_help", lang)}</p>{comandos}
+  </li>
+  <li>
+    <h3>{t("step_play", lang)}</h3>
+    <p class="note">{t("step_play_help", lang)}</p>
+    <pre>./sgalaxy play {rid}</pre>
+  </li>
+</ol>
+<p><a href="/room/{rid}?lang={lang}">&larr; {nome}</a></p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
+    return layout(t("join_title", lang) % nome, body, lang,
+                  f"{players}/{room['max_players']} {t('players', lang)}",
+                  f"/room/{rid}/join")
+
+
 def register_form(lang: str, error: str = "") -> str:
     aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
     body = f"""{aviso}
@@ -484,10 +584,14 @@ def registered_page(name: str, code: str, lang: str) -> str:
 <p class="code">{_esc(code)}</p>
 <p><b>{t("code_warning", lang)}</b></p>
 <h2>{t("use_in_client", lang)}</h2>
-<pre>python3 tools/sgalaxy.py register --recover "{_esc(code)}"</pre>
-<p><a href="/new-room?lang={lang}">{t("new_room", lang)}</a> ·
-   <a href="/?lang={lang}">{t("rooms", lang)}</a></p>
-<style>{FORM_CSS.format()}</style>"""
+<p class="note">{t("step_download_help", lang)}</p>
+<div class="dl">{"".join(
+    f'<a href="{RELEASES}/latest/download/{arq}">{t(k, lang)}</a>'
+    for k, arq, _c in BINARIES)}</div>
+<pre>./sgalaxy register --recover "{_esc(code)}"</pre>
+<p><a href="/?lang={lang}">{t("rooms", lang)}</a> ·
+   <a href="/new-room?lang={lang}">{t("new_room", lang)}</a></p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
     return layout(t("account_made", lang), body, lang, "", "/register")
 
 
