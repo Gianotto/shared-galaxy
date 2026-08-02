@@ -75,21 +75,6 @@ public class ShopButtonAspect {
     /** O nosso toggle enquanto o painel dele estiver aberto. */
     private static Object mine;
 
-    /**
-     * UM botao por armazem, reaproveitado.
-     *
-     * <p>E a diferenca entre este mod e um que funciona em producao. O
-     * ClaimAllDerelicts guarda o botao num `WeakHashMap` por nave e adiciona
-     * sempre o MESMO objeto — "Reutilizando boton existente" esta nas strings
-     * dele. Eu criava um objeto novo a cada selecao e ainda removia o anterior,
-     * que e justamente o que o jogo pode continuar rastreando: o novo entra
-     * meio registrado, numa lista e nao noutra, e desenha as vezes.
-     *
-     * <p>Fraco por chave para nao segurar armazem que a pessoa desmontou.
-     */
-    private static final java.util.Map<String, Object> cache =
-        new java.util.WeakHashMap<String, Object>();
-
     private static final String BUTTONS =
         "fi.bugbyte.gen.compiled.ToggleTextIconButtons1";
     private static final String CLICK =
@@ -382,17 +367,21 @@ public class ShopButtonAspect {
         Object caixa = read(selectionBox, "commandBox");
         Object commandBox = caixa;
 
-        Object reaproveitado = cache.get(id);
-        final Object button;
-        if (reaproveitado != null) {
-            button = reaproveitado;
-        } else {
-            button = Class.forName(BUTTONS, true, loader)
-                .getMethod("getBaseCheckBox1").invoke(null);
-            label(button, id);
-            handler(button, id, loader);
-            cache.put(id, button);
-        }
+        // UM BOTAO NOVO A CADA ABERTURA.
+        //
+        // Medido com o jogador clicando: o primeiro clique em cada armazem
+        // mostrava o botao, e as reaberturas oscilavam — ou seja, `(new)`
+        // aparece e `(reused)` nao. Um botao que sobrevive a destruicao do
+        // painel carrega estado preso a tela anterior, e nem `load()` nem
+        // `setDraw(true)` o revivem.
+        //
+        // Nao acumula: a mesma medicao mostrou a caixa vazia no
+        // `setSelectedItem` (`box now 1`, so o nosso) e com quatro no `open()`.
+        // Ela e refeita a cada selecao, entao o botao velho ja se foi.
+        final Object button = Class.forName(BUTTONS, true, loader)
+            .getMethod("getBaseCheckBox1").invoke(null);
+        label(button, id);
+        handler(button, id, loader);
         hold(button, id);
 
         // ESTAR NA LISTA NAO E ESTAR DESENHADO.
@@ -461,7 +450,6 @@ public class ShopButtonAspect {
             .invoke(menuSystem, button);
 
         trace(hook, id, "box now " + tamanho(read(commandBox, "buttons"))
-                       + (reaproveitado != null ? " (reused)" : " (new)")
                        + " draw=" + read(button, "draw")
                        + " loaded=" + read(button, "loaded"),
               panel);
