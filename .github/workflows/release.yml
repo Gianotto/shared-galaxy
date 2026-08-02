@@ -102,6 +102,7 @@ jobs:
             --name sgalaxy \
             --paths tools \
             --hidden-import install_mod \
+            --hidden-import steamfind \
             --add-data "mod/build/SharedGalaxy.jar${{ matrix.os == 'windows-latest' && ';' || ':' }}." \
             tools/sgalaxy.py
 

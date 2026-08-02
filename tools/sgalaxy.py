@@ -46,6 +46,14 @@ import urllib.error
 import urllib.request
 import zipfile
 
+# O proprio diretorio entra no path antes do import irmao. Sem isto o modulo so
+# importa quando `tools/` ja esta no path — que e o caso ao rodar o script, e
+# nao e o caso de quem o carrega por caminho de arquivo, como os testes e
+# qualquer coisa que o embuta.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import steamfind  # noqa: E402
+
 CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
 
@@ -222,23 +230,15 @@ def game_is_running() -> str | None:
 def find_game() -> str | None:
     """O executavel do jogo, se der para achar sozinho.
 
-    O launcher e um binario nativo que le `config.json` e levanta a JVM — nao
+    O launcher e um binario nativo que le `config.json` e levanta a JVM, e nao
     precisa do Steam para rodar. Achar sozinho e o que permite o fluxo unico:
-    sem isso, o jogador teria que dizer o path toda vez.
+    sem isso, a pessoa teria que dizer o path toda vez.
+
+    A busca sai de `steamfind`, que le as bibliotecas do proprio Steam. A lista
+    escrita a mao que estava aqui so tinha caminhos de Linux, entao no Windows
+    ela nunca achava nada, e o Windows e onde a maior parte da gente joga.
     """
-    if os.environ.get("SPACEHAVEN_BIN"):
-        return os.environ["SPACEHAVEN_BIN"]
-    candidatos = [
-        "~/snap/steam/common/.local/share/Steam/steamapps/common/SpaceHaven",
-        "~/.steam/steam/steamapps/common/SpaceHaven",
-        "~/.local/share/Steam/steamapps/common/SpaceHaven",
-        "/usr/share/spacehaven",
-    ]
-    for base in candidatos:
-        exe = os.path.join(os.path.expanduser(base), "spacehaven")
-        if os.path.isfile(exe) and os.access(exe, os.X_OK):
-            return exe
-    return None
+    return steamfind.launcher()
 
 
 def age_of(folder: str) -> float:

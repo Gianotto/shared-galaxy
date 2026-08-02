@@ -48,25 +48,15 @@ import shutil
 import subprocess
 import sys
 
+import steamfind
+
 AGENT_PREFIX = "-javaagent:./aspectjweaver"
 MOD_JAR = "SharedGalaxy.jar"
 BACKUP = "config.json.sgalaxy-backup"
 
-GAME_PATHS = [
-    os.environ.get("SPACEHAVEN_DIR", ""),
-    os.path.expanduser("~/snap/steam/common/.local/share/Steam/steamapps/"
-                       "common/SpaceHaven"),
-    os.path.expanduser("~/.steam/steam/steamapps/common/SpaceHaven"),
-    os.path.expanduser("~/.local/share/Steam/steamapps/common/SpaceHaven"),
-]
-
-LOADER_PATHS = [
-    os.environ.get("SPACEHAVEN_MODLOADER", ""),
-    os.path.expanduser("~/snap/steam/common/.local/share/Steam/steamapps/"
-                       "workshop/content/979110/3703674043"),
-    os.path.expanduser("~/.steam/steam/steamapps/workshop/content/979110/"
-                       "3703674043"),
-]
+# O item do Workshop que traz o AspectJ. Sem ele nao ha mod de codigo neste
+# jogo, e nao baixamos nada: a mensagem diz onde assinar.
+LOADER_ITEM = "3703674043"
 
 
 class ModError(Exception):
@@ -103,11 +93,12 @@ def game_is_running() -> str | None:
 
 
 def find_game() -> str:
-    for path in GAME_PATHS:
-        if path and os.path.isfile(os.path.join(path, "spacehaven.jar")):
-            return path
-    raise ModError("não achei a pasta do Space Haven. Aponte SPACEHAVEN_DIR "
-                   "para ela")
+    pasta = steamfind.game_dir()
+    if pasta:
+        return pasta
+    raise ModError("não achei a pasta do Space Haven. Se ele está instalado "
+                   "fora do Steam, ou em duas cópias, aponte SPACEHAVEN_DIR "
+                   "para a pasta que tem spacehaven.jar")
 
 
 def find_weaver() -> str:
@@ -117,9 +108,8 @@ def find_weaver() -> str:
     exatamente o que fazer. Um instalador que sai buscando jar na internet é
     outra categoria de coisa.
     """
-    for path in LOADER_PATHS:
-        if not path or not os.path.isdir(path):
-            continue
+    path = steamfind.workshop_item(LOADER_ITEM)
+    if path:
         for name in sorted(os.listdir(path)):
             if re.fullmatch(r"aspectjweaver-[\d.]+\.jar", name):
                 return os.path.join(path, name)

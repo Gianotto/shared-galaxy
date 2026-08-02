@@ -1,7 +1,7 @@
 <mod>
     <name>Shared Galaxy</name>
     <description>
-        Play Space Haven with other people in one shared galaxy — each of you
+        Play Space Haven with other people in one shared galaxy, each of you
         running your own game, on your own machine.
 
         A server keeps the savegame between sessions and hands it back with the
@@ -9,19 +9,26 @@
         what they put up for sale. One session at a time, so the galaxy never
         forks.
 
-        This mod is the in-game half, and it is optional — everything works
+        A neighbour parked in your system shows up as a ship you can trade
+        with. The server builds that ship inside your own save, from their ship
+        as it stood when they last returned it, carrying the goods they
+        consigned. When you buy from it, the credits reach the person who put
+        the goods there.
+
+        This mod is the in-game half, and it is optional. Everything works
         without it. What it adds:
 
-        - opens the room's save straight from the menu, instead of leaving you
-          to find it in the load list
+        - opens the room's save straight from the menu, so you never hunt for
+          it in the load list
         - writes the room, the save version and your sales into the game's own
-          log, so you can tell at a glance you are in the shared galaxy
-        - adds a SHOP toggle to a storage panel, so choosing what you sell is
-          done in the game rather than in a terminal
+          log, so a glance tells you which galaxy you are in
+        - adds a SHOP toggle to a storage panel, so you pick what you sell
+          inside the game
         - silences the automatic hails from neighbours' storefronts, which
           would otherwise trade on their own initiative
 
-        It does not patch the game's files. The game jar is untouched.
+        The game jar stays as it was. Uninstalling means undoing three lines in
+        a config file.
 
         You also need the client, which is one file and needs nothing
         installed: github.com/Gianotto/shared-galaxy/releases
