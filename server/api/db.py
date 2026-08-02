@@ -296,6 +296,14 @@ def set_injected_sids(conn: psycopg.Connection, lease_id: int,
                  (_json.dumps([str(s) for s in sids]), lease_id))
 
 
+def set_galaxy_stars(conn: psycopg.Connection, room_id: str,
+                     stars: dict) -> None:
+    """O mapa de estrelas que a sala conhece, que cresce com a exploracao."""
+    import json as _json
+    conn.execute("UPDATE room SET galaxy_stars = %s WHERE id = %s",
+                 (_json.dumps(stars), room_id))
+
+
 def set_consignments(conn: psycopg.Connection, lease_id: int,
                      consignments: list) -> None:
     """A foto de cada vitrine no momento em que o save saiu.

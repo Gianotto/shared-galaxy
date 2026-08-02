@@ -1,0 +1,42 @@
+<mod>
+    <name>Shared Galaxy</name>
+    <description>
+        Play Space Haven with other people in one shared galaxy — each of you
+        running your own game, on your own machine.
+
+        A server keeps the savegame between sessions and hands it back with the
+        galaxy as the others left it: where they are, what they explored, and
+        what they put up for sale. One session at a time, so the galaxy never
+        forks.
+
+        This mod is the in-game half, and it is optional — everything works
+        without it. What it adds:
+
+        - opens the room's save straight from the menu, instead of leaving you
+          to find it in the load list
+        - writes the room, the save version and your sales into the game's own
+          log, so you can tell at a glance you are in the shared galaxy
+        - adds a SHOP toggle to a storage panel, so choosing what you sell is
+          done in the game rather than in a terminal
+        - silences the automatic hails from neighbours' storefronts, which
+          would otherwise trade on their own initiative
+
+        It does not patch the game's files. The game jar is untouched.
+
+        You also need the client, which is one file and needs nothing
+        installed: github.com/Gianotto/shared-galaxy/releases
+
+        Requires: SpaceHaven Mod Loader
+        (steamcommunity.com/sharedfiles/filedetails/?id=3703674043)
+
+        Open source, MIT: github.com/Gianotto/shared-galaxy
+    </description>
+    <minimumLoaderVersion>0.12.1</minimumLoaderVersion>
+    <version>0.1.0</version>
+    <author>Gianotto</author>
+    <modid>9915</modid>
+    <dependencies>
+        <!-- SpaceHaven Mod Loader: exigido por qualquer mod AspectJ -->
+        <dependency workshopId="3703674043"/>
+    </dependencies>
+</mod>

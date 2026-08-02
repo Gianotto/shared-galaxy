@@ -600,9 +600,13 @@ does not patch the game's files: the game jar is untouched, and uninstalling is
 undoing three lines in a config file.</p>
 
 <h2>What is stored, and for how long</h2>
-<p>The last 20 versions of each save, per room, are kept so a bad session can be
-rolled back. Older ones are deleted automatically, and everything goes at once
-if you leave.</p>
+<p>The last three versions of each save, per room. Older ones are deleted
+automatically, and everything goes at once if you leave.</p>
+<p><b>There is no rollback.</b> Nothing restores an old version — not for you,
+not for the room owner, not for anybody. A session that went badly went badly,
+and a mistake that costs a crew costs it. The short history exists to protect
+you from <i>this server</i>: a bad graft or a storefront removed wrongly is our
+fault, not yours, and the previous version is what makes that recoverable.</p>
 """, "pt": """
 <h2>A ideia</h2>
 <p>Space Haven é um jogo de um jogador só, e isto não muda isso. Ninguém joga
@@ -681,9 +685,14 @@ altera os arquivos do jogo: o jar continua intacto, e desinstalar é desfazer
 três linhas num arquivo de configuração.</p>
 
 <h2>O que fica guardado, e por quanto tempo</h2>
-<p>As últimas 20 versões de cada save, por sala, para uma sessão ruim poder ser
-desfeita. As mais antigas são apagadas sozinhas, e tudo vai junto se você
-sair.</p>
+<p>As últimas três versões de cada save, por sala. As mais antigas são apagadas
+sozinhas, e tudo vai junto se você sair.</p>
+<p><b>Não existe rollback.</b> Nada restaura uma versão antiga — nem para você,
+nem para quem administra a sala, nem para ninguém. Uma sessão que deu errado deu
+errado, e um engano que custa uma tripulação custa. O histórico curto existe
+para te proteger <i>deste servidor</i>: um enxerto malfeito ou uma vitrine
+removida errado é culpa nossa, não sua, e a versão anterior é o que torna isso
+recuperável.</p>
 """}
 
 
@@ -735,6 +744,8 @@ FORM_CSS = """
 # Onde o binario mora. `releases/latest/download/<nome>` sempre aponta para a
 # publicacao mais recente, entao a pagina nao envelhece a cada versao.
 RELEASES = "https://github.com/Gianotto/shared-galaxy/releases"
+LOADER = ("https://steamcommunity.com/sharedfiles/filedetails/"
+          "?id=3703674043")
 BINARIES = (
     ("download_linux", "sgalaxy-linux-x86_64", "./sgalaxy"),
     ("download_windows", "sgalaxy-windows-x86_64.exe", "sgalaxy.exe"),
@@ -863,6 +874,19 @@ mv sgalaxy-* sgalaxy
 <p>{t("writes_intro", lang)}</p>
 <pre>~/.config/sgalaxy/credentials.json</pre>
 <p class="note">{t("writes_detail", lang)}</p>
+
+<h2>{t("mod_h", lang)}</h2>
+<p>{t("mod_why", lang)}</p>
+<p>{t("mod_needs_loader", lang)}</p>
+<p><a href="{LOADER}">SpaceHaven Mod Loader</a></p>
+
+<h3>{t("mod_install_h", lang)}</h3>
+<p class="note">{t("mod_install_help", lang)}</p>
+{commands("install-mod", lang)}
+<p class="note">{t("mod_closed_why", lang)}</p>
+<p class="note">{t("mod_uninstall", lang)}</p>
+{commands("install-mod --uninstall", lang)}
+<p class="note">{t("mod_touches", lang)}</p>
 <style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
     return layout(t("client_title", lang), body, lang, "", "/client")
 

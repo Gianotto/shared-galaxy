@@ -84,7 +84,16 @@ cp "$HERE/META-INF/aop.xml" "$OUT/classes/META-INF/aop.xml"
 docker run --rm --user "$(id -u):$(id -g)" -v "$HERE:/mod" eclipse-temurin:21-jdk \
     jar cf /mod/build/SharedGalaxy.jar -C /mod/build/classes .
 
+# O pacote do Workshop: exatamente o que o item publicado leva dentro. A forma
+# saiu de um mod de codigo ja publicado (ClaimAllDerelicts, 3736991511): um
+# `info.xml` e o jar, lado a lado. Montar aqui evita a versao do manifesto
+# divergir da do jar que ela descreve.
+mkdir -p "$OUT/workshop"
+cp "$HERE/workshop/info.xml" "$OUT/workshop/info.xml"
+cp "$OUT/SharedGalaxy.jar" "$OUT/workshop/SharedGalaxy.jar"
+
 echo "built $OUT/SharedGalaxy.jar"
+echo "workshop package in $OUT/workshop (info.xml + jar)"
 
 if [ "${1:-}" = "--verify" ]; then
     echo

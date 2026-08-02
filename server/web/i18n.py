@@ -63,6 +63,55 @@ STRINGS: dict = {
     },
     "what_it_writes": {"pt": "O que ele cria no seu computador",
                        "en": "What it writes on your machine"},
+    "mod_h": {"pt": "O mod, que é opcional",
+              "en": "The mod, which is optional"},
+    "mod_why": {
+        "pt": "Tudo funciona sem ele. O que ele tira são as partes chatas: "
+              "abre o save da sala direto, escreve a sala e as suas vendas no "
+              "log do jogo, põe um botão SHOP no painel do depósito, e cala os "
+              "chamados automáticos das vitrines dos vizinhos.",
+        "en": "Everything works without it. What it removes are the fiddly "
+              "parts: it opens the room's save straight away, writes the room "
+              "and your sales into the game log, puts a SHOP toggle on a "
+              "storage panel, and silences the automatic hails from your "
+              "neighbours' storefronts.",
+    },
+    "mod_needs_loader": {
+        "pt": "Ele precisa do <b>SpaceHaven Mod Loader</b>, que é um item do "
+              "Workshop. Assine-o e deixe o Steam baixar — é de onde vem o "
+              "AspectJ, que é o que permite um mod de código existir neste "
+              "jogo.",
+        "en": "It needs the <b>SpaceHaven Mod Loader</b>, a Workshop item. "
+              "Subscribe and let Steam download it — that is where AspectJ "
+              "comes from, and AspectJ is what makes a code mod possible in "
+              "this game at all.",
+    },
+    "mod_install_h": {"pt": "Instalar", "en": "Installing"},
+    "mod_install_help": {
+        "pt": "O cliente já leva o mod dentro dele. Com o <b>jogo fechado</b>:",
+        "en": "The client already carries the mod inside it. With the "
+              "<b>game closed</b>:",
+    },
+    "mod_closed_why": {
+        "pt": "Com o jogo aberto ele recusa, de propósito: a JVM lê o jar uma "
+              "vez, ao iniciar, então trocar o arquivo durante a partida não "
+              "muda nada — e faria você testar a versão antiga achando que "
+              "testa a nova.",
+        "en": "With the game open it refuses, on purpose: the JVM reads the "
+              "jar once, at startup, so swapping the file mid-session changes "
+              "nothing — and would have you testing the old version believing "
+              "it is the new one.",
+    },
+    "mod_uninstall": {"pt": "Para desfazer:", "en": "To undo it:"},
+    "mod_touches": {
+        "pt": "Ele não altera os arquivos do jogo. O <code>spacehaven.jar</code> "
+              "fica intacto; o que muda são três linhas no "
+              "<code>config.json</code> ao lado dele, e há backup.",
+        "en": "It does not patch the game's files. "
+              "<code>spacehaven.jar</code> is untouched; what changes is three "
+              "lines in the <code>config.json</code> beside it, and a backup "
+              "is kept.",
+    },
     "writes_intro": {
         "pt": "Um arquivo, e só um. É onde o seu código de acesso fica "
               "guardado, para você não ter que digitá-lo a cada sessão:",

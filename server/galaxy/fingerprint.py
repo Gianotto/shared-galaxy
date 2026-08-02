@@ -164,6 +164,62 @@ def fingerprint(path: str) -> dict:
 # O que o servidor usa
 # ---------------------------------------------------------------------------
 
+# Quantos sistemas duas galaxias precisam ter em comum para a concordancia
+# significar alguma coisa. Um save com dois sistemas concordaria com qualquer
+# galaxia por nao ter o que contradizer. A medida real e 64 num save recem
+# criado; dezesseis e um quarto disso — muito acima de qualquer acidente e
+# muito abaixo de qualquer save legitimo.
+MIN_OVERLAP = 16
+
+
+def stars_of(path: str) -> dict:
+    """As estrelas por sistema: `{systemId: {celeid, seed, x, y, ...}}`.
+
+    E a forma comparavel da galaxia. O digest continua existindo para
+    identificar a sala num relance; quem decide se dois saves compartilham
+    galaxia e isto.
+    """
+    return {s["id"]: s["star"]
+            for s in fingerprint(path)["systems"] if s["star"]}
+
+
+def agree(room_stars: dict, save_stars: dict) -> tuple:
+    """Estes dois saves sao da mesma galaxia? Devolve `(sim, motivo)`.
+
+    NAO E IGUALDADE, E CONCORDANCIA.
+
+    Uma galaxia se materializa aos poucos: o jogo gera o sistema quando alguem
+    viaja ate la. Medido numa sessao recusada de verdade — 64 sistemas na
+    entrega, 65 na devolucao, e as 64 estrelas em comum identicas byte a byte.
+    O save estava certo; o portao e que estava errado.
+
+    Uma seed gera o mesmo sistema 12 todas as vezes. Entao discordar sobre o
+    sistema 12 e ser outra galaxia; conhecer mais sistemas e so ter explorado
+    mais.
+    """
+    if not room_stars:
+        return True, ""
+    comuns = set(room_stars) & set(save_stars)
+    # O teto e o que a SALA conhece, nunca o que o save traz: incluir o
+    # tamanho do save no minimo faz um save de tres sistemas exigir tres
+    # coincidencias e passar — que e exatamente o ataque que este limite
+    # existe para barrar. Um save recem-criado tem 64 sistemas (medido: e o
+    # que a primeira entrada desta sala trouxe), entao dezesseis nao aperta
+    # ninguem legitimo.
+    if len(comuns) < min(MIN_OVERLAP, len(room_stars)):
+        return False, (f"this save shares only {len(comuns)} system(s) with "
+                       f"the room; that is not the same galaxy")
+    divergentes = sorted(k for k in comuns if room_stars[k] != save_stars[k])
+    if divergentes:
+        return False, (f"this save disagrees with the room about "
+                       f"system {divergentes[0]}"
+                       + (f" and {len(divergentes) - 1} other(s)"
+                          if len(divergentes) > 1 else "")
+                       + ". A seed generates the same system every time, so "
+                         "this galaxy is a different one")
+    return True, ""
+
+
 def digest_of(path: str) -> str:
     """So o digest, que e o que a sala guarda e compara."""
     return fingerprint(path)["digest"]

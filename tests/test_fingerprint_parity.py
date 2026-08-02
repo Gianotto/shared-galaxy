@@ -145,3 +145,48 @@ class FingerprintParityTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GalaxyGrowsTestCase(unittest.TestCase):
+    """A galáxia cresce enquanto se joga, e o portão precisa saber disso.
+
+    Medido numa sessão recusada de verdade: 64 sistemas na entrega, 65 na
+    devolução, e as 64 estrelas em comum idênticas byte a byte. O save estava
+    certo — o portão é que estava errado, e custou a sessão de alguém.
+    """
+
+    ESTRELAS = {str(i): {"celeid": str(i), "seed": str(1000 + i),
+                         "x": str(i * 10), "y": str(i * 7),
+                         "starType": "M", "starClass": "V"}
+                for i in range(1, 65)}
+
+    def test_a_save_that_discovered_a_new_system_still_belongs(self):
+        maior = dict(self.ESTRELAS)
+        maior["65"] = {"celeid": "65", "seed": "9999", "x": "1", "y": "2",
+                       "starType": "G", "starClass": "V"}
+        ok, motivo = vendored.agree(self.ESTRELAS, maior)
+        self.assertTrue(ok, motivo)
+
+    def test_a_fresher_save_with_fewer_systems_still_belongs(self):
+        menor = {k: v for k, v in self.ESTRELAS.items() if int(k) <= 40}
+        self.assertTrue(vendored.agree(self.ESTRELAS, menor)[0])
+
+    def test_a_save_that_disagrees_about_one_system_is_refused(self):
+        """Uma seed gera o mesmo sistema todas as vezes: discordar é ser
+        outra galáxia."""
+        outra = dict(self.ESTRELAS)
+        outra["6"] = dict(outra["6"], seed="0000")
+        ok, motivo = vendored.agree(self.ESTRELAS, outra)
+        self.assertFalse(ok)
+        self.assertIn("system 6", motivo)
+
+    def test_a_tiny_save_cannot_agree_by_having_nothing_to_contradict(self):
+        """O limite mede o que a SALA conhece. Medi-lo contra o save faz um
+        save de três sistemas exigir três coincidências — e passar."""
+        minusculo = {k: v for k, v in self.ESTRELAS.items() if int(k) <= 3}
+        ok, motivo = vendored.agree(self.ESTRELAS, minusculo)
+        self.assertFalse(ok)
+        self.assertIn("3 system", motivo)
+
+    def test_a_room_with_no_galaxy_yet_accepts_the_first_save(self):
+        self.assertTrue(vendored.agree({}, self.ESTRELAS)[0])

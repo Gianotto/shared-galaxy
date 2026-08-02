@@ -305,8 +305,8 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
                           if payload.get("password") else None),
         "owner_id": player["id"],
         "lease_hours": int(payload.get("leaseHours") or 12),
-        "retention_n": int(payload.get("retentionN") or 20),
-        "max_players": int(payload.get("maxPlayers") or 8),
+        "retention_n": int(payload.get("retentionN") or 3),
+        "max_players": int(payload.get("maxPlayers") or 64),
         # Todo mundo comeca junto. `None` explicito libera veterano a trazer o
         # que tem; ausente usa o padrao da coluna.
         "max_join_age_days": (None if payload.get("maxJoinAgeDays", 0) is None
@@ -687,27 +687,88 @@ NEIGHBOUR_FACTION = "Civilian"
 NEIGHBOUR_CREDITS = "5000"
 
 
-def _shop_of(conn, membership: dict) -> dict:
-    """O que este vizinho pos a venda: o conteudo do armazem que ele escolheu.
+def _room_stars(conn, room: dict) -> dict:
+    """As estrelas que esta sala conhece, montando na primeira vez.
 
-    Sai do save canonico guardado, entao e o que ele tinha quando devolveu — e
-    e por isso que o estoque da vitrine so muda de uma sessao dele para a
-    outra, nao em tempo real. Nao ha como ser diferente: o save dele so chega
-    aqui quando ele devolve.
+    Salas criadas antes da coluna existir nao tem nada guardado; a galaxia
+    doadora e que responde por elas, e o resultado fica gravado para nao ser
+    recalculado a cada retirada.
     """
-    if not membership.get("shop_storage_id") or not membership.get("canonical_id"):
+    guardadas = room.get("galaxy_stars")
+    if guardadas:
+        return guardadas
+    if not room.get("galaxy_sha256"):
         return {}
+    try:
+        with blobs.with_unpacked(store().get(room["galaxy_sha256"])) as folder:
+            estrelas = fingerprint.stars_of(folder)
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not read the room's galaxy: %s", exc)
+        return {}
+    db.set_galaxy_stars(conn, room["id"], estrelas)
+    return estrelas
+
+
+def _check_galaxy(conn, room: dict, folder: str) -> None:
+    """O save que chegou e desta galaxia? Levanta 409 se nao for.
+
+    Substitui a comparacao de digest, que era igualdade sobre um conjunto que
+    CRESCE. Medido numa sessao recusada de verdade: 64 sistemas na entrega, 65
+    na devolucao, e as 64 estrelas em comum identicas byte a byte. O save
+    estava certo — o portao e que estava errado, e custou a sessao de alguem.
+
+    Os sistemas novos entram no que a sala conhece: ela aprende a galaxia no
+    ritmo em que as pessoas a exploram.
+    """
+    minhas = fingerprint.stars_of(folder)
+    delas = _room_stars(conn, room)
+    ok, motivo = fingerprint.agree(delas, minhas)
+    if not ok:
+        raise HTTPException(409, f"{motivo}. This is not the save that was "
+                                 f"lent out")
+    novas = {k: v for k, v in minhas.items() if k not in delas}
+    if novas and delas:
+        db.set_galaxy_stars(conn, room["id"], {**delas, **novas})
+
+
+def _neighbour_ship(conn, membership: dict) -> tuple:
+    """A NAVE DE VERDADE deste vizinho, e o que ele pos a venda.
+
+    Sai do save canonico guardado, entao e o que ele tinha quando devolveu — o
+    estoque da vitrine muda de uma sessao dele para a outra, nao em tempo real.
+    Nao ha como ser diferente: o save dele so chega aqui quando ele devolve.
+
+    POR QUE A NAVE DELE, E NAO UM CASCO QUALQUER
+
+    A primeira versao montava a vitrine sobre uma nave NPC do proprio save de
+    destino, e o resultado era honesto mas mudo: aparecia uma nave civil
+    sorteada, com o nome do vizinho colado nela. Quem chegava nao reconhecia
+    nada. A nave de alguem em Space Haven e desenhada modulo por modulo ao
+    longo de dezenas de horas — e a coisa mais reconhecivel que uma pessoa tem
+    para mostrar.
+
+    O `<l id>` de dentro de uma nave e LOCAL a ela: duas naves do mesmo save
+    medido compartilhavam oito. Entao a copia entra sem colidir com o que ja
+    estava la, e `renumber_ship` cuida do `sid` e dos `entId` da tripulacao,
+    que sao globais.
+
+    Devolve `(nave, a_venda)`; a nave e None quando este vizinho ainda nao
+    devolveu save nenhum, e ai quem chama cai no casco local.
+    """
+    if not membership.get("canonical_id"):
+        return None, {}
     versao = db.get_version(conn, membership["canonical_id"])
     if versao is None:
-        return {}
+        return None, {}
     try:
         _game, nave = _player_ship_of(store().get(versao["sha256"]))
         if nave is None:
-            return {}
-        return shopping.on_sale(nave, membership["shop_storage_id"])
+            return None, {}
+        loja = membership.get("shop_storage_id")
+        return nave, (shopping.on_sale(nave, loja) if loja else {})
     except Exception as exc:      # noqa: BLE001
-        log.warning("could not read a neighbour's shop: %s", exc)
-        return {}
+        log.warning("could not read a neighbour's ship: %s", exc)
+        return None, {}
 
 
 def _neighbours_of(conn, room_id: str, player_id: int) -> list:
@@ -760,28 +821,38 @@ def _place_neighbours(conn, room_id: str, player_id: int,
             for outro in vizinhos:
                 nome = f"{outro['ship_name'] or 'ship'} ({outro['display_name']})"
                 try:
-                    # Nave NPC VIVA, nao casco de destroco: sucata aparece
-                    # como "Derelict" e, pior, se reclama e se desmonta. A
-                    # diferenca entre viva e sucata e a tripulacao, e ela vem
-                    # junto no molde.
-                    cascos = storefront.live_npc_ships(sf)
-                    if not cascos:
-                        relatorio["skipped"].append(
-                            f"{outro['display_name']}: no live NPC ship to "
-                            f"build the storefront on")
-                        continue
-                    # Sem <asi> a nave entra sem IA de bordo, sem radio e sem
-                    # postura de combate. Vitrine quebrada e pior que ausente.
-                    # O QUE ELE POS A VENDA vira a carga da vitrine. Sem
-                    # isto a loja abre com prateleira vazia: o jogo gera uma
-                    # lista do que ELE quer comprar, e o jogador clica em
-                    # "new trade" e nao encontra nada para levar.
-                    a_venda = _shop_of(conn, outro)
+                    # A NAVE DELE, se ja tivermos uma. E o que faz a vitrine
+                    # ser reconhecivel: quem chega ve o desenho que a pessoa
+                    # construiu, nao uma nave civil sorteada com o nome dela
+                    # colado. `<l id>` e local a nave, entao a copia entra sem
+                    # colidir com o que ja estava no setor.
+                    #
+                    # O QUE ELE POS A VENDA vira a carga. Sem isto a loja abre
+                    # com prateleira vazia: o jogo gera uma lista do que ELE
+                    # quer comprar, e a pessoa clica em "new trade" e nao acha
+                    # nada para levar.
+                    molde, a_venda = _neighbour_ship(conn, outro)
+                    # SO o casco local esconde o interior de verdade: a neblina
+                    # so se sustenta num casco que nunca foi explorado, e a
+                    # nave de um jogador sempre foi (findings item 10). Com a
+                    # nave dele, o interior fica a vista — e é o preço de ela
+                    # ser reconhecivel.
+                    modo_casco = False
+                    if molde is None:
+                        cascos = storefront.live_npc_ships(sf)
+                        if not cascos:
+                            relatorio["skipped"].append(
+                                f"{outro['display_name']}: no ship of theirs "
+                                f"stored yet, and no live NPC ship here to "
+                                f"stand in for it")
+                            continue
+                        molde, modo_casco = cascos[0], True
                     estoque = ",".join(f"{r}:{q}" for r, q in
                                        sorted(a_venda.items())) or None
                     rel = storefront.inject_ship(
-                        sf, cascos[0], faction=NEIGHBOUR_FACTION,
-                        credits=NEIGHBOUR_CREDITS, name=nome, hull_mode=True,
+                        sf, molde, faction=NEIGHBOUR_FACTION,
+                        credits=NEIGHBOUR_CREDITS, name=nome,
+                        hull_mode=modo_casco,
                         crew_side=NEIGHBOUR_FACTION, stock=estoque,
                         at=(outro["at_x"], outro["at_y"]),
                         system_id=outro["at_system"])
@@ -1100,13 +1171,13 @@ async def checkpoint(room_id: str, request: Request,
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
                 day = here["ageDays"]
+                _check_galaxy(conn, room, folder)
+        except HTTPException:
+            raise
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
             raise HTTPException(400, f"could not read this save: {exc}") from exc
-
-        if described["digest"] != room["galaxy_digest"]:
-            raise HTTPException(409, "this save's galaxy is not the room's")
 
         meta = store().put(data)
         version = db.add_version(conn, {
@@ -1163,17 +1234,15 @@ async def checkin(room_id: str, request: Request,
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
                 day = here["ageDays"]
+                # A galaxia tem que ser a mesma — mas ela CRESCE enquanto se
+                # joga, e comparar por igualdade recusava save legitimo.
+                _check_galaxy(conn, room, folder)
+        except HTTPException:
+            raise
         except StorageError as exc:
             raise HTTPException(400, str(exc)) from exc
         except Exception as exc:
             raise HTTPException(400, f"could not read this save: {exc}") from exc
-
-        # A galaxia nao pode ter mudado no meio de uma sessao. Se mudou, o save
-        # nao e o que foi emprestado — outra partida, outro universo.
-        if described["digest"] != room["galaxy_digest"]:
-            raise HTTPException(409,
-                                "this save's galaxy is not the room's. This is not "
-                                "the save that was lent out")
 
         meta = store().put(data)
         version = db.add_version(conn, {
@@ -1381,7 +1450,11 @@ def new_room_submit(request: Request, name: str = Form(""),
         "options": json.dumps({}),
         "password_hash": None,
         "owner_id": player["id"],
-        "lease_hours": 12, "retention_n": 20, "max_players": 32,
+        # Os mesmos numeros da rota de API. Estavam divergentes: uma sala
+        # criada pelo site nascia com teto de 32 pessoas, metade do que um
+        # convite de Discord precisa, e ninguem descobriria isso antes de a
+        # 33a chegar.
+        "lease_hours": 12, "retention_n": 3, "max_players": 64,
         "max_join_age_days": 5,
     }
     with db.pool().connection() as conn:
