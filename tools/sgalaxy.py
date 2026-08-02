@@ -1013,6 +1013,10 @@ def cmd_play(args) -> int:
     _list_neighbour_ships(game_dir, headers.get("x-neighbour-sids"))
     _tell_mod_the_shop(game_dir, headers.get("x-shop-storage"))
 
+    vendas = _sales_line(headers)
+    if vendas:
+        print(f"      {vendas}")
+
     versao = headers.get("x-version-id")
     servidor = base_url().split("//", 1)[-1]
     # Sobrescreve, nunca acrescenta: uma linha da sessão passada que o mod não
@@ -1021,6 +1025,7 @@ def cmd_play(args) -> int:
     note_in_game(game_dir, [
         f"Shared Galaxy — room {args.room}, save v{versao or '?'}",
         f"{servidor} — due {_deadline(deadline)}",
+    ] + ([vendas] if vendas else []) + [
         "Close the game when you are done and it goes back to the room.",
     ])
 
@@ -1100,6 +1105,26 @@ SHIPS_FILE = "sharedgalaxy.ships"
 # para ter certeza de que o jogo terminou de gravar.
 WATCH_EVERY = 20
 SETTLE_SECONDS = 3
+
+
+def _sales_line(headers) -> str | None:
+    """O que venderam por você enquanto esteve fora, se houve algo.
+
+    A venda aconteceu na partida de outra pessoa, contra uma nave que o servidor
+    montou. Este save já vem com os créditos dentro e com a carga fora do
+    depósito — mas nada disso aparece na tela do jogo, e uma pessoa que não é
+    avisada só percebe que vendeu quando dá falta do estoque.
+    """
+    try:
+        quantos = int(headers.get("x-sales-paid") or 0)
+        creditos = int(headers.get("x-sales-credits") or 0)
+    except (TypeError, ValueError):
+        return None
+    if quantos <= 0:
+        return None
+    return (f"sold while you were away: {quantos} "
+            f"transaction{'s' if quantos != 1 else ''}, "
+            f"{creditos} credits already in your bank")
 
 
 def mod_is_installed(game_dir: str) -> bool:

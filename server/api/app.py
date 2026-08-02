@@ -38,6 +38,7 @@ from server.domain import rules
 from server.galaxy import fingerprint, presence
 from sgalaxy import discovery as discovering
 from sgalaxy import graft as grafting
+from sgalaxy import settle
 from sgalaxy import shop as shopping
 from sgalaxy import storefront
 from sgalaxy.savefile import SaveFile
@@ -705,8 +706,10 @@ def _place_neighbours(conn, room_id: str, player_id: int,
     explorado, e a nave de um jogador sempre foi. De quebra, nada da maquina de
     outro jogador atravessa.
 
-    Devolve `(zip, sids, relatorio)`. Os `sids` sao o que o `checkin` vai tirar
-    de volta — sem isso a vitrine vira parte permanente da partida da pessoa.
+    Devolve `(zip, sids, consignacoes, relatorio)`. Os `sids` sao o que o
+    `checkin` vai tirar de volta — sem isso a vitrine vira parte permanente da
+    partida da pessoa. As `consignacoes` sao a foto de cada prateleira, que e
+    contra o que a apuracao compara o que voltou.
 
     Falhar aqui nunca custa a sessao: sem vitrine a sala continua jogavel, e
     entregar um save quebrado seria muito pior que entregar um save sozinho.
@@ -714,9 +717,10 @@ def _place_neighbours(conn, room_id: str, player_id: int,
     vizinhos = _neighbours_of(conn, room_id, player_id)
     relatorio = {"placed": 0, "skipped": [], "neighbours": []}
     if not vizinhos:
-        return data, [], relatorio
+        return data, [], [], relatorio
 
-    sids = []
+    sids: list = []
+    consignacoes: list = []
     try:
         with blobs.with_unpacked(data) as folder:
             sf = SaveFile(folder)
@@ -748,7 +752,19 @@ def _place_neighbours(conn, room_id: str, player_id: int,
                         crew_side=NEIGHBOUR_FACTION, stock=estoque,
                         at=(outro["at_x"], outro["at_y"]),
                         system_id=outro["at_system"])
-                    sids.append(rel["fleet"]["createdShipId"])
+                    novo_sid = rel["fleet"]["createdShipId"]
+                    sids.append(novo_sid)
+                    # A FOTO. Uma venda e a diferenca entre dois momentos, e
+                    # este e o primeiro deles. Sem isto o check-in recebe uma
+                    # prateleira sem nada com que compara-la.
+                    nave_nova = storefront.find_by_sid(sf, novo_sid)
+                    consignacoes.append({
+                        "sid": str(novo_sid),
+                        "seller_id": outro["player_id"],
+                        "stock": {r: int(q) for r, q in a_venda.items()},
+                        "credits": (storefront.bank_credits(nave_nova)
+                                    if nave_nova is not None else None),
+                    })
                     relatorio["placed"] += 1
                     relatorio["neighbours"].append(nome)
                     relatorio.setdefault("stock", {})[nome] = a_venda
@@ -756,12 +772,136 @@ def _place_neighbours(conn, room_id: str, player_id: int,
                     relatorio["skipped"].append(
                         f"{outro['display_name']}: {exc}")
             if not sids:
-                return data, [], relatorio
+                return data, [], [], relatorio
             sf.save(backup=False)
-            return blobs.pack_save(folder), sids, relatorio
+            return blobs.pack_save(folder), sids, consignacoes, relatorio
     except Exception as exc:      # noqa: BLE001
         log.warning("could not place neighbours: %s", exc)
-        return data, [], {"placed": 0, "skipped": [str(exc)], "neighbours": []}
+        return data, [], [], {"placed": 0, "skipped": [str(exc)],
+                              "neighbours": []}
+
+
+def _pay_settlements(conn, room_id: str, player_id: int, membership: dict,
+                     lease_id: int, data: bytes) -> tuple:
+    """Paga ao vendedor, no save que esta saindo, o que venderam por ele.
+
+    A outra metade de `_settle_neighbours`. A venda aconteceu na partida de
+    outra pessoa, dias atras talvez, contra uma nave que o servidor inventou —
+    e este e o unico momento em que ela vira dinheiro para quem vendeu, porque
+    e o unico momento em que temos o save dele aberto.
+
+    Duas escritas, e as duas importam:
+
+        creditos  ->  game/playerBank        o que o comprador pagou
+        carga     ->  o armazem-loja dele    o que saiu da prateleira
+
+    So creditar seria imprimir dinheiro: a mercadoria continuaria no deposito e
+    o dono teria sido pago por ela. So debitar seria confisco.
+
+    Marcado como pago apenas depois de o save ter sido efetivamente reescrito.
+    Se qualquer coisa falhar aqui, o acerto continua em aberto e sai no proximo
+    `checkout` — perder uma venda por engano e muito pior que paga-la tarde.
+    """
+    pendentes = db.unpaid_settlements(conn, room_id, player_id)
+    relatorio = {"paid": 0, "credits": 0, "goods": {}, "shortfall": {}}
+    if not pendentes:
+        return data, relatorio
+
+    loja = membership.get("shop_storage_id")
+    try:
+        with blobs.with_unpacked(data) as folder:
+            sf = SaveFile(folder)
+            jogo = sf.main
+            nave = _ship_in(sf)
+            if nave is None:
+                log.warning("settlements pending but no player ship in the save")
+                return data, relatorio
+
+            creditos = sum(int(linha["credits"]) for linha in pendentes)
+            if creditos:
+                shopping.pay(jogo, creditos)
+            relatorio["credits"] = creditos
+
+            for linha in pendentes:
+                for recurso, quantia in (linha["goods"] or {}).items():
+                    relatorio["goods"][recurso] = (
+                        relatorio["goods"].get(recurso, 0) + int(quantia))
+
+            # A carga sai do armazem-loja, e SO dele. Se a pessoa moveu o
+            # estoque entre a venda e agora, sai menos — e isso e reportado,
+            # nao coberto por outro movel. A loja e o unico lugar autorizado.
+            if loja:
+                for recurso, quantia in relatorio["goods"].items():
+                    saiu = shopping.take(nave, loja, recurso, int(quantia))
+                    if saiu < int(quantia):
+                        relatorio["shortfall"][recurso] = int(quantia) - saiu
+            elif relatorio["goods"]:
+                relatorio["shortfall"] = dict(relatorio["goods"])
+
+            sf.save(backup=False)
+            data = blobs.pack_save(folder)
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not pay settlements: %s", exc)
+        return data, {"paid": 0, "credits": 0, "goods": {}, "shortfall": {},
+                      "error": str(exc)}
+
+    db.mark_settlements_paid(conn, [linha["id"] for linha in pendentes],
+                             lease_id)
+    relatorio["paid"] = len(pendentes)
+    return data, relatorio
+
+
+def _ship_in(sf: SaveFile):
+    """A nave do jogador dentro de um save ja aberto — a de mais tripulacao."""
+    candidatas = [ship for _doc, ship in sf.ships()
+                  if (ship.find("settings") is not None
+                      and ship.find("settings").get("of")
+                      == presence.PLAYER_FACTION)]
+    if not candidatas:
+        return None
+    return max(candidatas, key=lambda sh: len(sh.findall(".//characters/c")))
+
+
+def _settle_neighbours(conn, room_id: str, buyer_id: int, lease: dict,
+                       data: bytes) -> dict:
+    """Apura o que foi vendido em cada vitrine, ANTES de remove-las.
+
+    A ordem nao e detalhe: `_strip_neighbours` apaga a prova. Depois dela a
+    prateleira nao existe mais e nao ha o que comparar.
+
+    Nada aqui pode custar a devolucao. Se a apuracao falhar, o save volta do
+    mesmo jeito e o que se perde e uma venda — o contrario, recusar o save de
+    alguem por causa da nossa contabilidade, seria muito pior.
+    """
+    consignacoes = (lease or {}).get("consignments") or []
+    relatorio = {"settled": 0, "credits": 0, "goods": {}, "notes": []}
+    if not consignacoes:
+        return relatorio
+    try:
+        with blobs.with_unpacked(data) as folder:
+            sf = SaveFile(folder)
+            for foto in consignacoes:
+                nave = storefront.find_by_sid(sf, foto["sid"])
+                achado = settle.reconcile(
+                    foto,
+                    storefront.read_stock(nave) if nave is not None else None,
+                    storefront.bank_credits(nave) if nave is not None else None)
+                relatorio["notes"] += achado["notes"]
+                if not achado["sold"] and not achado["credits"]:
+                    continue
+                db.record_settlement(
+                    conn, room_id, foto["seller_id"], buyer_id, lease["id"],
+                    foto["sid"], achado["credits"], achado["sold"],
+                    achado["notes"])
+                relatorio["settled"] += 1
+                relatorio["credits"] += achado["credits"]
+                for recurso, quantia in achado["sold"].items():
+                    relatorio["goods"][recurso] = (
+                        relatorio["goods"].get(recurso, 0) + quantia)
+    except Exception as exc:      # noqa: BLE001
+        log.warning("could not settle storefront sales: %s", exc)
+        relatorio["notes"].append(str(exc))
+    return relatorio
 
 
 def _strip_neighbours(lease: dict, data: bytes) -> bytes:
@@ -849,10 +989,16 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
     # E os vizinhos do mesmo sistema aparecem no setor. Os sids ficam no
     # emprestimo porque e o `checkin` que tem de tira-los de volta.
     with db.pool().connection() as conn:
-        data, sids, vizinhanca = _place_neighbours(conn, room_id, player["id"],
-                                                   data)
+        # O que venderam por ele enquanto esteve fora vira dinheiro e sai do
+        # deposito AGORA: e o unico momento em que o save dele esta aberto.
+        data, acertos = _pay_settlements(conn, room_id, player["id"],
+                                         membership, lease["id"], data)
+
+        data, sids, consignacoes, vizinhanca = _place_neighbours(
+            conn, room_id, player["id"], data)
         if sids:
             db.set_injected_sids(conn, lease["id"], sids)
+            db.set_consignments(conn, lease["id"], consignacoes)
 
     return Response(
         content=data, media_type="application/zip",
@@ -868,6 +1014,10 @@ def checkout(room_id: str, player: dict = Depends(current_player)):
             # armazem certo. Sem isto o canal e so de saida, e a cada sessao o
             # botao esqueceria o que a pessoa escolheu na anterior.
             "X-Shop-Storage": str(membership["shop_storage_id"] or ""),
+            # O que foi vendido por voce enquanto esteve fora, ja creditado
+            # neste save. O cliente mostra, e o mod escreve no log do jogo.
+            "X-Sales-Paid": str(acertos["paid"]),
+            "X-Sales-Credits": str(acertos["credits"]),
             "Content-Disposition": f'attachment; filename="{room_id}-save.zip"',
             "X-Lease-Id": str(lease["id"]),
             "X-Lease-Expires": expires.isoformat(),
@@ -964,6 +1114,12 @@ async def checkin(room_id: str, request: Request,
         if not ok:
             raise HTTPException(409, motivo)
 
+        # A APURACAO VEM PRIMEIRO, e a ordem nao e detalhe: `_strip_neighbours`
+        # apaga a prateleira, e depois disso nao ha o que comparar. Aqui e no
+        # `checkin`, nao no `checkpoint`: um checkpoint e o meio da sessao, e
+        # apurar la contaria a mesma venda duas vezes.
+        vendas = _settle_neighbours(conn, room_id, player["id"], lease, data)
+
         # As vitrines saem ANTES de qualquer leitura: o que for guardado, o
         # que entrar no mapa e o que a proxima retirada entregar tem de ser a
         # partida da pessoa, sem as naves que o servidor emprestou.
@@ -1008,6 +1164,7 @@ async def checkin(room_id: str, request: Request,
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,
             "presence": here, "pruned": pruned, "discovered": novos,
+            "sales": vendas,
             "message": "save received and stored. It is what the others see now."}
 
 

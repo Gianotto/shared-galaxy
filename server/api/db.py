@@ -280,6 +280,53 @@ def set_injected_sids(conn: psycopg.Connection, lease_id: int,
                  (_json.dumps([str(s) for s in sids]), lease_id))
 
 
+def set_consignments(conn: psycopg.Connection, lease_id: int,
+                     consignments: list) -> None:
+    """A foto de cada vitrine no momento em que o save saiu.
+
+    Uma venda e a diferenca entre dois momentos. Sem este, o check-in recebe
+    uma prateleira e nao tem com o que compara-la.
+    """
+    import json as _json
+    conn.execute("UPDATE lease SET consignments = %s WHERE id = %s",
+                 (_json.dumps(consignments), lease_id))
+
+
+def record_settlement(conn: psycopg.Connection, room_id: str, seller_id: int,
+                      buyer_id: int, lease_id: int, sid: str, credits: int,
+                      goods: dict, notes: list) -> int:
+    """Guarda o que a apuracao achou, devido ao vendedor."""
+    import json as _json
+    linha = conn.execute(
+        "INSERT INTO settlement (room_id, seller_id, buyer_id, lease_id, sid,"
+        "                        credits, goods, notes)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+        (room_id, seller_id, buyer_id, lease_id, str(sid), int(credits),
+         _json.dumps(goods), _json.dumps(notes))).fetchone()
+    return linha["id"] if isinstance(linha, dict) else linha[0]
+
+
+def unpaid_settlements(conn: psycopg.Connection, room_id: str,
+                       seller_id: int) -> list:
+    """O que este vendedor tem a receber nesta sala, mais antigo primeiro."""
+    return conn.execute(
+        "SELECT s.id, s.credits, s.goods, s.sid, s.created_at,"
+        "       p.display_name AS buyer_name"
+        "  FROM settlement s JOIN player p ON p.id = s.buyer_id"
+        " WHERE s.room_id = %s AND s.seller_id = %s AND s.paid_at IS NULL"
+        " ORDER BY s.created_at", (room_id, seller_id)).fetchall()
+
+
+def mark_settlements_paid(conn: psycopg.Connection, ids: list,
+                          lease_id: int | None) -> None:
+    """So depois de o save ter sido escrito: pago e o que chegou no save."""
+    if not ids:
+        return
+    conn.execute(
+        "UPDATE settlement SET paid_at = now(), paid_lease_id = %s"
+        " WHERE id = ANY(%s)", (lease_id, list(ids)))
+
+
 def close_lease(conn: psycopg.Connection, lease_id: int,
                 returned_id: int) -> None:
     conn.execute(

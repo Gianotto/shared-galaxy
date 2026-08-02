@@ -849,6 +849,49 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
     return report
 
 
+def read_stock(ship: ET.Element) -> dict:
+    """O que sobrou nas prateleiras da vitrine.
+
+    O par de leitura de `set_stock`. No `checkout` sabemos o que foi posto; so
+    isto diz o que ficou, e a diferenca entre os dois e a venda.
+    """
+    total: dict = {}
+    for rack in ship_racks(ship):
+        for stack in rack.findall("s"):
+            ident = stack.get("elementaryId")
+            if ident is None:
+                continue
+            try:
+                qty = int(stack.get("inStorage") or 0)
+            except (TypeError, ValueError):
+                continue
+            total[ident] = total.get(ident, 0) + qty
+    return {r: q for r, q in total.items() if q}
+
+
+def bank_credits(ship: ET.Element) -> int | None:
+    """Os creditos da banca da vitrine, ou None se ela nao tem banca.
+
+    E o `ca` do `<shipBank>`. Quem compra paga a nave, entao este numero sobe
+    exatamente no valor da venda — e o jogo faz o preco, o que e melhor do que
+    nos inventarmos uma tabela.
+    """
+    bank = ship.find("shipBank")
+    if bank is None:
+        return None
+    try:
+        return int(bank.get("ca") or 0)
+    except (TypeError, ValueError):
+        return None
+
+
+def find_by_sid(sf: SaveFile, sid: str) -> ET.Element | None:
+    for _doc, ship in sf.ships():
+        if ship.get("sid") == str(sid):
+            return ship
+    return None
+
+
 def ensure_ai(ship: ET.Element, donor: ET.Element | None) -> dict:
     """Garante um `<asi>` na nave: e a IA dela (radio, saudacao, combate)."""
     existing = ship.find("asi")
