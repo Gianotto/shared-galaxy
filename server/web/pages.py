@@ -30,6 +30,38 @@ def _esc(value) -> str:
     return html.escape(str(value)) if value is not None else ""
 
 
+# Icones do menu. Desenhados aqui, em `stroke="currentColor"`, para seguirem a
+# cor do link sem uma regra a mais — e para nao existir um pedido de rede por
+# um arquivo de icone. O site inteiro se serve sozinho, e isso e um argumento
+# numa comunidade que — com razao — desconfia de aplicativo desconhecido.
+ICONS = {
+    "nav_rooms":
+        '<circle cx="12" cy="12" r="8"/>'
+        '<ellipse cx="12" cy="12" rx="10" ry="4"/>',
+    "nav_client":
+        '<path d="M12 3v11"/><path d="M8 11l4 4 4-4"/>'
+        '<path d="M4 18v2h16v-2"/>',
+    "nav_recovery":
+        '<circle cx="8" cy="12" r="4"/>'
+        '<path d="M12 12h9"/><path d="M17 12v3"/><path d="M20 12v2"/>',
+    "nav_privacy":
+        '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+    "nav_how":
+        '<circle cx="12" cy="12" r="9"/>'
+        '<path d="M9.5 9.5a2.6 2.6 0 113.2 2.5c-.5.2-.7.6-.7 1.1v.4"/>'
+        '<path d="M12 17h.01"/>',
+}
+
+
+def icon(chave: str) -> str:
+    desenho = ICONS.get(chave)
+    if not desenho:
+        return ""
+    return (f'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" '
+            f'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" '
+            f'stroke-linejoin="round" aria-hidden="true">{desenho}</svg>')
+
+
 def layout(title: str, body: str, lang: str, subtitle: str = "",
            path: str = "/") -> str:
     """The shared shell.
@@ -42,6 +74,20 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
     sep = "&" if "?" in path else "?"
     switch = (f'<a href="{_esc(path)}{sep}lang={other}">'
               f'{"Português" if other == "pt" else "English"}</a>')
+
+    # O MENU. Antes disto cada pagina terminava num par de links soltos, e as
+    # de sala so ofereciam saida depois do mapa inteiro — um scroll longo antes
+    # de existir um caminho de volta. Uma pessoa que chega por um convite nao
+    # deveria ter que adivinhar o que mais existe aqui.
+    menu = "".join(
+        f'<a href="{destino}?lang={lang}"'
+        f'{" class=here" if path == destino else ""}>'
+        f'{icon(chave)}{t(chave, lang)}</a>'
+        for destino, chave in (("/", "nav_rooms"),
+                               ("/how-it-works", "nav_how"),
+                               ("/client", "nav_client"),
+                               ("/recovery", "nav_recovery"),
+                               ("/privacy", "nav_privacy")))
     return f"""<!doctype html><html lang="{lang}"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{_esc(title)}</title>
@@ -50,6 +96,15 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
            --me:#6ee7b7; --on:#fbbf24; }}
   a.cta {{ display:inline-block; padding:.6rem 1.1rem; border-radius:.35rem;
     background:#3b6fd4; color:#fff; text-decoration:none; font-weight:600; }}
+  header.nav {{ display:flex; flex-wrap:wrap; gap:.6rem 1.4rem;
+    align-items:baseline; justify-content:space-between;
+    padding:.9rem 0 1rem; margin-bottom:1.4rem;
+    border-bottom:1px solid var(--line); }}
+  header.nav nav {{ display:flex; flex-wrap:wrap; gap:1.1rem; }}
+  header.nav a {{ color:var(--dim); text-decoration:none;
+    display:inline-flex; align-items:center; gap:.4rem; }}
+  header.nav a:hover {{ color:var(--fg); }}
+  header.nav a.here {{ color:var(--fg); font-weight:600; }}
   * {{ box-sizing: border-box; }}
   body {{ margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }}
@@ -85,7 +140,10 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
            color:var(--dim); font-size:.85rem; }}
 </style>
 <div class="wrap">
-<p class="lang">{switch}</p>
+<header class="nav">
+  <nav>{menu}</nav>
+  <span class="lang">{switch}</span>
+</header>
 <h1>{_esc(title)}</h1>
 <p class="sub">{subtitle}</p>
 {body}
@@ -274,11 +332,6 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
               f'padding:.8rem;border-radius:.4rem">'
               f'{t("owner_next", lang)}</p>' if just_made else '')
 
-    # Ver a sala viva e o degrau 2; este e o degrau 3, e sem ele a pagina
-    # termina em admiracao. Fica no topo porque e a unica coisa que uma
-    # pessoa de fora pode FAZER nesta tela.
-    entrar = (f'<p><a class="cta" href="/room/{_esc(room["id"])}/join'
-              f'?lang={lang}">{t("join_this", lang)}</a></p>')
 
     # O nome do sistema, que e o que o jogador ve no mapa estelar do jogo. O
     # `at_system` e um id interno e o `at_body` e um nome de tipo — nenhum dos
@@ -310,28 +363,14 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
     else:
         table = f'<p class="sub">{t("nobody_yet", lang)}</p>'
 
-    if room["password_hash"]:
-        how = (f'<h2>{t("how_to_join", lang)}</h2>'
-               f'<p class="sub">{t("locked_room", lang)}</p>')
-    else:
-        recipe = room.get("options") or {}
-        items = "".join(f"<li>{_esc(k)}: <b>{_esc(v)}</b></li>"
-                        for k, v in sorted(recipe.items()))
-        how = f"""
-<h2>{t("how_to_join", lang)}</h2>
-<p>{t("how_intro", lang)}</p>
-<ul>
-  <li>{t("seed", lang)}: <code>{_esc(room['seed'])}</code></li>
-  {items or f'<li class="sub">{t("no_options_yet", lang)}</li>'}
-</ul>
-<p>{t("then_upload", lang)}</p>
-<pre>python3 tools/sgalaxy.py join {_esc(room['id'])} --save PATH/TO/GAME</pre>
-<p class="sub">{t("wrong_options", lang)}</p>"""
+    # A receita de entrada saiu daqui. Ela ensinava a criar a partida com a
+    # seed e terminava num `python3 tools/sgalaxy.py`, que e o comando de quem
+    # tem o repositorio — nao de quem baixou um binario. Entrar numa sala tem
+    # pagina propria agora, por sistema; esta e a pagina de VER a sala.
 
-    body = f"""{banner}{entrar}{map_svg}
+    body = f"""{banner}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
-{table}
-{how}"""
+{table}"""
     return layout(
         room["name"], body, lang,
         f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '
@@ -376,18 +415,39 @@ is not in that copy.</p>
 automatically. If you leave, everything goes at once.</p>
 
 <h2>What personal data</h2>
-<p><b>None.</b> We do not ask for an email, a real name, a password or a Steam
-login. Your identity here is a random code the server generates and keeps only a
-cryptographic digest of. The consequence is harsh and honest: <b>losing the code
-means losing the account</b>, and there is no recovery.</p>
+<p><b>Almost none, and not your address.</b> We do not ask for an email, a real
+name, a password or a Steam login. Your identity here is a random code the
+server generates and keeps only a cryptographic digest of. The consequence is
+harsh and honest: <b>losing the code means losing the account</b>, and there is
+no recovery.</p>
+<p>One thing is kept beyond that, and it would be dishonest not to say so.
+Because registration asks for a name and nothing else, a script could create
+accounts without limit, so the server allows <b>one account per connection</b>.
+To answer "has this address registered before" it stores an <b>HMAC</b> of the
+address — not the address, and not a plain hash of it either: a plain SHA-256 of
+an IPv4 is four billion candidates and falls to brute force in seconds. What is
+stored answers that one question and nothing else. It cannot place you, and it
+goes with the rest when you delete your account.</p>
+<p>If you share a connection with somebody who already joined — a house, a hall
+of residence, or any mobile carrier — you will be turned away for a reason that
+is not your fault. Ask whoever runs the room; lifting it takes one line.</p>
+
+<h2>What the client writes on your machine</h2>
+<p>One file, and only one:</p>
+<pre>~/.config/sgalaxy/credentials.json</pre>
+<p>On Windows the equivalent path is
+<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. It holds your
+access code, created mode 600 so only your user can read it. The code is stored
+in the clear because it <b>is</b> your account: anybody who reads that file signs
+in as you. Deleting it does not delete the account — it disconnects this machine
+from it. Nothing else is installed, and no service is left running.</p>
 
 <h2>How to delete everything and leave</h2>
-<p>One call, and there is no second-guessing step:</p>
-<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=delete%20everything" \\
-     -H "Authorization: Bearer YOUR-TOKEN"</pre>
+<p>There is a page for it, and there is no second-guessing step:</p>
+<p><a class="cta" href="/account/delete">Delete your account and leave</a></p>
 <p>It deletes your account and all your saves. Rooms you created that still have
 other players stay up — erasing them would destroy the saves of people who asked
-for nothing — but they leave the public listing and your token is invalidated.</p>
+for nothing — but they leave the public listing and your code is invalidated.</p>
 
 <h2>What cannot be promised</h2>
 <p>The game runs on your machine, on files you can edit. There is no way to stop
@@ -417,18 +477,38 @@ porão de verdade não entra nessa cópia.</p>
 sozinhas. Se você sair, apaga tudo na hora.</p>
 
 <h2>Que dado pessoal</h2>
-<p><b>Nenhum.</b> Não pedimos e-mail, nome real, senha ou login de Steam. A sua
+<p>Uma coisa é guardada, e omitir seria desonesto. Como o cadastro pede um nome
+e mais nada, um script criaria contas sem limite, então o servidor permite
+<b>uma conta por conexão</b>. Para responder "este endereço já se cadastrou" ele
+guarda um <b>HMAC</b> do endereço — não o endereço, e nem um hash simples dele:
+um SHA-256 puro de um IPv4 são quatro bilhões de candidatos e cai por força
+bruta em segundos. O que fica responde só essa pergunta. Não localiza ninguém, e
+vai junto com o resto quando você apaga a conta.</p>
+<p>Se você divide a conexão com quem já entrou — uma casa, um alojamento, ou
+qualquer operadora de celular — vai ser barrado por um motivo que não é culpa
+sua. Fale com quem administra a sala; liberar é uma linha.</p>
+<p><b>Fora isso, nenhum.</b> Não pedimos e-mail, nome real, senha ou login de
+Steam. A sua
 identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
 resumo criptográfico. A consequência é dura e é honesta: <b>quem perde o código
 perde a conta</b>, e não há como recuperar.</p>
 
+<h2>O que o cliente cria no seu computador</h2>
+<p>Um arquivo, e só um:</p>
+<pre>~/.config/sgalaxy/credentials.json</pre>
+<p>No Windows o caminho equivalente é
+<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. Ele guarda o seu
+código de acesso, criado com permissão 600 para que só o seu usuário leia. O
+código fica em claro porque ele <b>é</b> a sua conta: quem ler esse arquivo
+entra como você. Apagá-lo não apaga a conta — desconecta este computador dela.
+Nada mais é instalado, e nenhum serviço fica rodando.</p>
+
 <h2>Como apagar tudo e sair</h2>
-<p>Uma chamada, e não há etapa de arrependimento:</p>
-<pre>curl -X DELETE "https://galaxy.bygianotto.com.br/api/v1/me?confirm=delete%20everything" \\
-     -H "Authorization: Bearer SEU-TOKEN"</pre>
-<p>Apaga a sua conta e todos os seus saves. Salas que você criou e onde há outros
-jogadores continuam de pé — sumir com elas destruiria o save de quem não pediu
-nada —, mas saem da listagem e o seu token é invalidado.</p>
+<p>Existe uma página para isso, e não há etapa de arrependimento:</p>
+<p><a class="cta" href="/account/delete?lang=pt">Apagar a conta e sair</a></p>
+<p>Apaga a sua conta e todos os seus saves. Salas que você criou e que ainda têm
+outras pessoas dentro continuam de pé — apagá-las destruiria o save de quem não
+pediu nada — mas saem da listagem pública e o seu código deixa de valer.</p>
 
 <h2>O que não dá para prometer</h2>
 <p>O jogo roda na sua máquina, em arquivos que você consegue editar. Não há como
@@ -437,6 +517,181 @@ impedir que alguém altere o próprio save, e o projeto não finge que há: o de
 segurança absoluta é quem não pensou no assunto.</p>
 """,
 }
+
+
+HOW = {"en": """
+<h2>The idea</h2>
+<p>Space Haven is a single-player game and this does not change that. Nobody
+plays in your game, nothing is synchronised while you play, and there is no
+server tick. What is shared is <b>the galaxy</b>: the same star map, the same
+systems, and the trace everyone leaves in it.</p>
+<p>The unit of exchange is the savegame itself. Yours is uploaded, kept, and
+handed back with everyone else's marks written into it.</p>
+
+<h2>Check out, play, check in</h2>
+<p>A session is a loan, and the room hands the save to one person at a time.</p>
+<ol>
+<li><b>Check out.</b> The server builds your save: your run, plus the galaxy as
+the room left it. It marks the loan as open and starts a clock.</li>
+<li><b>Play.</b> Normally, offline, in your own copy of the game. While you
+play, each autosave is sent up as a checkpoint, so the room's map can show where
+you are without waiting for you to finish.</li>
+<li><b>Check in.</b> When you close the game the save goes back, is checked, and
+becomes what the others receive next.</li>
+</ol>
+<p>One session at a time is what keeps the galaxy from forking. Two people
+playing the same room at once would produce two versions of the same universe,
+and merging them is not a problem with an honest solution.</p>
+
+<h2>What the server checks, and what it does not</h2>
+<p>Every arriving save is fingerprinted by its stars. If the galaxy is not the
+room's, the save is refused — it is another universe, not this one. What the
+server does <b>not</b> do is police your run: it does not audit your resources,
+your ship or your crew. The game runs on your machine, on files you can edit,
+and pretending otherwise would be theatre.</p>
+
+<h2>What travels between players</h2>
+<p>Three things, and no more:</p>
+<ul>
+<li><b>Where you are.</b> Your position feeds the room's map.</li>
+<li><b>What you found.</b> Systems somebody explored become visible to
+everyone, including people who join later. Visited stays yours; visible is
+shared.</li>
+<li><b>What you sell.</b> One storage on your ship can be marked as your shop.
+Its contents — and only its contents — are copied into a storefront that
+appears in your neighbours' sectors.</li>
+</ul>
+<p>Your hold, your blueprints and your colony are not in that copy.</p>
+
+<h2>The storefront, and how a sale reaches you</h2>
+<p>A neighbour in your system shows up as a ship you can trade with. That ship
+is not their game reaching into yours: it is a copy the server assembles from a
+ship already present in <i>your</i> save, carrying only what they consigned.</p>
+<p>When somebody buys from it, the game charges them and pays the ship — a ship
+that, from the game's point of view, belongs to a faction. So the server
+photographs the shelf when it hands the save out, compares it when the save
+comes back, and records what was sold. You collect at your next check out:
+credits into your bank, goods out of your shop storage. The price is the one the
+game itself charged.</p>
+<p>The storefront is removed from the save when it comes back. It never becomes
+part of your game.</p>
+
+<h2>The mod</h2>
+<p>The mod is optional. Everything above works without it; it removes the
+fiddly parts.</p>
+<ul>
+<li><b>It opens the room's save for you</b>, instead of leaving you to find it
+in the load menu and hope you picked the right one.</li>
+<li><b>It writes the room, the version and your sales into the game's own log</b>,
+so you can tell at a glance that you are in the shared galaxy and not a local
+run.</li>
+<li><b>It adds a SHOP toggle</b> to a storage's panel, so choosing what you sell
+is done in the game rather than in a terminal.</li>
+<li><b>It silences the automatic hails</b> from storefronts. Left alone, the
+game's AI would have your neighbours' shops calling you to trade on their own
+initiative — an economy moving without anybody deciding it should.</li>
+</ul>
+<p>Technically it is a Java agent woven into the running game with AspectJ. It
+does not patch the game's files: the game jar is untouched, and uninstalling is
+undoing three lines in a config file.</p>
+
+<h2>What is stored, and for how long</h2>
+<p>The last 20 versions of each save, per room, are kept so a bad session can be
+rolled back. Older ones are deleted automatically, and everything goes at once
+if you leave.</p>
+""", "pt": """
+<h2>A ideia</h2>
+<p>Space Haven é um jogo de um jogador só, e isto não muda isso. Ninguém joga
+dentro do seu jogo, nada é sincronizado enquanto você joga, e não existe um
+servidor de partida. O que é compartilhado é <b>a galáxia</b>: o mesmo mapa
+estelar, os mesmos sistemas, e o rastro que cada um deixa nele.</p>
+<p>A unidade de troca é o próprio savegame. O seu sobe, fica guardado, e volta
+com as marcas de todo mundo escritas dentro dele.</p>
+
+<h2>Retirar, jogar, devolver</h2>
+<p>Uma sessão é um empréstimo, e a sala entrega o save a uma pessoa por vez.</p>
+<ol>
+<li><b>Retirar.</b> O servidor monta o seu save: a sua partida, mais a galáxia
+como a sala a deixou. Marca o empréstimo como aberto e começa a contar o
+tempo.</li>
+<li><b>Jogar.</b> Normalmente, offline, na sua própria cópia do jogo. Enquanto
+você joga, cada autosave sobe como checkpoint, para o mapa da sala mostrar onde
+você está sem esperar você terminar.</li>
+<li><b>Devolver.</b> Quando você fecha o jogo, o save volta, é conferido, e vira
+o que as outras pessoas recebem em seguida.</li>
+</ol>
+<p>Uma sessão por vez é o que impede a galáxia de se dividir. Duas pessoas
+jogando a mesma sala ao mesmo tempo produziriam duas versões do mesmo universo,
+e juntá-las não é um problema com solução honesta.</p>
+
+<h2>O que o servidor confere, e o que não confere</h2>
+<p>Todo save que chega é identificado pelas suas estrelas. Se a galáxia não for
+a da sala, o save é recusado — é outro universo, não este. O que o servidor
+<b>não</b> faz é fiscalizar a sua partida: não audita recursos, nave nem
+tripulação. O jogo roda na sua máquina, sobre arquivos que você pode editar, e
+fingir o contrário seria teatro.</p>
+
+<h2>O que viaja entre jogadores</h2>
+<p>Três coisas, e nada além:</p>
+<ul>
+<li><b>Onde você está.</b> A sua posição alimenta o mapa da sala.</li>
+<li><b>O que você descobriu.</b> Sistemas que alguém explorou ficam visíveis
+para todos, inclusive para quem entrar depois. Visitado continua seu; visível é
+compartilhado.</li>
+<li><b>O que você vende.</b> Um depósito da sua nave pode ser marcado como a sua
+loja. O conteúdo dele — e só ele — é copiado para uma vitrine que aparece nos
+setores dos seus vizinhos.</li>
+</ul>
+<p>O seu porão, os seus projetos e a sua colônia não estão nessa cópia.</p>
+
+<h2>A vitrine, e como uma venda chega até você</h2>
+<p>Um vizinho no seu sistema aparece como uma nave com quem dá para comerciar.
+Essa nave não é o jogo dele alcançando o seu: é uma cópia que o servidor monta a
+partir de uma nave que já estava no <i>seu</i> save, carregando só o que ele
+consignou.</p>
+<p>Quando alguém compra dela, o jogo cobra e paga a nave — uma nave que, para o
+jogo, pertence a uma facção. Então o servidor fotografa a prateleira quando
+entrega o save, compara quando ele volta, e registra o que foi vendido. Você
+recebe na sua próxima retirada: créditos no banco, mercadoria fora do depósito.
+O preço é o que o próprio jogo cobrou.</p>
+<p>A vitrine é removida do save quando ele volta. Ela nunca vira parte da sua
+partida.</p>
+
+<h2>O mod</h2>
+<p>O mod é opcional. Tudo acima funciona sem ele; o que ele tira são as partes
+chatas.</p>
+<ul>
+<li><b>Abre o save da sala para você</b>, em vez de deixar você procurar no menu
+de load e torcer para ter escolhido o certo.</li>
+<li><b>Escreve a sala, a versão e as suas vendas no log do próprio jogo</b>, para
+você saber de relance que está na galáxia compartilhada e não numa partida
+local.</li>
+<li><b>Acrescenta um botão SHOP</b> ao painel de um depósito, para escolher o
+que você vende ser coisa de dentro do jogo, e não de terminal.</li>
+<li><b>Cala os chamados automáticos</b> das vitrines. Sem isso, a IA do jogo põe
+as lojas dos seus vizinhos ligando para negociar por conta própria — uma
+economia se movendo sem ninguém ter decidido isso.</li>
+</ul>
+<p>Tecnicamente é um agente Java tecido no jogo em execução com AspectJ. Ele não
+altera os arquivos do jogo: o jar continua intacto, e desinstalar é desfazer
+três linhas num arquivo de configuração.</p>
+
+<h2>O que fica guardado, e por quanto tempo</h2>
+<p>As últimas 20 versões de cada save, por sala, para uma sessão ruim poder ser
+desfeita. As mais antigas são apagadas sozinhas, e tudo vai junto se você
+sair.</p>
+"""}
+
+
+def how_page(lang: str) -> str:
+    """O conceito inteiro numa pagina: save como unidade de troca, o
+    emprestimo, o que viaja entre jogadores, a vitrine e o mod.
+
+    Sem isto o site mostra salas vivas e nunca explica o que esta acontecendo,
+    e a pergunta que todo mundo faz primeiro — "entao voces jogam juntos?" —
+    fica sem resposta escrita.
+    """
+    return layout(t("how_title", lang), HOW[lang], lang, "", "/how-it-works")
 
 
 def privacy_page(lang: str) -> str:
@@ -543,8 +798,9 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
   <li>
     <h3>{t("step_account", lang)}</h3>
     <p class="note">{t("step_account_help", lang)}</p>
-    <p><a href="/register?lang={lang}">{t("no_account_yet", lang)}</a></p>
-    <pre>./sgalaxy register --recover "YOUR-RECOVERY-CODE"</pre>
+    <p><a href="/register?lang={lang}">{t("no_account_yet", lang)}</a> ·
+       <a href="/recovery?lang={lang}">{t("recovery_title", lang)}</a></p>
+    {commands('register --recover "YOUR-RECOVERY-CODE"', lang)}
   </li>
   <li>
     <h3>{t("step_join", lang)}</h3>
@@ -553,7 +809,7 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
   <li>
     <h3>{t("step_play", lang)}</h3>
     <p class="note">{t("step_play_help", lang)}</p>
-    <pre>./sgalaxy play {rid}</pre>
+    {commands(f"play {rid}", lang)}
   </li>
 </ol>
 <p><a href="/room/{rid}?lang={lang}">&larr; {nome}</a></p>
@@ -561,6 +817,110 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
     return layout(t("join_title", lang) % nome, body, lang,
                   f"{players}/{room['max_players']} {t('players', lang)}",
                   f"/room/{rid}/join")
+
+
+# Os dois jeitos de chamar o programa. Nao ha um terceiro: no macOS e no Linux
+# e o mesmo comando, e escrever `./sgalaxy` sozinho numa pagina que atende tres
+# sistemas manda metade das pessoas colarem algo que nao funciona.
+INVOKE = (("on_windows", "sgalaxy.exe"), ("on_unix", "./sgalaxy"))
+
+
+def commands(sufixo: str, lang: str) -> str:
+    """O mesmo comando nos dois sistemas, lado a lado."""
+    return "".join(
+        f'<p class="note">{t(chave, lang)}</p><pre>{_esc(prog)} {_esc(sufixo)}</pre>'
+        for chave, prog in INVOKE)
+
+
+def client_page(lang: str) -> str:
+    """Como instalar e chamar o cliente, em cada sistema.
+
+    Existe porque as instrucoes estavam espalhadas e todas escritas em
+    `./sgalaxy`, que e o comando de dois dos tres sistemas suportados.
+    """
+    baixar = "".join(
+        f'<a href="{RELEASES}/latest/download/{arquivo}">{t(chave, lang)}</a>'
+        for chave, arquivo, _cmd in BINARIES)
+    body = f"""
+<p>{t("client_intro", lang)}</p>
+<div class="dl">{baixar}</div>
+
+<h2>{t("on_windows", lang)}</h2>
+<p class="note">{t("windows_note", lang)}</p>
+<pre>.\\sgalaxy.exe --help</pre>
+
+<h2>{t("on_unix", lang)}</h2>
+<p class="note">{t("unix_chmod", lang)}</p>
+<pre>chmod +x sgalaxy-*
+mv sgalaxy-* sgalaxy
+./sgalaxy --help</pre>
+
+<h2>{t("what_it_writes", lang)}</h2>
+<p>{t("writes_intro", lang)}</p>
+<pre>~/.config/sgalaxy/credentials.json</pre>
+<p class="note">{t("writes_detail", lang)}</p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
+    return layout(t("client_title", lang), body, lang, "", "/client")
+
+
+def recovery_page(lang: str) -> str:
+    """O que e o codigo de recuperacao e como usa-lo.
+
+    Ele aparece uma vez, no cadastro, e depois disso e a unica credencial que
+    existe. Quem chega na mensagem "ja existe uma conta desta conexao" precisa
+    saber o que fazer, e ate agora nao havia onde ler isso.
+    """
+    body = f"""
+<p>{t("recovery_what", lang)}</p>
+<p>{t("recovery_when", lang)}</p>
+
+<h2>{t("recovery_how", lang)}</h2>
+{commands('register --recover "YOUR-RECOVERY-CODE"', lang)}
+<p class="note">{t("recovery_dashes", lang)}</p>
+<p class="note">{t("recovery_check", lang)}</p>
+
+<h2>{t("what_it_writes", lang)}</h2>
+<p>{t("writes_intro", lang)}</p>
+<pre>~/.config/sgalaxy/credentials.json</pre>
+<p class="note">{t("writes_detail", lang)}</p>
+
+<p><a href="/client?lang={lang}">{t("client_title", lang)}</a> ·
+   <a href="/account/delete?lang={lang}">{t("delete_title", lang)}</a></p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
+    return layout(t("recovery_title", lang), body, lang, "", "/recovery")
+
+
+def delete_form(lang: str, error: str = "") -> str:
+    """Apagar a conta sem precisar de um terminal.
+
+    A politica prometia isto e entregava uma linha de `curl` com um cabecalho
+    de autorizacao — o que so serve para quem ja sabe o que e um cabecalho de
+    autorizacao. Uma promessa de apagar dados que exige competencia tecnica
+    para ser exercida nao e bem uma promessa.
+    """
+    aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
+    body = f"""{aviso}
+<p>{t("delete_intro", lang)}</p>
+<p class="note">{t("delete_rooms_note", lang)}</p>
+<form method="post" action="/account/delete?lang={lang}">
+  <label for="code">{t("your_code_label", lang)}</label>
+  <input type="text" id="code" name="code" required autocomplete="off">
+  <label for="confirm">{t("delete_confirm_label", lang)}</label>
+  <input type="text" id="confirm" name="confirm" required autocomplete="off">
+  <button type="submit">{t("delete_button", lang)}</button>
+</form>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
+    return layout(t("delete_title", lang), body, lang, "", "/account/delete")
+
+
+def deleted_page(resultado: dict, lang: str) -> str:
+    detalhe = (f'<p class="note">{_esc(resultado.get("message", ""))}</p>'
+               if resultado.get("message") else "")
+    body = f"""
+<p>{t("delete_done", lang)}</p>{detalhe}
+<p><a href="/?lang={lang}">{t("nav_rooms", lang)}</a></p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
+    return layout(t("delete_title", lang), body, lang, "", "/account/delete")
 
 
 def register_form(lang: str, error: str = "", needs_invite: bool = False) -> str:
@@ -584,7 +944,9 @@ def register_form(lang: str, error: str = "", needs_invite: bool = False) -> str
          autocomplete="off">{convite}
   <button type="submit">{t("create_account", lang)}</button>
 </form>
-<style>{FORM_CSS.format()}</style>"""
+<p class="note" style="margin-top:1.4rem">
+  <a href="/recovery?lang={lang}">{t("have_account", lang)}</a></p>
+<style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
     return layout(t("create_account", lang), body, lang, "", "/register")
 
 
@@ -599,7 +961,7 @@ def registered_page(name: str, code: str, lang: str) -> str:
 <div class="dl">{"".join(
     f'<a href="{RELEASES}/latest/download/{arq}">{t(k, lang)}</a>'
     for k, arq, _c in BINARIES)}</div>
-<pre>./sgalaxy register --recover "{_esc(code)}"</pre>
+{commands(f'register --recover "{_esc(code)}"', lang)}
 <p><a href="/?lang={lang}">{t("rooms", lang)}</a> ·
    <a href="/new-room?lang={lang}">{t("new_room", lang)}</a></p>
 <style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""

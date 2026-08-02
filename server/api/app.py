@@ -35,6 +35,7 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from server.api import db
+from server.domain import addresses
 from server.domain import rules
 from server.galaxy import fingerprint, presence
 from sgalaxy import discovery as discovering
@@ -96,6 +97,29 @@ app = FastAPI(
 BLOB_ROOT = os.environ.get("BLOB_ROOT", "/data/blobs")
 INVITE_ONLY = os.environ.get("SGALAXY_INVITE_ONLY", "").strip()
 
+# Quantas contas por endereco. Um por padrao; a variavel existe para uma LAN
+# ou um alojamento nao precisarem de deploy para caber.
+MAX_PER_IP = int(os.environ.get("SGALAXY_MAX_PER_IP", "1") or "1")
+
+# O segredo que transforma endereco em impressao. Sem ele nao ha limite por
+# endereco NENHUM — preferimos registrar aberto a guardar endereco de gente em
+# claro, e a mensagem no log diz o que fazer.
+IP_PEPPER = os.environ.get("SGALAXY_IP_PEPPER", "").strip()
+
+
+def _address_has_room(conn, request: Request) -> tuple[bool, str | None]:
+    """Este endereco ainda pode criar conta? Devolve `(pode, impressao)`."""
+    impressao = addresses.fingerprint(addresses.client_ip(request),
+                                      IP_PEPPER)
+    if impressao is None:
+        if not IP_PEPPER:
+            log.warning("SGALAXY_IP_PEPPER is not set: accounts are NOT "
+                        "limited per address")
+        return True, None
+    if db.accounts_from(conn, impressao) >= MAX_PER_IP:
+        return False, impressao
+    return True, impressao
+
 _store: BlobStore | None = None
 
 
@@ -149,7 +173,7 @@ async def body_bytes(request: Request) -> bytes:
 # ---------------------------------------------------------------------------
 
 @app.post("/api/v1/players", status_code=201)
-def create_player(payload: dict | None = None):
+def create_player(request: Request, payload: dict | None = None):
     """Emite um token novo. E o unico cadastro que existe.
 
     Sem e-mail, sem senha, sem confirmacao. O token volta uma vez so — o cliente
@@ -167,7 +191,13 @@ def create_player(payload: dict | None = None):
 
     token = rules.new_token()
     with db.pool().connection() as conn:
-        player = db.create_player(conn, rules.hash_token(token), name)
+        pode, impressao = _address_has_room(conn, request)
+        if not pode:
+            raise HTTPException(429, "an account has already been created from "
+                                     "this connection. If it is yours, use your "
+                                     "recovery code instead of making another")
+        player = db.create_player(conn, rules.hash_token(token), name,
+                                  impressao)
     return {
         "playerId": player["id"],
         "name": player["display_name"],
@@ -1303,7 +1333,14 @@ def register_submit(request: Request, name: str = Form(""),
 
     token = rules.new_token()
     with db.pool().connection() as conn:
-        player = db.create_player(conn, rules.hash_token(token), limpo)
+        pode, impressao = _address_has_room(conn, request)
+        if not pode:
+            return HTMLResponse(
+                pages.register_form(idioma, i18n.t("one_per_ip", idioma),
+                                    needs_invite=pede),
+                status_code=429)
+        player = db.create_player(conn, rules.hash_token(token), limpo,
+                                  impressao)
     resposta = HTMLResponse(pages.registered_page(
         player["display_name"], rules.recovery_code(token), idioma))
     _set_session(resposta, token)
@@ -1351,6 +1388,69 @@ def new_room_submit(request: Request, name: str = Form(""),
         created = db.create_room(conn, room)
     return RedirectResponse(f"/room/{created['id']}?lang={idioma}&new=1",
                             status_code=303)
+
+
+@app.get("/how-it-works", response_class=HTMLResponse)
+def how_web(request: Request, lang: str = ""):
+    """O conceito inteiro: save como unidade de troca, o emprestimo, o que
+    viaja entre jogadores, a vitrine e o mod."""
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.how_page(idioma)
+
+
+@app.get("/client", response_class=HTMLResponse)
+def client_web(request: Request, lang: str = ""):
+    """Como instalar e chamar o cliente, em cada sistema."""
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.client_page(idioma)
+
+
+@app.get("/recovery", response_class=HTMLResponse)
+def recovery_web(request: Request, lang: str = ""):
+    """O que e o codigo de recuperacao e como usa-lo."""
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.recovery_page(idioma)
+
+
+@app.get("/account/delete", response_class=HTMLResponse)
+def delete_web(request: Request, lang: str = ""):
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    return pages.delete_form(idioma)
+
+
+@app.post("/account/delete", response_class=HTMLResponse)
+def delete_submit(request: Request, code: str = Form(""),
+                  confirm: str = Form(""), lang: str = ""):
+    """Apagar a conta pelo navegador.
+
+    A politica prometia isto e entregava uma linha de `curl` com cabecalho de
+    autorizacao — util para quem ja sabe o que e um cabecalho de autorizacao, e
+    para mais ninguem. Uma promessa de apagar dados que exige competencia
+    tecnica para ser exercida nao e bem uma promessa.
+
+    A confirmacao e digitada por extenso, igual a da API, porque nao ha
+    desfazer e um clique unico e pouco para uma porta so de ida.
+    """
+    idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    if confirm.strip() != "delete everything":
+        return HTMLResponse(
+            pages.delete_form(idioma, i18n.t("delete_bad_confirm", idioma)),
+            status_code=400)
+
+    token = rules.parse_recovery_code(code)
+    with db.pool().connection() as conn:
+        dono = db.player_by_token(conn, rules.hash_token(token))
+    if dono is None:
+        return HTMLResponse(
+            pages.delete_form(idioma, i18n.t("delete_bad_code", idioma)),
+            status_code=404)
+
+    resultado = delete_me(confirm="delete everything", player=dono)
+    resposta = HTMLResponse(pages.deleted_page(resultado, idioma))
+    # A sessao do navegador morre junto: deixar o cookie de uma conta que nao
+    # existe mais so produz erro na proxima pagina.
+    resposta.delete_cookie(COOKIE)
+    return resposta
 
 
 @app.get("/privacy", response_class=HTMLResponse)

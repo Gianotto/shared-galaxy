@@ -45,11 +45,27 @@ def now() -> dt.datetime:
 # Jogador
 # ---------------------------------------------------------------------------
 
-def create_player(conn: psycopg.Connection, token_hash: str, name: str) -> dict:
+def create_player(conn: psycopg.Connection, token_hash: str, name: str,
+                  ip_hash: str | None = None) -> dict:
     return conn.execute(
-        """INSERT INTO player (token_hash, display_name)
-           VALUES (%s, %s) RETURNING id, display_name, created_at""",
-        (token_hash, name)).fetchone()
+        """INSERT INTO player (token_hash, display_name, signup_ip_hash)
+           VALUES (%s, %s, %s) RETURNING id, display_name, created_at""",
+        (token_hash, name, ip_hash)).fetchone()
+
+
+def accounts_from(conn: psycopg.Connection, ip_hash: str) -> int:
+    """Quantas contas ja sairam deste endereco.
+
+    O `pg_advisory_xact_lock` serializa por endereco ate o fim da transacao.
+    Sem ele, duas inscricoes simultaneas do mesmo lugar contam zero as duas e
+    passam as duas — que e exatamente o que um script faria, porque disparar em
+    paralelo nao custa nada a quem ataca.
+    """
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (ip_hash,))
+    linha = conn.execute(
+        "SELECT count(*) AS n FROM player WHERE signup_ip_hash = %s",
+        (ip_hash,)).fetchone()
+    return int(linha["n"])
 
 
 def player_by_token(conn: psycopg.Connection, token_hash: str) -> dict | None:

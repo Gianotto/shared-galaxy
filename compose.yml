@@ -41,6 +41,13 @@ services:
       BLOB_ROOT: /data/blobs
       # Sem isso, qualquer um cria sala no seu servidor. Vazio = aberto.
       SGALAXY_INVITE_ONLY: ${SGALAXY_INVITE_ONLY:-}
+      # O segredo que transforma endereço em impressão. Sem ele NÃO há limite
+      # por endereço: preferimos registro aberto a guardar endereço de gente
+      # em claro. Gere um com `openssl rand -hex 32` e ponha no .env.
+      SGALAXY_IP_PEPPER: ${SGALAXY_IP_PEPPER:-}
+      # Quantas contas por endereço. Existe para uma LAN ou um alojamento não
+      # precisarem de deploy para caber.
+      SGALAXY_MAX_PER_IP: ${SGALAXY_MAX_PER_IP:-1}
     volumes:
       - save-data:/data/blobs
     ports:

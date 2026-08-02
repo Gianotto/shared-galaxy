@@ -28,12 +28,151 @@ STRINGS: dict = {
               "their own game.",
     },
     "rooms": {"pt": "salas", "en": "rooms"},
+    "home": {"pt": "Início", "en": "Home"},
+    "nav_rooms": {"pt": "Salas", "en": "Rooms"},
+    "nav_client": {"pt": "Cliente", "en": "Client"},
+    "nav_recovery": {"pt": "Código de acesso", "en": "Recovery code"},
+    "nav_privacy": {"pt": "Privacidade", "en": "Privacy"},
+
+    # -- o cliente, por sistema
+    "client_title": {"pt": "Instalar e usar o cliente",
+                     "en": "Install and use the client"},
+    "client_intro": {
+        "pt": "Um arquivo só. Sem instalador, sem Python, sem dependência. "
+              "Ele fala com o servidor e abre o jogo; o Space Haven continua "
+              "sendo o seu, instalado onde sempre esteve.",
+        "en": "One file. No installer, no Python, no dependencies. It talks to "
+              "the server and opens the game; Space Haven stays yours, "
+              "installed where it always was.",
+    },
+    "on_windows": {"pt": "No Windows", "en": "On Windows"},
+    "on_unix": {"pt": "No macOS e no Linux", "en": "On macOS and Linux"},
+    "unix_chmod": {
+        "pt": "Depois de baixar, dê permissão de execução e rode a partir da "
+              "pasta onde ele está:",
+        "en": "After downloading, make it executable and run it from the "
+              "folder it is in:",
+    },
+    "windows_note": {
+        "pt": "Abra o PowerShell na pasta onde baixou. O Windows pode avisar "
+              "que o arquivo veio da internet — é um binário sem assinatura "
+              "paga, e o código está aberto para conferência.",
+        "en": "Open PowerShell in the folder you downloaded to. Windows may "
+              "warn that the file came from the internet — it is an unsigned "
+              "binary, and the source is open to inspection.",
+    },
+    "what_it_writes": {"pt": "O que ele cria no seu computador",
+                       "en": "What it writes on your machine"},
+    "writes_intro": {
+        "pt": "Um arquivo, e só um. É onde o seu código de acesso fica "
+              "guardado, para você não ter que digitá-lo a cada sessão:",
+        "en": "One file, and only one. It is where your access code is kept so "
+              "you do not have to type it every session:",
+    },
+    "writes_detail": {
+        "pt": "No Windows o caminho equivalente é "
+              "<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. "
+              "O arquivo é criado com permissão 600 (só o seu usuário lê) e "
+              "guarda o código em claro — ele <b>é</b> a sua conta, então quem "
+              "ler o arquivo entra como você. Apagar o arquivo não apaga a "
+              "conta no servidor; desconecta este computador dela.",
+        "en": "On Windows the equivalent path is "
+              "<code>%USERPROFILE%\\.config\\sgalaxy\\credentials.json</code>. "
+              "The file is created mode 600 (only your user can read it) and "
+              "holds the code in the clear — it <b>is</b> your account, so "
+              "anybody who reads the file signs in as you. Deleting the file "
+              "does not delete the account; it disconnects this machine from "
+              "it.",
+    },
+
+    # -- codigo de recuperacao
+    "recovery_title": {"pt": "Usar um código de recuperação",
+                       "en": "Using a recovery code"},
+    "recovery_what": {
+        "pt": "O código de recuperação <b>é</b> a sua conta. Não há e-mail, "
+              "senha nem \"esqueci minha senha\": o servidor guarda apenas um "
+              "resumo criptográfico dele, e por isso não consegue te devolver "
+              "o código se você perder.",
+        "en": "The recovery code <b>is</b> your account. There is no email, no "
+              "password and no \"forgot my password\": the server keeps only a "
+              "cryptographic digest of it, which is exactly why it cannot give "
+              "the code back to you if you lose it.",
+    },
+    "recovery_when": {
+        "pt": "Você usa o código quando troca de computador, reinstala o "
+              "sistema, ou quando o servidor diz que já existe uma conta "
+              "criada da sua conexão.",
+        "en": "You use the code when you change machines, reinstall your "
+              "system, or when the server says an account already exists from "
+              "your connection.",
+    },
+    "recovery_how": {"pt": "Como usar", "en": "How to use it"},
+    "recovery_check": {
+        "pt": "O cliente confere com o servidor <b>antes</b> de gravar. Um "
+              "código digitado errado não apaga a conta que já estava ali.",
+        "en": "The client checks with the server <b>before</b> writing. A "
+              "mistyped code will not overwrite an account already there.",
+    },
+    "recovery_dashes": {
+        "pt": "Os traços são só para copiar sem errar: com ou sem eles, e em "
+              "qualquer caixa, funciona igual.",
+        "en": "The dashes only make it easier to copy: with or without them, "
+              "in any case, it works the same.",
+    },
+
+    # -- apagar a conta
+    "delete_title": {"pt": "Apagar a conta e sair",
+                     "en": "Delete your account and leave"},
+    "delete_intro": {
+        "pt": "Apaga a sua conta e todos os seus saves. Não há etapa de "
+              "arrependimento e não há como desfazer.",
+        "en": "This deletes your account and every save you have. There is no "
+              "second-guessing step and there is no undo.",
+    },
+    "delete_rooms_note": {
+        "pt": "Salas que você criou e que ainda têm outras pessoas dentro "
+              "continuam de pé: apagá-las destruiria o save de quem não pediu "
+              "nada. Elas saem da listagem pública e o seu código deixa de "
+              "valer.",
+        "en": "Rooms you created that still have other people in them stay up: "
+              "deleting them would destroy the saves of people who asked for "
+              "nothing. They leave the public listing and your code stops "
+              "working.",
+    },
+    "your_code_label": {"pt": "O seu código de recuperação",
+                        "en": "Your recovery code"},
+    "delete_confirm_label": {
+        "pt": "Digite <code>delete everything</code> para confirmar",
+        "en": "Type <code>delete everything</code> to confirm",
+    },
+    "delete_button": {"pt": "Apagar tudo", "en": "Delete everything"},
+    "delete_done": {"pt": "Apagado.", "en": "Deleted."},
+    "delete_bad_code": {
+        "pt": "Esse código não corresponde a nenhuma conta.",
+        "en": "That code does not match any account.",
+    },
+    "delete_bad_confirm": {
+        "pt": "A confirmação não confere.",
+        "en": "The confirmation does not match.",
+    },
     "invite_code": {"pt": "Código de convite", "en": "Invite code"},
     "invite_help": {
         "pt": "Este servidor pede convite. Quem te chamou tem o código.",
         "en": "This server asks for an invite. Whoever invited you has the code.",
     },
     "invite_wrong": {"pt": "Convite inválido.", "en": "That invite is not valid."},
+    "one_per_ip": {
+        "pt": "Já existe uma conta criada desta conexão. Se a conta é sua, "
+              "use o seu código de acesso em vez de criar outra. Se você "
+              "divide a internet com quem já "
+              "entrou, fale com quem administra a sala.",
+        "en": "An account has already been created from this connection. If it "
+              "is yours, use your recovery code instead of making another. If "
+              "you share the connection with somebody who already joined, ask "
+              "whoever runs the room.",
+    },
+    "nav_how": {"pt": "Como funciona", "en": "How it works"},
+    "how_title": {"pt": "Como funciona", "en": "How it works"},
 
     # -- entrar numa sala
     "join_this": {"pt": "Entrar nesta sala", "en": "Join this room"},

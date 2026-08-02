@@ -336,11 +336,6 @@ class JoinPageTestCase(unittest.TestCase):
         for lang in ("en", "pt"):
             self.assertIn("6359GV", pages.join_page(self.SALA, lang, 3, False))
 
-    def test_the_room_page_offers_the_way_in(self):
-        completa = dict(self.SALA, seed="123", lease_hours=12, retention_n=20)
-        html = pages.room_page(completa, [], {}, "en")
-        self.assertIn("/room/6359GV/join", html)
-
     def test_the_recovery_code_page_names_the_binary_not_the_repo(self):
         """Quem chega pelo Discord tem um binário, não um checkout do
         projeto: `python3 tools/sgalaxy.py` não existe na máquina dele."""
@@ -373,3 +368,79 @@ class InviteFormTestCase(unittest.TestCase):
         for lang in ("en", "pt"):
             self.assertIn('name="invite"',
                           pages.register_form(lang, needs_invite=True))
+
+
+class SiteNavigationTestCase(unittest.TestCase):
+    """O site tinha links soltos no fim de cada página e nenhum caminho de
+    volta antes do mapa inteiro. Estes travam a navegação."""
+
+    SALA = {"id": "6359GV", "name": "Sala", "max_players": 64,
+            "password_hash": None, "max_join_age_days": 5, "seed": "1",
+            "lease_hours": 12, "retention_n": 20}
+
+    def paginas(self, lang):
+        return {
+            "rooms": pages.room_list([], lang),
+            "room": pages.room_page(self.SALA, [], {}, lang),
+            "how": pages.how_page(lang),
+            "client": pages.client_page(lang),
+            "recovery": pages.recovery_page(lang),
+            "privacy": pages.privacy_page(lang),
+            "delete": pages.delete_form(lang),
+            "register": pages.register_form(lang),
+        }
+
+    def test_every_page_carries_the_menu(self):
+        for lang in ("en", "pt"):
+            for nome, html in self.paginas(lang).items():
+                with self.subTest(page=nome, lang=lang):
+                    self.assertIn("header class=\"nav\"", html)
+                    self.assertIn("/how-it-works?lang=", html)
+
+    def test_the_menu_has_an_icon_for_every_entry(self):
+        html = pages.room_list([], "en")
+        nav = html.split("<nav>")[1].split("</nav>")[0]
+        self.assertEqual(nav.count("<a href"), nav.count("<svg"))
+
+    def test_the_current_page_is_marked(self):
+        self.assertIn("class=here", pages.privacy_page("en"))
+
+    def test_no_page_tells_a_windows_user_to_run_a_unix_command(self):
+        """`./sgalaxy` é o comando de dois dos três sistemas suportados. Onde
+        aparecer sozinho, metade das pessoas cola algo que não funciona."""
+        for lang in ("en", "pt"):
+            for nome, html in self.paginas(lang).items():
+                with self.subTest(page=nome, lang=lang):
+                    if "./sgalaxy" in html:
+                        self.assertIn("sgalaxy.exe", html)
+
+    def test_the_room_page_no_longer_teaches_how_to_join(self):
+        """Ela ensinava a criar a partida pela seed e terminava num
+        `python3 tools/sgalaxy.py` — o comando de quem tem o repositório, não
+        de quem baixou um binário."""
+        html = pages.room_page(self.SALA, [], {}, "en")
+        self.assertNotIn("tools/sgalaxy.py", html)
+        self.assertNotIn("/join", html)
+
+    def test_privacy_offers_a_page_instead_of_a_curl_line(self):
+        """Uma promessa de apagar dados que exige saber o que é um cabeçalho
+        de autorização não é bem uma promessa."""
+        for lang in ("en", "pt"):
+            html = pages.privacy_page(lang)
+            self.assertNotIn("curl -X DELETE", html)
+            self.assertIn("/account/delete", html)
+
+    def test_privacy_says_what_the_client_writes_on_disk(self):
+        for lang in ("en", "pt"):
+            self.assertIn("credentials.json", pages.privacy_page(lang))
+
+    def test_how_it_works_covers_the_loan_and_the_mod(self):
+        for lang in ("en", "pt"):
+            html = pages.how_page(lang)
+            self.assertIn("AspectJ", html)
+            self.assertIn("checkpoint", html.lower())
+
+    def test_the_delete_form_asks_for_the_code_and_a_confirmation(self):
+        html = pages.delete_form("en")
+        self.assertIn('name="code"', html)
+        self.assertIn('name="confirm"', html)
