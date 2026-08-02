@@ -72,9 +72,6 @@ public class ShopButtonAspect {
     /** O armazem que esta selecionado agora, ou null. */
     private static volatile String selected;
 
-    /** O nosso toggle enquanto o painel dele estiver aberto. */
-    private static Object mine;
-
     private static final String BUTTONS =
         "fi.bugbyte.gen.compiled.ToggleTextIconButtons1";
     private static final String CLICK =
@@ -185,115 +182,14 @@ public class ShopButtonAspect {
         }
     }
 
-    /**
-     * O controle do armazem no OVERVIEW acabou de abrir: o toggle entra ali.
-     *
-     * <p>Aqui o registro e na TELA (`Screen.addButton`), nao numa caixa que o
-     * `MenuSystem` administra e esvazia. Foi por isso que a barra de comandos
-     * nunca parou de piscar: ela tem dono, e o dono nao tem contrato com mods.
-     *
-     * <p>E o lugar certo tambem pelo sentido: ser loja e uma configuracao do
-     * armazem, vizinha do "allow food consumption", nao uma acao ao lado de
-     * MOVE e DISMANTLE.
-     */
-    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
-           + "$StorageControl.open(..))")
-    public void afterStorageControlOpened(JoinPoint joinPoint) {
-        Object[] args = joinPoint.getArgs();
-        String id = selected;
-        // Falar tambem quando nao faz nada: um retorno mudo aqui produz
-        // exatamente "o botao nem apareceu", que nao distingue gancho que nao
-        // rodou de gancho que rodou sem dados.
-        System.out.println("[shared-galaxy] storageControl.open args="
-                           + args.length + " selected=" + id);
-        if (args.length == 0 || args[0] == null || id == null) {
-            return;
-        }
-        try {
-            Object screen = args[0];
-            ClassLoader loader = screen.getClass().getClassLoader();
-            Object button = Class.forName(BUTTONS, true, loader)
-                .getMethod("getBaseCheckBox1").invoke(null);
-            label(button, id);
-            hold(button, id);
-            handler(button, id, loader);
-            screen.getClass().getMethod("addButton",
-                    Class.forName("fi.bugbyte.framework.screen.StageButton",
-                                  true, loader))
-                .invoke(screen, button);
-            mine = button;
-            System.out.println("[shared-galaxy] shop toggle added to the "
-                               + "screen for storage " + id);
-        } catch (Throwable failure) {
-            System.err.println("[shared-galaxy] could not add the shop toggle: "
-                               + failure);
-        }
-    }
-
-    /**
-     * Poe o toggle ao lado do de comida.
-     *
-     * <p>A posicao sai do proprio controle do jogo, nunca de coordenadas
-     * inventadas: o `toggleEatingAllowed` acabou de ser colocado, e o nosso vai
-     * ao lado dele. Se aquele nao existir — armazem so de corpos, por exemplo —
-     * serve o botao de transferencia.
-     */
-    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
-           + "$StorageControl.setPos(..))")
-    public void afterStorageControlMoved(JoinPoint joinPoint) {
-        Object button = mine;
-        if (button == null) {
-            System.out.println("[shared-galaxy] storageControl.setPos, "
-                               + "but no toggle of ours exists");
-            return;
-        }
-        try {
-            Object control = joinPoint.getTarget();
-            Object vizinho = read(control, "toggleEatingAllowed");
-            if (vizinho == null) {
-                vizinho = read(control, "shipLevelTransfer");
-            }
-            if (vizinho == null) {
-                return;
-            }
-            float x = ((Float) vizinho.getClass().getMethod("getX")
-                .invoke(vizinho)).floatValue();
-            float y = ((Float) vizinho.getClass().getMethod("getY")
-                .invoke(vizinho)).floatValue();
-            float w = ((Float) vizinho.getClass().getMethod("getWidth")
-                .invoke(vizinho)).floatValue();
-            button.getClass().getMethod("setPos", float.class, float.class)
-                .invoke(button, Float.valueOf(x + w + 6f), Float.valueOf(y));
-            System.out.println("[shared-galaxy] toggle placed at "
-                               + (x + w + 6f) + "," + y + " (beside "
-                               + vizinho.getClass().getSimpleName() + ")");
-        } catch (Throwable failure) {
-            System.err.println("[shared-galaxy] could not place the shop "
-                               + "toggle: " + failure);
-        }
-    }
-
-    /** O painel fechou: o toggle sai com ele. */
-    @After("execution(* fi.bugbyte.spacehaven.gui.WorldElementInfos"
-           + "$StorageControl.close(..))")
-    public void afterStorageControlClosed(JoinPoint joinPoint) {
-        Object button = mine;
-        Object[] args = joinPoint.getArgs();
-        mine = null;
-        if (button == null || args.length == 0 || args[0] == null) {
-            return;
-        }
-        try {
-            Object screen = args[0];
-            screen.getClass().getMethod("removeButton",
-                    Class.forName("fi.bugbyte.framework.screen.StageButton",
-                                  true, screen.getClass().getClassLoader()))
-                .invoke(screen, button);
-        } catch (Throwable failure) {
-            System.err.println("[shared-galaxy] could not remove the shop "
-                               + "toggle: " + failure);
-        }
-    }
+    // A tentativa no OVERVIEW (`WorldElementInfos$StorageControl`) foi
+    // removida. Ela nunca chegou a mostrar um botao, e ficou ligada em
+    // paralelo com a da barra de comandos — duas implementacoes criando,
+    // posicionando e removendo botoes a cada abertura, por armazem. Isso
+    // sozinho explica "a primeira vez aparece, depois oscila".
+    //
+    // O caminho continua valido e esta em docs/plan.md, se um dia valer a pena
+    // sozinho.
 
     /** O clique, por proxy: a interface tem um metodo so. */
     private static void handler(final Object button, final String id,
