@@ -75,6 +75,21 @@ public class ShopButtonAspect {
     /** O nosso toggle enquanto o painel dele estiver aberto. */
     private static Object mine;
 
+    /**
+     * UM botao por armazem, reaproveitado.
+     *
+     * <p>E a diferenca entre este mod e um que funciona em producao. O
+     * ClaimAllDerelicts guarda o botao num `WeakHashMap` por nave e adiciona
+     * sempre o MESMO objeto — "Reutilizando boton existente" esta nas strings
+     * dele. Eu criava um objeto novo a cada selecao e ainda removia o anterior,
+     * que e justamente o que o jogo pode continuar rastreando: o novo entra
+     * meio registrado, numa lista e nao noutra, e desenha as vezes.
+     *
+     * <p>Fraco por chave para nao segurar armazem que a pessoa desmontou.
+     */
+    private static final java.util.Map<String, Object> cache =
+        new java.util.WeakHashMap<String, Object>();
+
     private static final String BUTTONS =
         "fi.bugbyte.gen.compiled.ToggleTextIconButtons1";
     private static final String CLICK =
@@ -162,10 +177,9 @@ public class ShopButtonAspect {
             if (!isStorage(element)) {
                 return;     // nao e armazem: silencio aqui e correto
             }
-            // So registra QUAL armazem esta selecionado. O controle vive no
-            // painel OVERVIEW, e e de la que ele e posto na tela.
             selected = String.valueOf(
                 element.getClass().getMethod("getId").invoke(element));
+            addButton(panel, selected, hook);
         } catch (Throwable failure) {
             // A panel without our button is a small loss; a crash while
             // somebody clicks a crate is not.
@@ -352,21 +366,20 @@ public class ShopButtonAspect {
             return;     // cedo demais; o `open()` cobre logo depois
         }
 
-        // TIRA O NOSSO ANTIGO, nao pergunta se ja tem.
-        //
-        // A versao anterior perguntava "a caixa ja tem um botao nosso?" e
-        // voltava calada quando sim. So que a caixa continua guardando a
-        // referencia do botao da selecao passada mesmo depois de o painel ser
-        // refeito — entao a resposta era sempre "sim", e a partir da segunda
-        // selecao o botao nunca mais aparecia. Perguntar era o erro; remover e
-        // idempotente e nao depende de a caixa estar limpa.
         Object caixa = read(selectionBox, "commandBox");
-        int antes = caixa == null ? -1 : tamanho(read(caixa, "buttons"));
-        int tirados = dropOurs(caixa);
-        final Object button = Class.forName(BUTTONS, true, loader)
-            .getMethod("getBaseCheckBox1").invoke(null);
+        Object commandBox = caixa;
 
-        label(button, id);
+        Object reaproveitado = cache.get(id);
+        final Object button;
+        if (reaproveitado != null) {
+            button = reaproveitado;
+        } else {
+            button = Class.forName(BUTTONS, true, loader)
+                .getMethod("getBaseCheckBox1").invoke(null);
+            label(button, id);
+            handler(button, id, loader);
+            cache.put(id, button);
+        }
         hold(button, id);
 
         Class<?> click = Class.forName(CLICK, true, loader);
@@ -393,32 +406,16 @@ public class ShopButtonAspect {
         button.getClass().getMethod("setClickHandler", click)
             .invoke(button, handler);
 
-        // NA CAIXA DE COMANDOS, junto de MOVE / DUPLICATE / DISMANTLE.
+        // PELA API DO MENUSYSTEM, com o MESMO botao de sempre.
         //
-        // A primeira versao chamou o `addButton` protegido do
-        // `AbstractSelectedBoxItem`, que repassa para o `selectionBox` — outra
-        // caixa. O botao existia e funcionava, mas aparecia no rodape, quase
-        // fora da area do jogo, e o jogador quase nao o achou. O
-        // ClaimAllDerelicts ja fazia o certo e eu li a receita pela metade:
-        // selectionBox -> commandBox -> addButton.
-        Object commandBox = caixa;
+        // Duas coisas que so o mod que funciona ensinou. A rota e publica —
+        // `addCommandButtonAsFirst` — e nao escrever direto no `commandBox`,
+        // que tem dono e um `clearCommandButtons()`. E o botao e reaproveitado:
+        // criar um objeto novo a cada selecao, e remover o anterior, deixava o
+        // jogo rastreando um e desenhando outro.
         if (commandBox == null) {
             throw new IllegalStateException("the panel has no commandBox");
         }
-        // PELA API DO PROPRIO MENUSYSTEM.
-        //
-        // Era isto que faltava, e a pergunta certa foi "voce olhou as classes
-        // que constroem esses menus?". O `MenuSystem` tem a rota publica:
-        //
-        //     addCommandButton, addCommandButtonAtIndex,
-        //     addCommandButtonAsFirst, removeCommandButton,
-        //     clearCommandButtons
-        //
-        // e e por ela que MOVE, DUPLICATE e DISMANTLE entram. Eu vinha
-        // escrevendo direto no `commandBox`, por baixo de quem o administra —
-        // e existe um `clearCommandButtons()` que, rodando depois do nosso
-        // `open()`, apaga o que foi posto por fora. Some as vezes, fica outras,
-        // e nenhuma medida no botao explica, porque a causa nao esta nele.
         Object menuSystem = read(selectionBox, "menuSystem");
         if (menuSystem == null) {
             throw new IllegalStateException("the box has no menuSystem");
@@ -428,88 +425,10 @@ public class ShopButtonAspect {
         menuSystem.getClass()
             .getMethod("addCommandButtonAsFirst", stageButton)
             .invoke(menuSystem, button);
-        Object aceito = Boolean.TRUE;
 
-        if (Boolean.FALSE.equals(aceito)) {
-            trace(hook, id, "REFUSED, box " + antes + " -> "
-                           + tamanho(read(commandBox, "buttons"))
-                           + " || " + geometry(commandBox), panel);
-        }
-    }
-
-    /**
-     * Tira da caixa qualquer botao que seja nosso.
-     *
-     * Reconhecidos pelo que o proxy do clique responde a `toString`: o objeto
-     * muda a cada selecao, a marca nao.
-     */
-    private static int dropOurs(Object commandBox) {
-        Object lista = commandBox == null ? null : read(commandBox, "buttons");
-        if (lista == null) {
-            return 0;
-        }
-        int tirados = 0;
-        try {
-            java.lang.reflect.Method get = lista.getClass()
-                .getMethod("get", int.class);
-            // Tirar tambem pela porta de quem administra a caixa.
-            java.lang.reflect.Method remove = commandBox.getClass()
-                .getMethod("removeButton",
-                    Class.forName("fi.bugbyte.framework.screen.StageButton",
-                                  true, commandBox.getClass().getClassLoader()));
-            for (int i = tamanho(lista) - 1; i >= 0; i--) {
-                Object b = get.invoke(lista, Integer.valueOf(i));
-                if (b == null) {
-                    continue;
-                }
-                Object h = b.getClass().getMethod("getClickHandler").invoke(b);
-                if (h != null && MARKER.equals(h.toString())) {
-                    remove.invoke(commandBox, b);
-                    tirados++;
-                }
-            }
-        } catch (Throwable failure) {
-            System.err.println("[shared-galaxy] could not clear the old shop "
-                               + "button: " + failure);
-        }
-        return tirados;
-    }
-
-    /**
-     * Onde cada botao da caixa foi parar, e ate onde a tela vai.
-     *
-     * O que decide se um botao existe mas nao se ve: `redoButtonPositions`
-     * distribui somando larguras, e quem passar da borda fica invisivel.
-     */
-    private static String geometry(Object commandBox) {
-        StringBuilder out = new StringBuilder();
-        try {
-            Object tela = Class.forName("com.badlogic.gdx.Gdx")
-                .getField("graphics").get(null);
-            out.append("screenW=")
-               .append(tela.getClass().getMethod("getWidth").invoke(tela));
-        } catch (Throwable unknown) {
-            out.append("screenW=?");
-        }
-        Object lista = read(commandBox, "buttons");
-        int total = tamanho(lista);
-        try {
-            java.lang.reflect.Method get = lista.getClass()
-                .getMethod("get", int.class);
-            for (int i = 0; i < total; i++) {
-                Object b = get.invoke(lista, Integer.valueOf(i));
-                Object h = b.getClass().getMethod("getClickHandler").invoke(b);
-                boolean nosso = h != null && MARKER.equals(h.toString());
-                out.append(nosso ? " [OURS " : " [")
-                   .append(b.getClass().getMethod("getX").invoke(b))
-                   .append(",w=")
-                   .append(b.getClass().getMethod("getWidth").invoke(b))
-                   .append("]");
-            }
-        } catch (Throwable unknown) {
-            out.append(" (posicoes indisponiveis: ").append(unknown).append(")");
-        }
-        return out.toString();
+        trace(hook, id, "box now " + tamanho(read(commandBox, "buttons"))
+                       + (reaproveitado != null ? " (reused)" : " (new)"),
+              panel);
     }
 
     private static int tamanho(Object lista) {
