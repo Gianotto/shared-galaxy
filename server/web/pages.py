@@ -796,10 +796,6 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
         f'<a href="{RELEASES}/latest/download/{arquivo}">{t(chave, lang)}</a>'
         for chave, arquivo, _cmd in BINARIES)
 
-    comandos = "".join(f"""
-  <p class="note">{t(chave, lang)}</p>
-  <pre>{_esc(cmd)} join {rid}</pre>""" for chave, _a, cmd in BINARIES)
-
     avisos = ""
     if full:
         avisos += f'<p class="warn">{t("room_full", lang)}</p>'
@@ -821,7 +817,12 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
     <h3>{t("step_download", lang)}</h3>
     <p class="note">{t("step_download_help", lang)}</p>
     <div class="dl">{baixar}</div>
-    <pre>chmod +x sgalaxy-*</pre>
+    <p class="note">{t("rename_it", lang)}</p>
+    <p class="note">{t("on_windows", lang)}</p>
+    <pre>ren sgalaxy-windows-x86_64.exe sgalaxy.exe</pre>
+    <p class="note">{t("on_unix", lang)}</p>
+    <pre>mv sgalaxy-* sgalaxy
+chmod +x sgalaxy</pre>
   </li>
   <li>
     <h3>{t("step_account", lang)}</h3>
@@ -832,7 +833,11 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
   </li>
   <li>
     <h3>{t("step_join", lang)}</h3>
-    <p class="note">{t("step_join_help", lang)}</p>{comandos}
+    <p class="note">{t("step_join_help", lang)}</p>
+    {commands(f"join {rid}", lang)}
+    <p class="note">{t("mod_optional_here", lang)}
+       <a href="/client?lang={lang}">{t("client_title", lang)}</a></p>
+    {commands("install-mod", lang)}
   </li>
   <li>
     <h3>{t("step_play", lang)}</h3>

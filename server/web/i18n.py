@@ -237,10 +237,24 @@ STRINGS: dict = {
     "step_download": {"pt": "1. Baixe o cliente",
                       "en": "1. Download the client"},
     "step_download_help": {
-        "pt": "Um arquivo só, sem instalador e sem Python. No Linux e no macOS, "
-              "dê permissão de execução depois de baixar.",
-        "en": "One file, no installer and no Python. On Linux and macOS, make it "
-              "executable after downloading.",
+        "pt": "Um arquivo só, sem instalador e sem Python. Você precisa ter o "
+              "Space Haven instalado; o cliente acha sozinho onde ele está.",
+        "en": "One file, no installer and no Python. You need Space Haven "
+              "installed; the client finds it on its own.",
+    },
+    "rename_it": {
+        "pt": "Renomeie o arquivo baixado para <code>sgalaxy</code>. Os "
+              "comandos abaixo usam esse nome, e o arquivo chega com o do "
+              "sistema no fim.",
+        "en": "Rename the file you downloaded to <code>sgalaxy</code>. The "
+              "commands below use that name, and the file arrives with the "
+              "system stamped on the end.",
+    },
+    "mod_optional_here": {
+        "pt": "O mod é opcional e melhora a vida: ele abre o save da sala "
+              "direto e põe o botão da loja dentro do jogo.",
+        "en": "The mod is optional and makes life easier: it opens the room's "
+              "save for you and puts the shop toggle inside the game.",
     },
     "step_account": {"pt": "2. Entre na sua conta",
                      "en": "2. Sign in to your account"},

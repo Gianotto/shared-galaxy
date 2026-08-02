@@ -455,3 +455,38 @@ class SiteNavigationTestCase(unittest.TestCase):
         html = pages.delete_form("en")
         self.assertIn('name="code"', html)
         self.assertIn('name="confirm"', html)
+
+
+class ColdStartTestCase(unittest.TestCase):
+    """O caminho de quem chega sem saber nada e segue a página ao pé da letra.
+
+    O download chega como `sgalaxy-windows-x86_64.exe` e todos os comandos
+    dizem `sgalaxy.exe`. Sem o passo de renomear, a primeira linha que a pessoa
+    digita é um nome de arquivo que não existe.
+    """
+
+    SALA = {"id": "6359GV", "name": "Sala", "max_players": 64,
+            "password_hash": None, "max_join_age_days": 5}
+
+    def test_the_page_renames_the_file_to_what_the_commands_call_it(self):
+        for lang in ("en", "pt"):
+            html = pages.join_page(self.SALA, lang, 2, False)
+            for arquivo, _cmd in (("sgalaxy-windows-x86_64.exe", "sgalaxy.exe"),
+                                  ("sgalaxy-*", "sgalaxy")):
+                self.assertIn(arquivo, html)
+            self.assertIn("sgalaxy.exe join 6359GV", html)
+            self.assertIn("./sgalaxy join 6359GV", html)
+
+    def test_chmod_is_not_shown_to_windows(self):
+        """Era o primeiro comando da página, para todo mundo."""
+        html = pages.join_page(self.SALA, "en", 2, False)
+        antes_do_unix = html.split("On macOS and Linux")[0]
+        self.assertNotIn("chmod", antes_do_unix)
+
+    def test_every_command_appears_in_both_forms(self):
+        html = pages.join_page(self.SALA, "en", 2, False)
+        for sufixo in (f"join {self.SALA['id']}", f"play {self.SALA['id']}",
+                       "install-mod", "register --recover"):
+            with self.subTest(cmd=sufixo):
+                self.assertIn(f"sgalaxy.exe {sufixo}", html)
+                self.assertIn(f"./sgalaxy {sufixo}", html)
