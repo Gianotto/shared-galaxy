@@ -347,3 +347,29 @@ class JoinPageTestCase(unittest.TestCase):
         html = pages.registered_page("Eu", "ABCD-1234", "en")
         self.assertIn("./sgalaxy register", html)
         self.assertNotIn("tools/sgalaxy.py", html)
+
+
+class InviteFormTestCase(unittest.TestCase):
+    """O modo convite é a resposta ao registro aberto, e ele tem de funcionar
+    pelo site também: a API e o cliente já aceitavam `invite`, e o formulário
+    apenas recusava, sem oferecer onde digitar."""
+
+    def test_no_invite_field_when_the_server_does_not_ask(self):
+        self.assertNotIn('name="invite"', pages.register_form("en"))
+
+    def test_the_field_appears_when_the_server_asks(self):
+        html = pages.register_form("en", needs_invite=True)
+        self.assertIn('name="invite"', html)
+        self.assertIn("invite", html.lower())
+
+    def test_the_form_survives_an_error_without_losing_the_field(self):
+        """Errar o convite não pode devolver um formulário sem o campo."""
+        html = pages.register_form("en", "That invite is not valid.",
+                                   needs_invite=True)
+        self.assertIn('name="invite"', html)
+        self.assertIn("not valid", html)
+
+    def test_both_languages(self):
+        for lang in ("en", "pt"):
+            self.assertIn('name="invite"',
+                          pages.register_form(lang, needs_invite=True))

@@ -28,6 +28,12 @@ STRINGS: dict = {
               "their own game.",
     },
     "rooms": {"pt": "salas", "en": "rooms"},
+    "invite_code": {"pt": "Código de convite", "en": "Invite code"},
+    "invite_help": {
+        "pt": "Este servidor pede convite. Quem te chamou tem o código.",
+        "en": "This server asks for an invite. Whoever invited you has the code.",
+    },
+    "invite_wrong": {"pt": "Convite inválido.", "en": "That invite is not valid."},
 
     # -- entrar numa sala
     "join_this": {"pt": "Entrar nesta sala", "en": "Join this room"},

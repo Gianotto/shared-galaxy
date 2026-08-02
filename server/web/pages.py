@@ -563,14 +563,25 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
                   f"/room/{rid}/join")
 
 
-def register_form(lang: str, error: str = "") -> str:
+def register_form(lang: str, error: str = "", needs_invite: bool = False) -> str:
+    """O formulario de conta, com o campo de convite quando o servidor pede um.
+
+    O campo SO aparece quando ha convite exigido. Antes disto o modo convite
+    recusava aqui sem oferecer onde digitar, e a pagina virava um beco sem
+    saida: a API e o cliente aceitavam `invite`, o site nao.
+    """
     aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
-    body = f"""{aviso}
+    convite = f"""
+  <label for="invite">{t("invite_code", lang)}</label>
+  <input type="text" id="invite" name="invite" maxlength="80" required
+         autocomplete="off">""" if needs_invite else ""
+    ajuda = f'<p>{t("invite_help", lang)}</p>' if needs_invite else ""
+    body = f"""{aviso}{ajuda}
 <p>{t("no_email", lang)}</p>
 <form method="post" action="/register?lang={lang}">
   <label for="name">{t("your_name", lang)}</label>
   <input type="text" id="name" name="name" maxlength="40" required
-         autocomplete="off">
+         autocomplete="off">{convite}
   <button type="submit">{t("create_account", lang)}</button>
 </form>
 <style>{FORM_CSS.format()}</style>"""

@@ -26,6 +26,7 @@ import contextlib
 import datetime as dt
 import copy
 import json
+import secrets
 import logging
 import os
 
@@ -155,8 +156,10 @@ def create_player(payload: dict | None = None):
     e responsavel por guardar, e por deixar claro que perder e perder.
     """
     payload = payload or {}
-    if INVITE_ONLY and payload.get("invite", "").strip() != INVITE_ONLY:
-        raise HTTPException(403, "este servidor exige convite para criar conta")
+    if INVITE_ONLY and not secrets.compare_digest(
+            str(payload.get("invite") or "").strip(), INVITE_ONLY):
+        raise HTTPException(403, "this server requires an invite to create an "
+                                 "account")
 
     name = str(payload.get("name") or "").strip() or "Anonymous"
     if len(name) > 40:
@@ -1277,19 +1280,25 @@ def _set_session(response, token: str) -> None:
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request, lang: str = ""):
     idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
-    return pages.register_form(idioma)
+    return pages.register_form(idioma, needs_invite=bool(INVITE_ONLY))
 
 
 @app.post("/register", response_class=HTMLResponse)
-def register_submit(request: Request, name: str = Form(""), lang: str = ""):
+def register_submit(request: Request, name: str = Form(""),
+                    invite: str = Form(""), lang: str = ""):
     idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
+    pede = bool(INVITE_ONLY)
     limpo = name.strip()[:40]
     if not limpo:
-        return HTMLResponse(pages.register_form(idioma, "?"), status_code=400)
-    if INVITE_ONLY:
         return HTMLResponse(
-            pages.register_form(idioma,
-                                "this server requires an invite"),
+            pages.register_form(idioma, "?", needs_invite=pede),
+            status_code=400)
+    # O convite e conferido com `compare_digest`: a comparacao ingenua vaza o
+    # prefixo certo pelo tempo, e um codigo curto cai rapido assim.
+    if pede and not secrets.compare_digest(invite.strip(), INVITE_ONLY):
+        return HTMLResponse(
+            pages.register_form(idioma, i18n.t("invite_wrong", idioma),
+                                needs_invite=True),
             status_code=403)
 
     token = rules.new_token()
