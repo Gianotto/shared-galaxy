@@ -166,6 +166,9 @@ class SaveFile:
         self.path = _resolve_main(path)
         self.dir = os.path.dirname(self.path)
         self.docs: dict[str, Document] = {}
+        # Arquivos a apagar quando `save()` for chamado. Apagar na hora deixaria
+        # o save inconsistente se quem chama desistir de gravar.
+        self._removidos: list = []
         self.load()
 
     # -- carregamento ------------------------------------------------------
@@ -356,8 +359,27 @@ class SaveFile:
 
     # -- gravacao ----------------------------------------------------------
 
+    def drop_document(self, key: str) -> bool:
+        """Tira um documento do save, arquivo e tudo.
+
+        Uma nave que o jogo mudou para `ships/shipNNNN` nao tem elemento pai:
+        ela E a raiz do proprio arquivo. Tirar do save quer dizer apagar o
+        arquivo, e nao ha outro jeito.
+        """
+        doc = self.docs.pop(key, None)
+        if doc is None:
+            return False
+        self._removidos.append(doc.path)
+        return True
+
     def save(self, backup: bool = True) -> dict:
         """Regrava apenas os arquivos que mudaram, cada um com seu backup."""
+        for caminho in self._removidos:
+            try:
+                os.remove(caminho)
+            except OSError:
+                pass
+        self._removidos = []
         written = [d.write(backup) for d in self.docs.values() if d.dirty]
         if not written:
             written = [self.docs[MAIN_DOC].write(backup)]

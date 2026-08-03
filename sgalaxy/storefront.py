@@ -1021,6 +1021,58 @@ def apply_hostmap_permissions(sf: SaveFile, faction_id: str, side: str,
 # --------------------------------------------------------------------------
 
 
+# Onde uma nave pode ficar DENTRO do setor. Medido em dezesseis saves: `ox` vai
+# de -7488 a 7539 e os valores caem numa grade de 1248. Duas naves de 56
+# celulas convivem a 2496 de distancia, entao 3744 e uma folga confortavel.
+PASSO_SETOR = 1248
+FOLGA_SETOR = 3744
+VAGAS_SETOR = (-7488, -3744, 0, 3744, 7488)
+
+
+def sector_slot(dest: SaveFile, preferido: int | None = None) -> int | None:
+    """Um `ox` livre no setor, longe das naves que ja estao la.
+
+    POR QUE ISTO EXISTE
+
+    A vitrine e uma copia, e a copia trazia o `ox`/`oy` da nave original: ela
+    reaparecia na coordenada que o dono ocupava no setor DELE. Relatado duas
+    vezes por quem jogou — uma vez quase em cima da propria nave, outra parada
+    onde o vizinho tinha estado num salto anterior.
+
+    O hyperjump e onde isso fica visivel: o jogo mostra a grade do setor e a
+    pessoa escolhe onde encostar. A nave de outra pessoa aparecer num ponto que
+    ela nao escolheu, e que o dono nem ocupa mais, e ruido no unico momento em
+    que a grade importa.
+
+    Devolve None quando nao ha vaga, e quem chama mantem o que veio: uma
+    vitrine no lugar errado ainda e melhor que nenhuma.
+    """
+    # SO AS NAVES DO SETOR CARREGADO. As que o jogo guardou em `ships/shipNNN`
+    # estao em outro lugar da galaxia, e conta-las lotava a grade: num save de
+    # verdade sao vinte naves espalhadas por toda a faixa, e nenhuma vaga
+    # sobrava. As do setor sao as que estao no `<ships>` do `game`.
+    portador = dest.main.find("ships")
+    ocupados = [int(nave.get("ox")) for nave in (portador if portador is not None else [])
+                if nave.tag == "ship" and nave.get("ox") is not None]
+
+    def livre(x):
+        return all(abs(x - usado) >= FOLGA_SETOR for usado in ocupados)
+
+    if preferido is not None and livre(preferido):
+        return preferido
+    for vaga in VAGAS_SETOR:
+        if livre(vaga):
+            return vaga
+    # Setor cheio nas vagas conhecidas: tenta a grade inteira, do centro para
+    # fora, para nao empurrar a nave para uma borda so porque a lista e curta.
+    for passo in range(1, 13):
+        for lado in (passo, -passo):
+            vaga = lado * PASSO_SETOR
+            if abs(vaga) <= 7488 and livre(vaga):
+                return vaga
+    return None
+
+
 def strip_crafts(ship: ET.Element) -> dict:
     """Tira os shuttles da nave antes de ela virar vitrine.
 
@@ -1067,14 +1119,29 @@ def remove_storefronts(dest: SaveFile, sids) -> dict:
         return report
 
     achados = set()
-    for _doc, ship in list(dest.ships()):
-        if ship.get("sid") in alvos:
-            pais = parents_of(dest.main)
-            dono = pais.get(id(ship))
-            if dono is not None:
-                dono.remove(ship)
+    pais = parents_of(dest.main)
+    for doc, ship in list(dest.ships()):
+        if ship.get("sid") not in alvos:
+            continue
+        dono = pais.get(id(ship))
+        if dono is not None:
+            dono.remove(ship)
+            achados.add(ship.get("sid"))
+            report["ships"] += 1
+        elif doc != "game":
+            # O JOGO MOVE NAVES PARA ARQUIVO PROPRIO. Quando a pessoa sai do
+            # setor, cada nave sai do `<ships>` do `game` e vira `ships/shipNNN`,
+            # cuja raiz E o `<ship>`: nao ha pai de onde remove-la.
+            #
+            # A versao anterior procurava o pai so dentro do `game`, nao
+            # achava, e seguia calada. Medido num save de verdade: tres copias
+            # de `HSS YANNI (Vizinha)` em `ship1157`, `ship1383` e `ship2463`,
+            # de uma conta que ja tinha sido apagada. Elas ficariam ali para
+            # sempre.
+            if dest.drop_document(doc):
                 achados.add(ship.get("sid"))
                 report["ships"] += 1
+                report.setdefault("files", []).append(doc)
 
     starmap = dest.main.find("starmap")
     if starmap is not None:
@@ -1119,6 +1186,17 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
     ship = copy.deepcopy(source_ship)
     ship.tail = None
     report["crafts"] = strip_crafts(ship)
+
+    # A COPIA NAO HERDA O LUGAR DA ORIGINAL. Ela trazia o `ox` da nave do
+    # vizinho, entao aparecia na coordenada que ele ocupava no setor dele.
+    vaga = sector_slot(dest)
+    report["sector"] = {"from": ship.get("ox"), "to": vaga}
+    if vaga is not None:
+        ship.set("ox", str(vaga))
+    else:
+        report["warnings"].append(
+            "no free spot in the sector: the storefront kept the offset it had "
+            "where it came from, and may overlap another ship")
     old_sid = ship.get("sid")
     if old_sid is None:
         raise SaveError("a nave de origem não tem @sid; ela não é uma <ship> válida")

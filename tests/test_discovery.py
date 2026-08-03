@@ -313,3 +313,94 @@ class StorefrontTemplateTestCase(unittest.TestCase):
         todos = [c.get("entId") for _d, s in sf.ships()
                  for c in storefront.crew_members(s)]
         self.assertEqual(len(todos), len(set(todos)), "entId repetido no save")
+
+
+class StorefrontLeakTestCase(unittest.TestCase):
+    """O jogo move naves para arquivo próprio quando a pessoa sai do setor, e
+    a vitrine ia junto. Medido num save de verdade: três cópias de
+    `HSS YANNI (Vizinha)` em `ship1157`, `ship1383` e `ship2463`, de uma conta
+    já apagada. Ficariam ali para sempre."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.dir = os.path.join(self.tmp, "save")
+        os.makedirs(os.path.join(self.dir, "ships"))
+        jogo = ET.Element("game", {"seed": "0"})
+        ET.SubElement(jogo, "ships")
+        ET.SubElement(jogo, "starmap", {"w": "1", "h": "1"})
+        with open(os.path.join(self.dir, "game"), "wb") as fh:
+            fh.write(ET.tostring(jogo))
+        with open(os.path.join(self.dir, "info"), "wb") as fh:
+            fh.write(b'<info date="86400" version="21"/>')
+        # Uma vitrine que o jogo ja mudou para arquivo proprio.
+        nave = ET.Element("ship", {"sid": "1157", "sname": "HSS YANNI (Vizinha)",
+                                   "ox": "-9984", "oy": "5216"})
+        with open(os.path.join(self.dir, "ships", "ship1157"), "wb") as fh:
+            fh.write(ET.tostring(nave))
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_storefront_in_its_own_file_is_removed(self):
+        from sgalaxy import storefront
+        from sgalaxy.savefile import SaveFile
+        sf = SaveFile(self.dir)
+        rel = storefront.remove_storefronts(sf, ["1157"])
+        self.assertEqual(rel["ships"], 1)
+        self.assertEqual(rel["missing"], [])
+        sf.save(backup=False)
+        self.assertFalse(os.path.isfile(
+            os.path.join(self.dir, "ships", "ship1157")))
+
+    def test_nothing_is_deleted_before_the_save_is_written(self):
+        """Apagar na hora deixaria o save inconsistente se quem chama
+        desistir de gravar."""
+        from sgalaxy import storefront
+        from sgalaxy.savefile import SaveFile
+        storefront.remove_storefronts(SaveFile(self.dir), ["1157"])
+        self.assertTrue(os.path.isfile(
+            os.path.join(self.dir, "ships", "ship1157")))
+
+
+class SectorSlotTestCase(unittest.TestCase):
+    """A cópia trazia o `ox` da nave original, então reaparecia na coordenada
+    que o dono ocupava no setor dele. Relatado duas vezes por quem jogou."""
+
+    def _save_com(self, offsets):
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp,
+                                                            ignore_errors=True))
+        d = os.path.join(tmp, "save")
+        os.makedirs(d)
+        jogo = ET.Element("game", {"seed": "0"})
+        naves = ET.SubElement(jogo, "ships")
+        for i, ox in enumerate(offsets):
+            ET.SubElement(naves, "ship", {"sid": str(100 + i), "ox": str(ox),
+                                          "oy": "5216"})
+        ET.SubElement(jogo, "starmap", {"w": "1", "h": "1"})
+        with open(os.path.join(d, "game"), "wb") as fh:
+            fh.write(ET.tostring(jogo))
+        with open(os.path.join(d, "info"), "wb") as fh:
+            fh.write(b'<info date="86400" version="21"/>')
+        from sgalaxy.savefile import SaveFile
+        return SaveFile(d)
+
+    def test_it_keeps_clear_of_the_ships_already_there(self):
+        from sgalaxy import storefront
+        sf = self._save_com([-4992, 4992])
+        vaga = storefront.sector_slot(sf)
+        self.assertIsNotNone(vaga)
+        for usado in (-4992, 4992):
+            self.assertGreaterEqual(abs(vaga - usado), storefront.FOLGA_SETOR)
+
+    def test_an_empty_sector_takes_the_preferred_spot(self):
+        from sgalaxy import storefront
+        self.assertEqual(storefront.sector_slot(self._save_com([]), 3744), 3744)
+
+    def test_a_full_sector_says_so_instead_of_overlapping(self):
+        from sgalaxy import storefront
+        cheio = list(range(-7488, 7489, storefront.PASSO_SETOR))
+        self.assertIsNone(storefront.sector_slot(self._save_com(cheio)))
