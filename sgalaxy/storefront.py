@@ -1123,6 +1123,14 @@ def remove_storefronts(dest: SaveFile, sids) -> dict:
     for doc, ship in list(dest.ships()):
         if ship.get("sid") not in alvos:
             continue
+        # NUNCA A NAVE DE QUEM JOGA. Um `sid` sai do contador do save de
+        # destino, entao o mesmo numero pode pertencer a uma nave legitima
+        # noutro save — e um molde copiado carrega os numeros do original.
+        # Uma vitrine e sempre de faccao NPC; a casa da pessoa nunca e.
+        ajustes = ship.find("settings")
+        if ajustes is not None and ajustes.get("owner") == "Player":
+            report.setdefault("kept", []).append(ship.get("sid"))
+            continue
         dono = pais.get(id(ship))
         if dono is not None:
             dono.remove(ship)

@@ -1244,14 +1244,14 @@ def _settle_neighbours(conn, room_id: str, buyer_id: int, lease: dict,
     return relatorio
 
 
-def _strip_neighbours(lease: dict, data: bytes) -> bytes:
+def _strip_neighbours(lease: dict, data: bytes, sids=None) -> bytes:
     """Tira as vitrines antes de guardar o que voltou.
 
     E o par obrigatorio de `_place_neighbours`. Sem ele a nave de um vizinho
     ficaria guardada como parte da partida de quem devolveu, e voltaria
     empilhada a cada sessao.
     """
-    sids = (lease or {}).get("injected_sids") or []
+    sids = sids or (lease or {}).get("injected_sids") or []
     if not sids:
         return data
     try:
@@ -1400,7 +1400,8 @@ async def checkpoint(room_id: str, request: Request,
                 409, "no open lease: a checkpoint belongs to a session that is "
                      "running. Check the save out first")
 
-        data = _strip_neighbours(lease, data)
+        data = _strip_neighbours(
+            lease, data, db.all_injected_sids(conn, room_id, player["id"]))
 
         try:
             with blobs.with_unpacked(data) as folder:
@@ -1470,7 +1471,11 @@ async def checkin(room_id: str, request: Request,
         # As vitrines saem ANTES de qualquer leitura: o que for guardado, o
         # que entrar no mapa e o que a proxima retirada entregar tem de ser a
         # partida da pessoa, sem as naves que o servidor emprestou.
-        data = _strip_neighbours(lease, data)
+        #
+        # E o historico inteiro, nao so este emprestimo: uma vitrine que
+        # escapou de uma sessao anterior nunca mais seria procurada.
+        data = _strip_neighbours(
+            lease, data, db.all_injected_sids(conn, room_id, player["id"]))
 
         try:
             with blobs.with_unpacked(data) as folder:

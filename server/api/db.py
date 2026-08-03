@@ -343,6 +343,29 @@ def set_galaxy_stars(conn: psycopg.Connection, room_id: str,
                  (_json.dumps(stars), room_id))
 
 
+def all_injected_sids(conn: psycopg.Connection, room_id: str,
+                      player_id: int) -> list:
+    """Tudo que o servidor ja injetou no save DESTA pessoa nesta galaxia.
+
+    O `checkin` tirava so o que o emprestimo atual tinha posto, e isso bastava
+    enquanto a remocao funcionava. Nao funcionava: uma vitrine que o jogo tinha
+    mudado para arquivo proprio passava batido, e ficava. Da sessao seguinte em
+    diante ela era de um emprestimo antigo, entao nem era procurada.
+
+    Medido: tres vitrines presas nos canonicos dos dois jogadores da mesma
+    galaxia. Varrer o historico e o que as alcanca.
+
+    Por jogador, e nunca por galaxia inteira: o `sid` sai do contador do save de
+    destino, entao o mesmo numero pode ser uma nave legitima de outra pessoa.
+    """
+    linhas = conn.execute(
+        """SELECT jsonb_array_elements_text(injected_sids) AS sid
+             FROM lease
+            WHERE room_id = %s AND player_id = %s""",
+        (room_id, player_id)).fetchall()
+    return sorted({r["sid"] for r in linhas})
+
+
 def set_consignments(conn: psycopg.Connection, lease_id: int,
                      consignments: list) -> None:
     """A foto de cada vitrine no momento em que o save saiu.

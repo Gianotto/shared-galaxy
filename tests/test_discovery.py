@@ -354,6 +354,25 @@ class StorefrontLeakTestCase(unittest.TestCase):
         self.assertFalse(os.path.isfile(
             os.path.join(self.dir, "ships", "ship1157")))
 
+    def test_the_players_own_ship_is_never_removed(self):
+        """Um `sid` sai do contador do save de destino, então o mesmo número
+        pode ser uma nave legítima noutro save, e um molde copiado carrega os
+        números do original."""
+        from sgalaxy import storefront
+        from sgalaxy.savefile import SaveFile
+        import xml.etree.ElementTree as ET2
+        casa = ET2.Element("ship", {"sid": "1157", "sname": "HSS MINHA"})
+        ET2.SubElement(casa, "settings", {"of": "461", "owner": "Player"})
+        with open(os.path.join(self.dir, "ships", "ship1157"), "wb") as fh:
+            fh.write(ET2.tostring(casa))
+        sf = SaveFile(self.dir)
+        rel = storefront.remove_storefronts(sf, ["1157"])
+        self.assertEqual(rel["ships"], 0)
+        self.assertEqual(rel["kept"], ["1157"])
+        sf.save(backup=False)
+        self.assertTrue(os.path.isfile(
+            os.path.join(self.dir, "ships", "ship1157")))
+
     def test_nothing_is_deleted_before_the_save_is_written(self):
         """Apagar na hora deixaria o save inconsistente se quem chama
         desistir de gravar."""
