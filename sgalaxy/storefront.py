@@ -453,6 +453,31 @@ def find_player_fleet(sf: SaveFile) -> tuple[ET.Element | None, ET.Element | Non
     return None, None
 
 
+def where_the_player_is(sf: SaveFile) -> tuple:
+    """As coordenadas da frota do jogador, do jeito que o `presence` as le.
+
+    A frota aparece em dois lugares: pendurada num corpo celeste, ou num setor
+    vazio quando a pessoa salvou em transito. O corpo manda quando existe,
+    porque a frota carrega coordenadas defasadas — e sem corpo valem as dela.
+
+    Devolve `(None, None)` quando nao ha frota de jogador, e quem chama trata
+    isso como "nao sei onde ela esta", que nao e o mesmo que "esta aqui".
+    """
+    starmap = sf.main.find("starmap")
+    if starmap is None:
+        return (None, None)
+    pais = {id(filho): pai for pai in starmap.iter() for filho in pai}
+    for elemento in starmap.iter():
+        if elemento.get("isPlayer") != "true":
+            continue
+        container = pais.get(id(elemento))
+        corpo = pais.get(id(container)) if container is not None else None
+        if corpo is not None and corpo.get("celeid") is not None:
+            return (corpo.get("x"), corpo.get("y"))
+        return (elemento.get("x"), elemento.get("y"))
+    return (None, None)
+
+
 def find_npc_fleet(sf: SaveFile) -> ET.Element | None:
     """Uma frota de NPC qualquer, para servir de molde estrutural."""
     starmap = sf.main.find("starmap")
@@ -1300,12 +1325,15 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
     # posta ali e desenhada ali, mesmo com a frota apontando para outro corpo:
     # relatado por quem jogou, a vitrine de um vizinho aparecia no setor dele
     # enquanto o vizinho estava a dois corpos de distancia.
-    _hosp, frota_jogador = find_player_fleet(dest)
-    aqui = None
-    if frota_jogador is not None:
-        aqui = (frota_jogador.get("x"), frota_jogador.get("y"))
+    aqui = where_the_player_is(dest)
     la = (body.get("x"), body.get("y"))
-    if aqui is not None and aqui != la:
+    # GUARDAR E O PADRAO. Nao saber onde a pessoa esta nao autoriza desenhar a
+    # nave de um vizinho no setor dela: `find_player_fleet` so olhava dentro de
+    # `<fleets>`, e quem esta numa hyperlane tem a frota num setor vazio. Devolvia
+    # None, a verificacao nao decidia nada, e a vitrine ia para o setor
+    # carregado — relatado por quem jogou, a nave do vizinho aparecendo fora da
+    # grade de um setor onde ele nao estava.
+    if aqui != la:
         report["stowed"] = dest.stow_ship(ship)
 
     # -- 8: as permissoes ---------------------------------------------------

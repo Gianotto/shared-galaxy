@@ -493,3 +493,39 @@ class StorefrontSectorTestCase(unittest.TestCase):
         onde = [d for d, n in sf.ships() if n.get("sid") == sid]
         self.assertEqual(onde, ["game"])
         self.assertIsNone(rel.get("stowed"))
+
+    def test_a_player_in_an_empty_sector_is_still_located(self):
+        """Quem está numa hyperlane tem a frota num setor vazio, e não sob um
+        corpo celeste. `find_player_fleet` devolvia None ali, a verificação de
+        "mesmo corpo?" não decidia nada, e a vitrine ia para o setor carregado."""
+        from sgalaxy import storefront
+        sf = self._save()
+        starmap = sf.main.find("starmap")
+        # Tira a frota do corpo e põe num setor vazio, como o jogo faz.
+        for corpo in starmap.iter("l"):
+            frotas = corpo.find("fleets")
+            if frotas is not None:
+                corpo.remove(frotas)
+                break
+        sistema = starmap.find("systems/l")
+        vazios = ET.SubElement(sistema, "emptySectors")
+        setor = ET.SubElement(vazios, "l", {"id": "99", "x": "500", "y": "500"})
+        ET.SubElement(ET.SubElement(setor, "fleets"), "f",
+                      {"id": "0", "isPlayer": "true", "x": "500", "y": "500"})
+        self.assertEqual(storefront.where_the_player_is(sf), ("500", "500"))
+
+    def test_not_knowing_where_the_player_is_still_stows(self):
+        """Não saber não autoriza desenhar a nave de um vizinho aqui."""
+        from sgalaxy import storefront
+        sf = self._save()
+        starmap = sf.main.find("starmap")
+        for f in list(starmap.iter("f")):
+            if f.get("isPlayer") == "true":
+                for pai in starmap.iter():
+                    if f in list(pai):
+                        pai.remove(f)
+        self.assertEqual(storefront.where_the_player_is(sf), (None, None))
+        rel = storefront.inject_ship(sf, self._molde(), faction="Civilian",
+                                     name="CS VIZINHA", at=("100", "100"),
+                                     system_id="31")
+        self.assertIsNotNone(rel["stowed"])
