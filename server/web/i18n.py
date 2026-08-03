@@ -268,12 +268,22 @@ STRINGS: dict = {
                  "en": "3. Install the mod (optional)"},
     "step_join": {"pt": "4. Entre na sala", "en": "4. Join the room"},
     "step_join_help": {
-        "pt": "Uma vez só. O jogo abre para você criar a sua nave em NEW GAME, "
-              "o cliente sobe a partida e o servidor enxerta a galáxia da sala "
-              "nela. Feche o jogo quando a nave estiver criada.",
-        "en": "Once only. The game opens so you can create your ship in NEW "
-              "GAME, the client uploads it, and the server grafts the room's "
-              "galaxy into it. Close the game once the ship exists.",
+        "pt": "Uma vez só, e é um download. A sala te entrega uma cópia da "
+              "partida de quem a fundou, com a sua nave batizada com o seu "
+              "nome e estacionada num campo de asteroides livre. A galáxia já "
+              "é a da sala, então não há nada a conferir.",
+        "en": "Once only, and it is a download. The room hands you a copy of "
+              "the game its founder started, with your ship named after you "
+              "and parked on a free asteroid field. The galaxy is already the "
+              "room's, so there is nothing to check.",
+    },
+    "step_join_empty": {
+        "pt": "Se você for a primeira pessoa da sala, não há partida para "
+              "copiar: o jogo abre para você criar a sua em NEW GAME, e é ela "
+              "que vira o ponto de partida de quem chegar depois.",
+        "en": "If you are the first person in the room there is nothing to "
+              "copy: the game opens for you to create yours in NEW GAME, and "
+              "that one becomes the starting point for everybody after you.",
     },
     "mod_first": {
         "pt": "Instale o mod antes deste passo, se for instalar: com ele o "

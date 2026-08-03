@@ -548,7 +548,8 @@ handed back with everyone else's marks written into it.</p>
 <p>A session is a loan, and the room hands the save to one person at a time.</p>
 <ol>
 <li><b>Check out.</b> The server builds your save: your run, plus the galaxy as
-the room left it. It marks the loan as open and starts a clock.</li>
+the room left it, the neighbours parked in your system and anything you are owed
+from sales. It marks the loan as open and starts a clock.</li>
 <li><b>Play.</b> Normally, offline, in your own copy of the game. While you
 play, each autosave is sent up as a checkpoint, so the room's map can show where
 you are without waiting for you to finish.</li>
@@ -593,6 +594,61 @@ charged.</p>
 <p>The storefront is removed from the save when it comes back, so it stays out
 of your own game for good.</p>
 
+
+<h2>The commands, and what moves</h2>
+<p>Five of them do everything. Each row says what leaves your machine and what
+comes back.</p>
+<div style="overflow-x:auto">
+<table>
+<tr><th>Command</th><th>Up</th><th>Down</th><th>What it is for</th></tr>
+<tr><td><code>register</code></td><td>a name</td><td>a recovery code</td>
+    <td>Creates your account. The code is the whole account: the server keeps
+    only a digest of it, so losing it loses the account.</td></tr>
+<tr><td><code>join</code></td><td>nothing</td><td>a starting game</td>
+    <td>Puts you in the room. The server copies the game its founder started,
+    names the ship after you and parks it on a free asteroid field. If you are
+    the first person in the room, this is reversed: your game goes up and
+    becomes the starting point for everybody else.</td></tr>
+<tr><td><code>play</code></td><td>your save, when you close the game</td>
+    <td>the room's save</td>
+    <td>The whole session in one command. It checks the save out, launches the
+    game, waits, and returns the save when the game closes.</td></tr>
+<tr><td><code>shop</code></td><td>one storage id</td><td>confirmation</td>
+    <td>Marks one storage on your ship as your shop. What you move into it is
+    what your neighbours can buy.</td></tr>
+<tr><td><code>install-mod</code></td><td>nothing</td><td>nothing</td>
+    <td>Local only. Writes three lines into the game's config so the mod loads.
+    It talks to no server.</td></tr>
+</table>
+</div>
+<p><code>checkout</code> and <code>return</code> are the two halves of
+<code>play</code>, for when you want to run the game yourself. <code>status</code>
+says whether a session is open, and <code>state</code> shows who is where.</p>
+
+<h2>What crosses the wire, step by step</h2>
+<p>A session in full, with the server's side of each step.</p>
+<pre>you                          server
+---                          ------
+play  ---------------------&gt;  is a session already open?
+                              no: opens one, starts the clock
+      &lt;--------------------  your save, plus:
+                                systems anybody has explored
+                                neighbours in your system, as ships
+                                credits owed to you from sales
+game opens on the room's save
+  ...playing...
+autosave -----------------&gt;  checkpoint: your position on the room map
+  ...playing...
+you close the game
+      ---------------------&gt;  the save comes back
+                              storefront sales are settled
+                              the storefronts are stripped out
+                              the galaxy is checked against the room's
+                              this becomes what the others receive</pre>
+<p>The order in the last block is not arbitrary. Sales are settled before the
+storefronts are removed, because removing them erases the evidence of what was
+sold.</p>
+
 <h2>The mod</h2>
 <p>The mod is optional. Everything above works without it; it removes the
 fiddly parts.</p>
@@ -633,8 +689,8 @@ com as marcas de todo mundo escritas dentro dele.</p>
 <p>Uma sessão é um empréstimo, e a sala entrega o save a uma pessoa por vez.</p>
 <ol>
 <li><b>Retirar.</b> O servidor monta o seu save: a sua partida, mais a galáxia
-como a sala a deixou. Marca o empréstimo como aberto e começa a contar o
-tempo.</li>
+como a sala a deixou, os vizinhos parados no seu sistema e o que você tenha a
+receber de vendas. Marca o empréstimo como aberto e começa a contar o tempo.</li>
 <li><b>Jogar.</b> Normalmente, offline, na sua própria cópia do jogo. Enquanto
 você joga, cada autosave sobe como checkpoint, para o mapa da sala mostrar onde
 você está sem esperar você terminar.</li>
@@ -677,6 +733,61 @@ próxima retirada: créditos no banco, mercadoria fora do depósito. O preço é
 que o próprio jogo cobrou.</p>
 <p>A vitrine é removida do save quando ele volta, então fica de fora da sua
 partida para sempre.</p>
+
+
+<h2>Os comandos, e o que se move</h2>
+<p>Cinco deles fazem tudo. Cada linha diz o que sai da sua máquina e o que
+volta.</p>
+<div style="overflow-x:auto">
+<table>
+<tr><th>Comando</th><th>Sobe</th><th>Desce</th><th>Para que serve</th></tr>
+<tr><td><code>register</code></td><td>um nome</td><td>um código de acesso</td>
+    <td>Cria a sua conta. O código é a conta inteira: o servidor guarda só um
+    resumo dele, então perder o código é perder a conta.</td></tr>
+<tr><td><code>join</code></td><td>nada</td><td>uma partida pronta</td>
+    <td>Coloca você na sala. O servidor copia a partida de quem a fundou,
+    batiza a nave com o seu nome e a estaciona num campo de asteroides livre.
+    Se você for a primeira pessoa da sala, é o contrário: a sua partida sobe e
+    vira o ponto de partida de todo mundo.</td></tr>
+<tr><td><code>play</code></td><td>o seu save, ao fechar o jogo</td>
+    <td>o save da sala</td>
+    <td>A sessão inteira num comando. Retira o save, abre o jogo, espera, e
+    devolve quando você fecha.</td></tr>
+<tr><td><code>shop</code></td><td>o id de um depósito</td><td>confirmação</td>
+    <td>Marca um depósito da sua nave como a sua loja. O que você põe dentro é
+    o que os vizinhos podem comprar.</td></tr>
+<tr><td><code>install-mod</code></td><td>nada</td><td>nada</td>
+    <td>Só local. Escreve três linhas na configuração do jogo para o mod
+    carregar. Não fala com servidor nenhum.</td></tr>
+</table>
+</div>
+<p><code>checkout</code> e <code>return</code> são as duas metades do
+<code>play</code>, para quem quiser abrir o jogo por conta própria. O
+<code>status</code> diz se há sessão aberta, e o <code>state</code> mostra quem
+está onde.</p>
+
+<h2>O que atravessa a rede, passo a passo</h2>
+<p>Uma sessão inteira, com o lado do servidor em cada etapa.</p>
+<pre>você                         servidor
+----                         --------
+play  ---------------------&gt;  já há sessão aberta?
+                              não: abre uma e começa a contar
+      &lt;--------------------  o seu save, mais:
+                                sistemas que alguém explorou
+                                vizinhos do seu sistema, como naves
+                                créditos que você tem a receber
+o jogo abre no save da sala
+  ...jogando...
+autosave -----------------&gt;  checkpoint: sua posição no mapa da sala
+  ...jogando...
+você fecha o jogo
+      ---------------------&gt;  o save volta
+                              as vendas da vitrine são apuradas
+                              as vitrines são removidas
+                              a galáxia é conferida contra a da sala
+                              isto vira o que os outros recebem</pre>
+<p>A ordem do último bloco não é arbitrária. As vendas são apuradas antes de as
+vitrines saírem, porque removê-las apaga a prova do que foi vendido.</p>
 
 <h2>O mod</h2>
 <p>O mod é opcional. Tudo acima funciona sem ele; o que ele tira são as partes
@@ -841,6 +952,7 @@ chmod +x sgalaxy</pre>
     <h3>{t("step_join", lang)}</h3>
     <p class="note">{t("step_join_help", lang)}</p>
     {commands(f"join {rid}", lang)}
+    <p class="note">{t("step_join_empty", lang)}</p>
   </li>
   <li>
     <h3>{t("step_play", lang)}</h3>

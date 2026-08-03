@@ -490,3 +490,34 @@ class ColdStartTestCase(unittest.TestCase):
             with self.subTest(cmd=sufixo):
                 self.assertIn(f"sgalaxy.exe {sufixo}", html)
                 self.assertIn(f"./sgalaxy {sufixo}", html)
+
+
+class HowItWorksTestCase(unittest.TestCase):
+    """A página tem de explicar cada comando: alguém que baixou um binário
+    precisa saber o que cada um envia antes de rodá-lo."""
+
+    def test_every_command_the_client_has_is_explained(self):
+        import importlib.util
+        raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        spec = importlib.util.spec_from_file_location(
+            "sgalaxy_cli", os.path.join(raiz, "tools", "sgalaxy.py"))
+        cliente = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cliente)
+        essenciais = {"register", "join", "play", "shop", "install-mod",
+                      "checkout", "return", "status", "state"}
+        for lang in ("en", "pt"):
+            html = pages.how_page(lang)
+            for cmd in essenciais:
+                with self.subTest(cmd=cmd, lang=lang):
+                    self.assertIn(f"<code>{cmd}</code>", html)
+
+    def test_the_flow_names_both_directions(self):
+        for lang in ("en", "pt"):
+            html = pages.how_page(lang)
+            self.assertIn("checkpoint", html)
+            self.assertIn("autosave", html)
+
+    def test_the_settle_before_strip_order_is_stated(self):
+        """É a ordem que uma pessoa não adivinha e que já custou uma sessão."""
+        self.assertIn("erases the evidence", pages.how_page("en"))
+        self.assertIn("apaga a prova", pages.how_page("pt"))

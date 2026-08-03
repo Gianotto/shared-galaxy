@@ -565,11 +565,20 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
 
     def test_without_a_game_it_says_what_to_do(self):
         """Sem save de partida na sala e sem o jogo, a mensagem tem que dizer
-        as duas saídas. O cliente tenta a sala primeiro, então isto também
-        prova que um 404 cai de volta no caminho pelo jogo em vez de estourar
-        (é o que acontece contra um servidor antigo, sem a rota)."""
-        args = client.build_parser().parse_args(
-            ["join", "6359GV", "--game", "/nao/existe"])
-        with self.assertRaises(client.ClientError) as erro:
-            client.cmd_join(args)
+        as duas saídas.
+
+        A sala é dublada. A primeira versão deste teste chamava o servidor de
+        verdade com as credenciais desta máquina, e passava por acidente: a
+        sala ainda não existia. Quando ela passou a existir, o teste virou
+        `409 you are already in this room` e o defeito era o teste."""
+        original = client._start_in_room
+        client._start_in_room = lambda room, senha: None
+        try:
+            args = client.build_parser().parse_args(
+                ["join", "6359GV", "--game", "/nao/existe"])
+            with self.assertRaises(client.ClientError) as erro:
+                client.cmd_join(args)
+        finally:
+            client._start_in_room = original
         self.assertIn("--save", str(erro.exception))
+        self.assertIn("no starting save", str(erro.exception))

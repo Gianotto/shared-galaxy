@@ -464,6 +464,17 @@ Out of the queue, blocking nothing: the minimal mod from 2.9 and live injection.
 
 ---
 
+## Written down for later
+
+- **Randomise crew and ship names the way the game does.** A newcomer receives a
+  copy of the founder's game, so every arrival carries the founder's crew, with
+  the founder's names. It matters less than it sounds: crews from different
+  ships never interact, players rarely learn each other's crew names, and most
+  people rename them anyway. Still worth doing properly. The game generates
+  those names from its own tables, and the server can read the same tables out
+  of the game data rather than inventing a list that drifts from what Space
+  Haven produces.
+
 ## Risks this plan accepts
 
 - **Losing the token loses the player.** The price of not keeping personal data.
