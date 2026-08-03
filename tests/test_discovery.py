@@ -529,3 +529,46 @@ class StorefrontSectorTestCase(unittest.TestCase):
                                      name="CS VIZINHA", at=("100", "100"),
                                      system_id="31")
         self.assertIsNotNone(rel["stowed"])
+
+
+class ShelfIsOnlyWhatWasConsignedTestCase(unittest.TestCase):
+    """O jogo vende o que está no chão junto com o que está na prateleira.
+    Medido: uma venda de 544 créditos com a prateleira vazia, apurada como
+    crédito sem mercadoria. A pessoa foi paga por carga que nunca ofereceu, e
+    a carga não saiu do save dela porque nunca esteve à venda."""
+
+    def _nave_com_caixas(self):
+        nave = ET.Element("ship", {"sid": "77", "sname": "CS MOLDE",
+                                   "ox": "0", "oy": "5216"})
+        ET.SubElement(nave, "settings", {"of": "1694", "owner": "Civilian"})
+        ET.SubElement(ET.SubElement(nave, "characters"), "c", {"entId": "9"})
+        ET.SubElement(nave, "roof", {"hullPattern": "1"})
+        feat = ET.SubElement(ET.SubElement(nave, "l"), "feat")
+        ET.SubElement(ET.SubElement(feat, "inv"), "s",
+                      {"elementaryId": "56", "inStorage": "30"})
+        itens = ET.SubElement(nave, "items")
+        for i in range(4):
+            ET.SubElement(itens, "i", {"eid": "176", "id": str(500 + i)})
+        return nave
+
+    def test_crates_are_emptied_with_the_shelves(self):
+        from sgalaxy import storefront
+        nave = self._nave_com_caixas()
+        rel = storefront.set_stock(nave, [("2475", "17")], clear=True)
+        self.assertEqual(rel.get("cratesCleared"), 4)
+        self.assertEqual(nave.findall("items/i"), [])
+
+    def test_reading_back_counts_crates_too(self):
+        """Ler só a prateleira faz uma venda de caixa virar crédito sem
+        mercadoria."""
+        from sgalaxy import storefront
+        nave = self._nave_com_caixas()
+        lido = storefront.read_stock(nave)
+        self.assertEqual(lido.get("176"), 4)
+        self.assertEqual(lido.get("56"), 30)
+
+    def test_keeping_the_cargo_keeps_the_crates(self):
+        from sgalaxy import storefront
+        nave = self._nave_com_caixas()
+        storefront.set_stock(nave, [], clear=False)
+        self.assertEqual(len(nave.findall("items/i")), 4)

@@ -836,6 +836,14 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
     if clear:
         for rack in racks:
             report["cleared"] += clear_children(rack, "s")
+        # AS CAIXAS TAMBEM. O jogo vende o que esta no chao, nao so o que esta
+        # na prateleira, e a copia trazia as caixas do vendedor. Medido: uma
+        # venda de 544 creditos com a prateleira vazia, apurada como credito
+        # sem mercadoria — a pessoa foi paga por carga que nunca ofereceu, e a
+        # carga nao saiu do save dela, porque nunca esteve a venda.
+        caixas = ship.find("items")
+        if caixas is not None:
+            report["cratesCleared"] = clear_children(caixas, "i")
 
     if not stock:
         return report
@@ -875,12 +883,23 @@ def set_stock(ship: ET.Element, stock: list[tuple[str, str]], clear: bool = True
 
 
 def read_stock(ship: ET.Element) -> dict:
-    """O que sobrou nas prateleiras da vitrine.
+    """O que sobrou na vitrine: prateleira mais caixa.
 
     O par de leitura de `set_stock`. No `checkout` sabemos o que foi posto; so
     isto diz o que ficou, e a diferenca entre os dois e a venda.
+
+    CAIXA CONTA. O jogo vende o que esta no chao junto com o que esta na
+    prateleira, e ler so a prateleira faz uma venda de caixa virar credito sem
+    mercadoria. Uma unidade por `<i>`, e o recurso vem de `eid`.
     """
     total: dict = {}
+    caixas = ship.find("items")
+    for item in (caixas if caixas is not None else []):
+        if item.tag != "i":
+            continue
+        recurso = item.get("eid")
+        if recurso:
+            total[recurso] = total.get(recurso, 0) + 1
     for rack in ship_racks(ship):
         for stack in rack.findall("s"):
             ident = stack.get("elementaryId")
