@@ -409,20 +409,42 @@ class SectorSlotTestCase(unittest.TestCase):
 
     def test_it_keeps_clear_of_the_ships_already_there(self):
         from sgalaxy import storefront
-        sf = self._save_com([-4992, 4992])
-        vaga = storefront.sector_slot(sf)
+        vaga, _altura = storefront.sector_slot(self._save_com([-4992, 4992]))
         self.assertIsNotNone(vaga)
         for usado in (-4992, 4992):
             self.assertGreaterEqual(abs(vaga - usado), storefront.FOLGA_SETOR)
 
-    def test_an_empty_sector_takes_the_preferred_spot(self):
+    def test_it_stays_near_the_ships_that_are_there(self):
+        """Uma vaga a quinze mil unidades da nave mais próxima está fora do
+        que a pessoa enxerga. Medido num setor real: as naves estavam em 0,
+        7488 e 10144, e a versão anterior escolheu -7488."""
         from sgalaxy import storefront
-        self.assertEqual(storefront.sector_slot(self._save_com([]), 3744), 3744)
+        vaga, _altura = storefront.sector_slot(self._save_com([0, 7488, 10144]))
+        perto = min(abs(vaga - usado) for usado in (0, 7488, 10144))
+        self.assertLessEqual(perto, storefront.FOLGA_SETOR * 2)
+        self.assertGreater(vaga, 0)
 
-    def test_a_full_sector_says_so_instead_of_overlapping(self):
+    def test_the_height_follows_the_neighbourhood(self):
+        """Uma nave na altura errada está tão fora da vista quanto uma na
+        coluna errada."""
+        from sgalaxy import storefront
+        _vaga, altura = storefront.sector_slot(self._save_com([0, 7488]))
+        self.assertEqual(altura, 5216)
+
+    def test_an_empty_sector_takes_the_middle(self):
+        from sgalaxy import storefront
+        self.assertEqual(storefront.sector_slot(self._save_com([])), (0, None))
+
+    def test_a_dense_sector_places_just_outside_it(self):
+        """Um setor lotado não impede a vitrine: ela encosta na borda do
+        aglomerado, que é onde ainda dá para ver."""
         from sgalaxy import storefront
         cheio = list(range(-7488, 7489, storefront.PASSO_SETOR))
-        self.assertIsNone(storefront.sector_slot(self._save_com(cheio)))
+        vaga, _altura = storefront.sector_slot(self._save_com(cheio))
+        self.assertIsNotNone(vaga)
+        for usado in cheio:
+            self.assertGreaterEqual(abs(vaga - usado), storefront.FOLGA_SETOR)
+        self.assertLessEqual(abs(vaga) - 7488, storefront.FOLGA_SETOR * 2)
 
 
 class StorefrontSectorTestCase(unittest.TestCase):

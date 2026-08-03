@@ -1073,48 +1073,51 @@ FOLGA_SETOR = 3744
 VAGAS_SETOR = (-7488, -3744, 0, 3744, 7488)
 
 
-def sector_slot(dest: SaveFile, preferido: int | None = None) -> int | None:
-    """Um `ox` livre no setor, longe das naves que ja estao la.
+def sector_slot(dest: SaveFile) -> tuple:
+    """Um lugar livre no setor, PERTO das naves que ja estao la.
 
     POR QUE ISTO EXISTE
 
     A vitrine e uma copia, e a copia trazia o `ox`/`oy` da nave original: ela
     reaparecia na coordenada que o dono ocupava no setor DELE. Relatado duas
-    vezes por quem jogou — uma vez quase em cima da propria nave, outra parada
-    onde o vizinho tinha estado num salto anterior.
+    vezes por quem jogou — uma quase em cima da propria nave, outra parada onde
+    o vizinho tinha estado num salto anterior.
 
-    O hyperjump e onde isso fica visivel: o jogo mostra a grade do setor e a
-    pessoa escolhe onde encostar. A nave de outra pessoa aparecer num ponto que
-    ela nao escolheu, e que o dono nem ocupa mais, e ruido no unico momento em
-    que a grade importa.
+    POR QUE UMA LISTA FIXA NAO SERVE
 
-    Devolve None quando nao ha vaga, e quem chama mantem o que veio: uma
-    vitrine no lugar errado ainda e melhor que nenhuma.
+    A primeira versao escolhia entre cinco offsets fixos, tirados da faixa que
+    dezesseis saves mostravam. Medido depois num setor de verdade: as naves
+    estavam em 0, 7488 e 10144, e a vaga escolhida foi -7488 — a quinze mil
+    unidades da mais proxima, fora do que a pessoa enxerga. A faixa varia por
+    setor, entao ela tem que sair das naves que estao ali, e nao de uma
+    constante.
+
+    A vaga sai da grade de 1248, a pelo menos `FOLGA_SETOR` de toda nave, e a
+    mais perto do centro do aglomerado. O `oy` acompanha a vizinhanca pelo mesmo
+    motivo: uma nave na altura errada esta tao fora da vista quanto uma na
+    coluna errada.
+
+    Devolve `(None, None)` quando nao ha vaga, e quem chama mantem o que veio.
     """
-    # SO AS NAVES DO SETOR CARREGADO. As que o jogo guardou em `ships/shipNNN`
-    # estao em outro lugar da galaxia, e conta-las lotava a grade: num save de
-    # verdade sao vinte naves espalhadas por toda a faixa, e nenhuma vaga
-    # sobrava. As do setor sao as que estao no `<ships>` do `game`.
     portador = dest.main.find("ships")
-    ocupados = [int(nave.get("ox")) for nave in (portador if portador is not None else [])
-                if nave.tag == "ship" and nave.get("ox") is not None]
+    naves = [n for n in (portador if portador is not None else [])
+             if n.tag == "ship" and n.get("ox") is not None]
+    if not naves:
+        return (0, None)
 
-    def livre(x):
-        return all(abs(x - usado) >= FOLGA_SETOR for usado in ocupados)
+    ocupados = [int(n.get("ox")) for n in naves]
+    alturas = sorted(int(n.get("oy")) for n in naves if n.get("oy") is not None)
+    altura = alturas[len(alturas) // 2] if alturas else None
 
-    if preferido is not None and livre(preferido):
-        return preferido
-    for vaga in VAGAS_SETOR:
-        if livre(vaga):
-            return vaga
-    # Setor cheio nas vagas conhecidas: tenta a grade inteira, do centro para
-    # fora, para nao empurrar a nave para uma borda so porque a lista e curta.
-    for passo in range(1, 13):
-        for lado in (passo, -passo):
-            vaga = lado * PASSO_SETOR
-            if abs(vaga) <= 7488 and livre(vaga):
-                return vaga
-    return None
+    centro = (min(ocupados) + max(ocupados)) // 2
+    inicio = min(ocupados) - FOLGA_SETOR * 2
+    fim = max(ocupados) + FOLGA_SETOR * 2
+    candidatos = [x for x in range(
+        (inicio // PASSO_SETOR) * PASSO_SETOR, fim + PASSO_SETOR, PASSO_SETOR)
+        if all(abs(x - usado) >= FOLGA_SETOR for usado in ocupados)]
+    if not candidatos:
+        return (None, None)
+    return (min(candidatos, key=lambda x: abs(x - centro)), altura)
 
 
 def strip_crafts(ship: ET.Element) -> dict:
@@ -1241,10 +1244,13 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
 
     # A COPIA NAO HERDA O LUGAR DA ORIGINAL. Ela trazia o `ox` da nave do
     # vizinho, entao aparecia na coordenada que ele ocupava no setor dele.
-    vaga = sector_slot(dest)
-    report["sector"] = {"from": ship.get("ox"), "to": vaga}
+    vaga, altura = sector_slot(dest)
+    report["sector"] = {"from": (ship.get("ox"), ship.get("oy")),
+                        "to": (vaga, altura)}
     if vaga is not None:
         ship.set("ox", str(vaga))
+        if altura is not None:
+            ship.set("oy", str(altura))
     else:
         report["warnings"].append(
             "no free spot in the sector: the storefront kept the offset it had "
