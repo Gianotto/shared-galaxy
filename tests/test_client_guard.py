@@ -498,8 +498,50 @@ class WatcherTestCase(unittest.TestCase):
             fh.write(f'<info version="21" date="{int(dia * 86400)}"/>')
         return pasta
 
-    def test_only_autosaves_are_watched(self):
-        """A pasta `save` é a manual; ela vai na devolução, não em checkpoint."""
+    def test_a_manual_save_is_sent_too(self):
+        """Salvar à mão é o gesto de quem quer registrar onde está. Só
+        `autosave*` era observado, e nada acontecia até o autosave seguinte."""
+        enviados = []
+        real = client._send_checkpoint
+        client._send_checkpoint = lambda p, n, r, g: enviados.append(n)
+        self.addCleanup(lambda: setattr(client, "_send_checkpoint", real))
+
+        parar = threading.Event()
+        client.WATCH_EVERY, client.SETTLE_SECONDS = 0.01, 0.01
+        t = threading.Thread(target=client.watch_autosaves,
+                             args=(self.sala, "XXXXXX", self.jogo, parar))
+        t.start()
+        time.sleep(0.1)
+        self._autosave("save", 5.4)          # a pessoa salvou à mão agora
+        time.sleep(0.3)
+        parar.set()
+        t.join(timeout=2)
+        self.assertIn("manual save", enviados,
+                      f"o save manual não subiu: {enviados}")
+
+    def test_the_same_autosave_is_not_sent_twice(self):
+        """Sem isto, um autosave viraria uma versão nova a cada volta do laço."""
+        enviados = []
+        real = client._send_checkpoint
+        client._send_checkpoint = lambda p, n, r, g: enviados.append(n)
+        self.addCleanup(lambda: setattr(client, "_send_checkpoint", real))
+
+        parar = threading.Event()
+        client.WATCH_EVERY, client.SETTLE_SECONDS = 0.01, 0.01
+        t = threading.Thread(target=client.watch_autosaves,
+                             args=(self.sala, "XXXXXX", self.jogo, parar))
+        t.start()
+        time.sleep(0.1)
+        self._autosave("autosave1", 5.2)
+        time.sleep(0.4)
+        parar.set()
+        t.join(timeout=2)
+        self.assertEqual(enviados, ["autosave1"],
+                         f"mandou o mesmo autosave {len(enviados)} vezes")
+
+    def test_what_was_already_there_is_not_sent_back(self):
+        """O `checkout` acabou de escrever `save/`. Sem semear o estado
+        inicial, ela subiria como checkpoint antes de a pessoa jogar."""
         self._autosave("save", 5.0)
         self._autosave("autosave1", 5.2)
         enviados = []
@@ -515,27 +557,7 @@ class WatcherTestCase(unittest.TestCase):
         time.sleep(0.3)
         parar.set()
         t.join(timeout=2)
-        self.assertEqual(enviados, ["autosave1"],
-                         f"mandou o que não devia: {enviados}")
-
-    def test_the_same_autosave_is_not_sent_twice(self):
-        """Sem isto, um autosave viraria uma versão nova a cada volta do laço."""
-        self._autosave("autosave1", 5.2)
-        enviados = []
-        real = client._send_checkpoint
-        client._send_checkpoint = lambda p, n, r, g: enviados.append(n)
-        self.addCleanup(lambda: setattr(client, "_send_checkpoint", real))
-
-        parar = threading.Event()
-        client.WATCH_EVERY, client.SETTLE_SECONDS = 0.01, 0.01
-        t = threading.Thread(target=client.watch_autosaves,
-                             args=(self.sala, "XXXXXX", self.jogo, parar))
-        t.start()
-        time.sleep(0.4)
-        parar.set()
-        t.join(timeout=2)
-        self.assertEqual(enviados, ["autosave1"],
-                         f"mandou o mesmo autosave {len(enviados)} vezes")
+        self.assertEqual(enviados, [], f"mandou sem ninguém salvar: {enviados}")
 
     def test_a_folder_still_being_written_waits(self):
         """Ler no meio da gravação daria XML cortado. Espera a pasta assentar."""

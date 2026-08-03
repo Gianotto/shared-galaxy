@@ -1046,18 +1046,31 @@ def watch_autosaves(target: str, room: str, game_dir: str, parar) -> None:
     canônico e não fecha o empréstimo. Quem decide o que fica é o `checkin`, e é
     isso que mantém a regra de uma sessão por vez.
 
+    O SAVE MANUAL CONTA TAMBÉM. Ele vai para `save/`, e a primeira versão disto
+    só olhava `autosave*`: quem salvava à mão para marcar um momento não via
+    nada acontecer, e o mapa da sala só se mexia no autosave seguinte. Salvar é
+    justamente o gesto de quem quer registrar onde está.
+
     NUNCA ESCREVE. Só lê, e só depois que a pasta para de mudar — o jogo é dono
     daqueles arquivos enquanto estiver aberto.
     """
-    vistos = {}
+    def _pastas():
+        try:
+            nomes = os.listdir(target)
+        except OSError:
+            return []
+        return [n for n in nomes
+                if (n.startswith("autosave") or n == "save")
+                and os.path.isfile(os.path.join(target, n, "game"))]
+
+    # O estado inicial entra já visto. Sem isso, a pasta que o `checkout`
+    # acabou de escrever seria mandada de volta como checkpoint no primeiro
+    # giro, antes de a pessoa jogar qualquer coisa.
+    vistos = {n: _folder_state(os.path.join(target, n)) for n in _pastas()}
+
     while not parar.is_set():
         parar.wait(WATCH_EVERY)
-        try:
-            candidatos = [n for n in os.listdir(target)
-                          if n.startswith("autosave")
-                          and os.path.isfile(os.path.join(target, n, "game"))]
-        except OSError:
-            continue
+        candidatos = _pastas()
         for nome in sorted(candidatos):
             pasta = os.path.join(target, nome)
             estado = _folder_state(pasta)
@@ -1068,7 +1081,8 @@ def watch_autosaves(target: str, room: str, game_dir: str, parar) -> None:
             if _folder_state(pasta) != estado:
                 continue        # ainda estava gravando; pega na próxima volta
             vistos[nome] = estado
-            _send_checkpoint(pasta, nome, room, game_dir)
+            rotulo = "manual save" if nome == "save" else nome
+            _send_checkpoint(pasta, rotulo, room, game_dir)
 
 
 def _send_checkpoint(pasta: str, nome: str, room: str, game_dir: str) -> None:
