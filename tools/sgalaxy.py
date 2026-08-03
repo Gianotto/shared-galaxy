@@ -512,12 +512,19 @@ def cmd_join(args) -> int:
     `play`.
     """
     if not args.save:
+        # A SALA PRIMEIRO. Se ela tem um save de partida, entrar e um download:
+        # a galaxia ja e a dela, a idade e do primeiro dia, e ninguem precisa
+        # abrir o jogo para criar nave nenhuma.
+        pronto = _start_in_room(args.room, args.password or "")
+        if pronto is not None:
+            return pronto
+
         exe = args.game or find_game()
         if not exe or not os.path.isfile(exe):
             raise ClientError(
-                "could not find Space Haven, and without it I cannot open the "
-                "game for you to create a ship. Pass --game PATH, or point "
-                "--save at a game you already have")
+                "this room has no starting save, so your game has to be "
+                "created in Space Haven, and I could not find it. Pass "
+                "--game PATH, or point --save at a game you already have")
         if not first_join(args.room, None, args.yes, args.password or "", exe):
             return 1
         print()
@@ -540,6 +547,37 @@ def cmd_join(args) -> int:
     print(f"  your ship:  {data['presence']['shipName']}")
     print()
     print("  The server owns this save now. Use `play` to start a session.")
+    return 0
+
+
+def _start_in_room(room: str, senha: str):
+    """Entra com o save de partida da sala. None quando ela nao tem um.
+
+    Sala sem save de partida e a sala vazia: alguem tem que trazer a primeira
+    partida, e ai o caminho antigo, pelo jogo, e o unico que existe.
+    """
+    try:
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{room}/start", b"",
+                              {"X-Room-Password": senha})
+    except ClientError as erro:
+        texto = str(erro)
+        # Sala sem partida guardada, ou servidor antigo que nao tem a rota. Nos
+        # dois casos o caminho pelo jogo ainda existe. Um 404 com "no room" e
+        # outra coisa: a sala nao existe, e abrir o jogo so adiaria o erro.
+        if "no starting save" in texto or "(404): Not Found" in texto:
+            return None
+        raise
+    data = json.loads(raw)
+    print(f"joined room {room}")
+    print(f"  your ship:  {data['shipName']}")
+    onde = data.get("placedAt") or {}
+    if onde.get("system"):
+        print(f"  placed in:  system {onde['system']}")
+    print(f"  age:        {data['ageDays']} days")
+    for aviso in data.get("warnings") or []:
+        print(f"  note: {aviso}")
+    print()
+    print(f"  Play with: {prog()} play {room}")
     return 0
 
 

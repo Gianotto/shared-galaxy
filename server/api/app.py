@@ -42,6 +42,7 @@ from sgalaxy import discovery as discovering
 from sgalaxy import graft as grafting
 from sgalaxy import settle
 from sgalaxy import shop as shopping
+from sgalaxy import starter
 from sgalaxy import storefront
 from sgalaxy.savefile import SaveFile
 from server.storage import blobs
@@ -440,6 +441,76 @@ def room_state(room_id: str, player: dict = Depends(current_player)):
 # ---------------------------------------------------------------------------
 # Entrada
 # ---------------------------------------------------------------------------
+
+@app.post("/api/v1/rooms/{room_id}/start", status_code=201)
+def start_in_room(room_id: str, request: Request,
+                  player: dict = Depends(current_player)):
+    """Entra na sala com o save de partida dela, sem passar pelo jogo.
+
+    A alternativa ao `join`, e a que deveria ser o caminho normal. O `join`
+    exige uma partida criada no Space Haven, e criar uma e cinco passos manuais
+    onde tudo pode dar errado. Aqui a sala entrega uma copia da partida de quem
+    a fundou, com nome de nave proprio e num corpo celeste livre.
+
+    Nao ha enxerto: a galaxia ja e a da sala, porque a copia veio de dentro
+    dela. Nao ha regra de idade: a partida e do dia em que a sala nasceu.
+    """
+    with db.pool().connection() as conn:
+        room = _require_room(conn, room_id)
+        senha = request.headers.get("x-room-password", "")
+        if room["password_hash"] and rules.hash_token(senha) != room["password_hash"]:
+            raise HTTPException(403, "wrong room password")
+        if db.get_membership(conn, room_id, player["id"]) is not None:
+            raise HTTPException(409, "you are already in this room. Use "
+                                     "/checkout to play")
+        if db.count_players(conn, room_id) >= room["max_players"]:
+            raise HTTPException(409, "the room is full")
+
+        molde = room.get("starter_sha256") or room.get("galaxy_sha256")
+        if not molde:
+            raise HTTPException(
+                409, "this room has no starting save yet: nobody has joined, "
+                     "so there is no game to copy. The first person has to "
+                     "bring one with `join`")
+
+        # Onde ja ha gente, para a nave nova nao nascer dentro de outra.
+        ocupados = {(m["at_x"], m["at_y"]) for m in db.room_roster(conn, room_id)
+                    if m["at_x"] and m["at_y"]}
+        nome = f"HSS {player['display_name'].upper()[:24]}"
+
+        try:
+            with blobs.with_unpacked(store().get(molde)) as folder:
+                sf = SaveFile(folder)
+                rel = starter.personalise(sf, nome, ocupados)
+                sf.save(backup=False)
+                described = fingerprint.describe(folder)
+                here = presence.read(folder)
+                data = blobs.pack_save(folder)
+        except Exception as exc:      # noqa: BLE001
+            log.warning("could not build a starting save: %s", exc)
+            raise HTTPException(
+                500, f"could not build a starting save: {exc}") from exc
+
+        meta = store().put(data)
+        version = db.add_version(conn, {
+            "room_id": room_id, "player_id": player["id"],
+            "sha256": meta["sha256"], "bytes": meta["bytes"],
+            "kind": "canonical", "age_days": here["ageDays"],
+            "galaxy_digest": described["digest"]})
+        db.upsert_membership(conn, room_id, player["id"], here["shipName"],
+                             version["id"])
+        db.set_position(conn, room_id, player["id"], here["system"],
+                        here["x"], here["y"], here["body"])
+        db.record_visit(conn, room_id, player["id"], here["system"],
+                        here["x"], here["y"])
+
+    return {"roomId": room_id, "versionId": version["id"],
+            "ageDays": here["ageDays"], "presence": here,
+            "shipName": rel["shipName"], "placedAt": rel["at"],
+            "warnings": rel["warnings"],
+            "message": ("you are in. The room handed you a starting game; "
+                        "use `play` to check it out.")}
+
 
 @app.post("/api/v1/rooms/{room_id}/join")
 async def join_room(room_id: str, request: Request,

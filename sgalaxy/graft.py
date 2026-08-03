@@ -117,6 +117,66 @@ def start_body(starmap: ET.Element) -> tuple:
     return None, None
 
 
+def place_player_fleet(starmap: ET.Element, fleet: ET.Element,
+                       body: ET.Element, system: ET.Element) -> dict:
+    """Poe a frota do jogador num corpo celeste, com tudo que isso exige.
+
+    QUATRO COISAS TEM QUE CONCORDAR, e fazer tres delas produz um save que
+    abre e mente sobre onde a pessoa esta:
+
+        1. a frota pendurada no `<fleets>` do corpo de destino
+        2. a tag `<f>`, porque e assim que os irmaos dela se chamam ali
+        3. as coordenadas DO CORPO, nao as que a frota trazia
+        4. `starmap/@sys` e `@pa` apontando para o mesmo lugar
+
+    O `@pa` e o `@id` LOCAL do corpo, e nao o `celeid`: confundir os dois foi o
+    erro silencioso do item 1 do findings.
+
+    A terceira e a menos obvia. O `presence` le a posicao do CORPO quando a
+    frota esta pendurada num, porque a frota carrega coordenadas defasadas —
+    medido em E7c, uma frota num planeta de x=75924 anunciava x=75724, que era
+    o asteroide de onde ela tinha saido.
+
+    Devolve o relatorio do que fez. A frota entra como copia; quem chama
+    remove a original se ela ainda estiver em outro lugar.
+    """
+    relatorio: dict = {"warnings": []}
+    fleets = body.find("fleets")
+    if fleets is None:
+        # Secao 1.5: o corpo de destino em geral nao tem <fleets>; ele entra
+        # entre <stuff> e <info>.
+        fleets = ET.Element("fleets")
+        info = body.find("info")
+        index = list(body).index(info) if info is not None else len(list(body))
+        _insert_child(body, fleets, index)
+        relatorio["createdFleets"] = True
+
+    moved = copy.deepcopy(fleet)
+    moved.tail = None
+    moved.tag = "f"
+    if body.get("x") is None or body.get("y") is None:
+        relatorio["warnings"].append(
+            "the destination body has no x/y; the fleet kept the coordinates "
+            "it had before, which point nowhere here")
+    for attr in ("x", "y"):
+        if body.get(attr) is not None:
+            moved.set(attr, body.get(attr))
+    _insert_child(fleets, moved)
+
+    starmap.set("sys", system.get("systemId"))
+    if body.get("id") is not None:
+        starmap.set("pa", body.get("id"))
+    else:
+        relatorio["warnings"].append(
+            "the destination body has no @id; left starmap/@pa untouched")
+
+    relatorio.update({"toCeleid": body.get("celeid"),
+                      "toBodyId": body.get("id"),
+                      "system": system.get("systemId"),
+                      "x": moved.get("x"), "y": moved.get("y")})
+    return relatorio
+
+
 def graft(galaxy_sf: SaveFile, player_sf: SaveFile,
           start_celeid: str | None = None) -> dict:
     """Puts the room's galaxy into the player's save. Mutates `player_sf`."""
@@ -161,43 +221,9 @@ def graft(galaxy_sf: SaveFile, player_sf: SaveFile,
                 "no body marked isst=\"1\" in the galaxy, and no --start-celeid "
                 "given: I do not know where to put the player")
 
-    fleets = body.find("fleets")
-    if fleets is None:
-        # Section 1.5: the target body usually has no <fleets>; it goes between
-        # <stuff> and <info>.
-        fleets = ET.Element("fleets")
-        info = body.find("info")
-        index = list(body).index(info) if info is not None else len(list(body))
-        _insert_child(body, fleets, index)
-        report["createdFleets"] = True
-
-    moved = copy.deepcopy(fleet)
-    moved.tail = None
-    # A fleet taken from an empty sector arrives tagged <l>, because that is what
-    # its old container called its children. Under <fleets> the siblings are <f>,
-    # and the game reads the tag — so it is renamed on the way in.
-    moved.tag = "f"
-    # The fleet carries the coordinates it had in the old galaxy. They mean
-    # nothing here — the body moved — so they take the new body's. Measured in
-    # real saves: every body carries absolute `x`/`y`, the starting asteroid
-    # included, so this normally finds them.
-    if body.get("x") is None or body.get("y") is None:
-        report["warnings"].append(
-            "the destination body has no x/y; the fleet kept the coordinates "
-            "it had in the old galaxy, which point nowhere here")
-    for attr in ("x", "y"):
-        if body.get(attr) is not None:
-            moved.set(attr, body.get(attr))
-    _insert_child(fleets, moved)
-
-    # The three that have to agree (section 1.5). `@pa` is the body's LOCAL id,
-    # not its celeid: confusing them is the silent error of findings item 1.
-    new_map.set("sys", system.get("systemId"))
-    if body.get("id") is not None:
-        new_map.set("pa", body.get("id"))
-    else:
-        report["warnings"].append(
-            "the destination body has no @id; left starmap/@pa untouched")
+    posto = place_player_fleet(new_map, fleet, body, system)
+    report["warnings"] += posto.pop("warnings", [])
+    report.update(posto)
 
     index = list(target_root).index(current)
     _remove_child(target_root, current)

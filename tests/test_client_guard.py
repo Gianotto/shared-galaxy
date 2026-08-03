@@ -564,6 +564,10 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
         self.assertTrue(args.yes)
 
     def test_without_a_game_it_says_what_to_do(self):
+        """Sem save de partida na sala e sem o jogo, a mensagem tem que dizer
+        as duas saídas. O cliente tenta a sala primeiro, então isto também
+        prova que um 404 cai de volta no caminho pelo jogo em vez de estourar
+        (é o que acontece contra um servidor antigo, sem a rota)."""
         args = client.build_parser().parse_args(
             ["join", "6359GV", "--game", "/nao/existe"])
         with self.assertRaises(client.ClientError) as erro:
