@@ -891,10 +891,17 @@ def _adopt_starter(conn, room: dict) -> str | None:
     Menor idade porque um molde deve ser um comeco; passar na conferencia
     porque entregar uma partida que o jogo desenha errado ja custou uma sessao.
     """
+    # IDADE TEM TETO. "A de menor idade que passe" nao basta: quando a unica
+    # partida restante era uma colonia de dezessete dias, ela foi adotada, e
+    # quem entrou depois recebeu a nave madura de outra pessoa como ponto de
+    # partida. Um molde e um comeco, e o teto e o mesmo que decide se uma
+    # partida e madura demais para entrar na galaxia.
+    teto = float(room.get("max_join_age_days") or 5)
     candidatas = conn.execute(
         """SELECT id, sha256, age_days FROM save_version
-            WHERE room_id = %s AND kind = 'canonical'
-            ORDER BY age_days, id LIMIT 12""", (room["id"],)).fetchall()
+            WHERE room_id = %s AND kind = 'canonical' AND age_days <= %s
+            ORDER BY age_days, id LIMIT 12""",
+        (room["id"], teto)).fetchall()
     for linha in candidatas:
         try:
             with blobs.with_unpacked(store().get(linha["sha256"])) as folder:

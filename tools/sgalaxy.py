@@ -462,22 +462,51 @@ def cmd_rooms(args) -> int:
 
 
 def cmd_create_room(args) -> int:
+    """Cria a galaxia E a primeira partida dela. Um comando, nao dois.
+
+    Criar sem a partida deixava a galaxia existindo e vazia, e a pessoa
+    descobria sozinha que faltava um passo. Pior: o passo seguinte era criar um
+    jogo no Space Haven, e nada dizia que a seed tinha que ser esta. Com outra
+    seed o servidor registra um mundo diferente do anunciado, e o defeito so
+    aparece quando um segundo jogador tenta entrar.
+    """
     data = json_request("POST", "/api/v1/rooms", {
         "seed": args.seed, "name": args.name, "password": args.password,
         "leaseHours": args.lease_hours, "maxPlayers": args.max_players,
         "options": _recipe(args)})
     print(f"galaxy {data['id']} created")
-    print(f"  seed:  {data['seed']}")
+    print(f"  name:          {data.get('name') or args.name}")
+    print(f"  seed:          {data['seed']}")
     print(f"  sessions last: {data['leaseHours']}h")
-    print()
-    print("  Publish the recipe for whoever joins:")
-    print(f"    {prog()} how-to-join {data['id']}")
-    if not _recipe(args):
+
+    if getattr(args, "empty", False):
         print()
-        print("  The recipe is empty. Once you have created the game,")
-        print("  record the ship and the options you picked:")
-        print(f"    {prog()} configure-galaxy {data['id']} \\")
-        print('        --ship "Starting ship name" --difficulty Normal')
+        print("  Nobody is in it yet. The first game to arrive is the galaxy:")
+        print(f"    {prog()} join {data['id']}")
+        return 0
+
+    exe = args.game or find_game()
+    if not exe or not os.path.isfile(exe):
+        print()
+        print("  I could not find Space Haven, so the first game has to be")
+        print("  created by hand. Run this where the game is installed:")
+        print(f"    {prog()} join {data['id']}")
+        print(f"  and use the seed above, exactly: {data['seed']}")
+        return 0
+
+    print()
+    if not first_join(data["id"], None, args.yes, args.password or "",
+                      exe, seed=str(data["seed"])):
+        print()
+        print("  The galaxy exists and is empty. When you are ready:")
+        print(f"    {prog()} join {data['id']}")
+        return 1
+
+    print()
+    print(f"  Share this to invite people: {base_url()}/galaxy/{data['id']}")
+    if not _recipe(args):
+        print(f"  Record what you picked: {prog()} configure-galaxy "
+              f"{data['id']} --ship \"...\" --difficulty Normal")
     return 0
 
 
@@ -872,7 +901,8 @@ def launch_and_wait(exe: str, marcador: str) -> None:
         raise ClientError(f"could not launch the game: {exc}") from exc
 
 
-def create_ship(room: str, exe: str, sim: bool) -> str | None:
+def create_ship(room: str, exe: str, sim: bool,
+                seed: str | None = None) -> str | None:
     """Faz a pessoa criar a nave dela, no proprio jogo, e devolve a pasta.
 
     POR QUE NAO APROVEITAR UM SAVE QUE JA EXISTE
@@ -893,16 +923,30 @@ def create_ship(room: str, exe: str, sim: bool) -> str | None:
     if not raiz:
         raise ClientError("could not find the game's savegames folder")
 
-    print(f"you are not in room {room} yet — let's create your ship.")
+    print(f"you are not in {room} yet, so let's create your ship.")
     print()
     print("  The game will open on NEW GAME. Build your starting ship, save,")
     print("  and close the game. I take it from there.")
     print()
-    print("  Any seed and any scenario option will do: the server replaces the")
-    print("  galaxy with the room's. Your ship, crew and bank stay yours.")
+    if seed:
+        # QUEM FUNDA TEM QUE USAR ESTA SEED. A partida dela e que vira a
+        # galaxia, entao a seed que ela digitar e a galaxia de todo mundo. Com
+        # outra, o servidor registra um mundo diferente do que a pagina
+        # anuncia, e ninguem descobre ate um segundo jogador nao conseguir
+        # entrar. Para quem apenas ENTRA numa galaxia existente a seed nao
+        # importa, porque o servidor enxerta a galaxia certa por cima.
+        print(f"  USE THIS SEED, exactly: {seed}")
+        print()
+        print("  It is the galaxy everybody here will share. A different seed")
+        print("  makes a different universe, and this one would be wrong from")
+        print("  the first day.")
+    else:
+        print("  Any seed and any scenario option will do: the server replaces")
+        print("  the galaxy with this one's. Your ship, crew and bank stay")
+        print("  yours.")
     print()
-    print("  Everyone in this room starts on a new game, so an old colony is")
-    print("  not accepted here.")
+    print("  Everyone here starts on a new game, so an old colony is not")
+    print("  accepted.")
 
     if not sim:
         print()
@@ -946,7 +990,7 @@ def create_ship(room: str, exe: str, sim: bool) -> str | None:
 
 
 def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
-               exe: str) -> bool:
+               exe: str, seed: str | None = None) -> bool:
     """A primeira entrada de alguem numa sala, dentro do `play`.
 
     Sobe a partida recem-criada; o servidor enxerta a galaxia da sala nela e
@@ -958,7 +1002,7 @@ def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
         # A sala ainda tem a ultima palavra pela idade, no servidor.
         pasta = resolve_save(escolhido)
     else:
-        pasta = create_ship(room, exe, sim)
+        pasta = create_ship(room, exe, sim, seed)
         if pasta is None:
             return False
 
@@ -1550,6 +1594,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="how people will recognise it in the listing")
     p.add_argument("--max-players", type=int, required=True,
                    help="how many people it opens to")
+    p.add_argument("--game", help="path to the Space Haven executable")
+    p.add_argument("--empty", action="store_true",
+                   help="create it without making the first game yet")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="do not ask before opening the game")
     p.add_argument("--password")
     p.add_argument("--lease-hours", type=int, default=12,
                    help="how long a session may stay checked out")

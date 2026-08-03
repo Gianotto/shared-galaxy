@@ -649,3 +649,32 @@ class VersionTestCase(unittest.TestCase):
         precisar perguntar."""
         self.assertIn(client.VERSION, client.USER_AGENT)
         self.assertIn("sgalaxy/", client.USER_AGENT)
+
+
+class FoundingAGalaxyTestCase(unittest.TestCase):
+    """Criar a galáxia e criar a primeira partida eram dois passos, e nada
+    dizia que a seed do segundo tinha de ser a do primeiro. Com outra seed o
+    servidor registra um mundo diferente do anunciado, e o defeito só aparece
+    quando um segundo jogador tenta entrar."""
+
+    def test_create_galaxy_takes_what_founding_needs(self):
+        args = client.build_parser().parse_args(
+            ["create-galaxy", "--seed", "1", "--name", "X",
+             "--max-players", "8", "--game", "/tmp/x", "-y"])
+        self.assertEqual(args.game, "/tmp/x")
+        self.assertTrue(args.yes)
+        self.assertFalse(args.empty)
+
+    def test_it_can_be_told_to_stop_at_the_galaxy(self):
+        args = client.build_parser().parse_args(
+            ["create-galaxy", "--seed", "1", "--name", "X",
+             "--max-players", "8", "--empty"])
+        self.assertTrue(args.empty)
+
+    def test_the_founder_is_told_which_seed_to_use(self):
+        """Quem apenas entra numa galáxia existente não precisa da seed: o
+        servidor enxerta a certa por cima. Quem funda, precisa."""
+        import inspect
+        fonte = inspect.getsource(client.create_ship)
+        self.assertIn("USE THIS SEED", fonte)
+        self.assertIn("seed", inspect.signature(client.create_ship).parameters)
