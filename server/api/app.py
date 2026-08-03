@@ -493,9 +493,23 @@ def room_state(room_id: str, player: dict = Depends(current_player)):
     with db.pool().connection() as conn:
         _require_room(conn, room_id)
         roster = db.room_roster(conn, room_id)
+        galaxia = db.galaxy_map(conn, room_id)
+    # O NOME DO SISTEMA, que e o que a pessoa ve no mapa estelar do jogo. O
+    # `at_system` e um id interno e o `at_body` e um nome de tipo: nenhum dos
+    # dois aparece na tela dela, e foi por isso que sairam do site.
+    nomes = {str(sistema["systemId"]): (sistema.get("name") or "")
+             for sistema in (galaxia.get("systems") or [])}
+
+    def onde(quem):
+        if not quem["at_system"]:
+            return None
+        return (nomes.get(str(quem["at_system"]))
+                or f'system {quem["at_system"]}')
+
     return {"roomId": room_id, "players": [
         {"playerId": r["player_id"], "name": r["display_name"],
          "shipName": r["ship_name"], "system": r["at_system"],
+         "systemName": onde(r),
          "x": r["at_x"], "y": r["at_y"], "body": r["at_body"], "ageDays": float(r["age_days"]) if r["age_days"] else None,
          "playing": r["playing"],
          "lastSeen": r["last_seen_at"].isoformat() if r["last_seen_at"] else None}

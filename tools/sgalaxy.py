@@ -1468,14 +1468,28 @@ def cmd_status(args) -> int:
 def cmd_state(args) -> int:
     data = json_request("GET", f"/api/v1/rooms/{args.galaxy}/state")
     if not data["players"]:
-        print("empty room")
+        print("nobody has joined yet")
         return 0
-    print(f"{'player':<18}{'ship':<24}{'system':<10}{'body':<18}{'age':<8}where")
-    for p in data["players"]:
-        print(f"{(p['name'] or '?'):<18}{(p['shipName'] or '—'):<24}"
-              f"{(p['system'] or '—'):<10}{(p['body'] or '—'):<18}"
-              f"{str(p['ageDays'] or '—'):<8}"
-              f"{'playing' if p['playing'] else 'away'}")
+    # As mesmas colunas do site, e pelo mesmo motivo: o id do sistema e o tipo
+    # do corpo nao aparecem na tela de quem joga, entao nao ajudam ninguem a
+    # achar um vizinho.
+    # A largura sai do conteudo. Fixa, um nome de sistema como "Boalos
+    # Kalevala Proximity" invade a coluna seguinte e a tabela deixa de ser
+    # tabela.
+    linhas = [(p["name"] or "?", p["shipName"] or "—",
+               p.get("systemName") or "—",
+               f"{float(p['ageDays']):.1f} days" if p.get("ageDays") else "—",
+               "playing" if p["playing"] else "")
+              for p in data["players"]]
+    cabecalho = ("player", "ship", "system", "age", "")
+    larguras = [max(len(str(linha[i])) for linha in (cabecalho, *linhas)) + 2
+                for i in range(4)]
+    def _linha(campos):
+        return "".join(f"{campo:<{larguras[i]}}" for i, campo in
+                       enumerate(campos[:4])) + campos[4]
+    print(_linha(cabecalho))
+    for linha in linhas:
+        print(_linha(linha))
     return 0
 
 
