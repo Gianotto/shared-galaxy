@@ -427,7 +427,7 @@ class SiteNavigationTestCase(unittest.TestCase):
         nome porque é a única coisa que uma pessoa de fora pode FAZER ali —
         e uma vez só: dois iguais na mesma página é ruído."""
         html = pages.room_page(self.SALA, [], {}, "en")
-        self.assertIn("/room/6359GV/join", html)
+        self.assertIn("/galaxy/6359GV/join", html)
         self.assertEqual(html.count('class="cta"'), 1)
         barra = html.split('<div class="titlebar">')[1].split("</div>")[0]
         self.assertIn("<h1>", barra)

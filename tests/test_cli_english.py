@@ -80,12 +80,16 @@ class CommandLineIsEnglishTestCase(unittest.TestCase):
         parser = cliente.build_parser()
         sub = next(a for a in parser._actions
                    if isinstance(a, argparse_subparsers()))
-        for nome, sp in sub.choices.items():
+        # Um apelido não tem entrada própria: o argparse lista os dois sob o
+        # nome principal, e a ajuda é a mesma. Conferir os apelidos aqui
+        # reprovaria um comando que está descrito.
+        principais = {c.dest for c in sub._choices_actions}
+        for nome in principais:
             with self.subTest(cmd=nome):
-                self.assertTrue(sub._choices_actions, "sem ajuda nenhuma")
                 ajuda = next((c.help for c in sub._choices_actions
                               if c.dest == nome), None)
                 self.assertTrue(ajuda, f"{nome} has no help text")
+        self.assertTrue(principais <= set(sub.choices))
 
 
 def argparse_subparsers():

@@ -27,9 +27,9 @@ STRINGS: dict = {
         "en": "Several people playing Space Haven in one galaxy, each running "
               "their own game.",
     },
-    "rooms": {"pt": "salas", "en": "rooms"},
+    "rooms": {"pt": "galáxias", "en": "galaxies"},
     "home": {"pt": "Início", "en": "Home"},
-    "nav_rooms": {"pt": "Salas", "en": "Rooms"},
+    "nav_rooms": {"pt": "Galáxias", "en": "Galaxies"},
     "nav_client": {"pt": "Cliente", "en": "Client"},
     "nav_recovery": {"pt": "Código de acesso", "en": "Recovery code"},
     "nav_privacy": {"pt": "Privacidade", "en": "Privacy"},
@@ -67,11 +67,11 @@ STRINGS: dict = {
               "en": "The mod, which is optional"},
     "mod_why": {
         "pt": "Tudo funciona sem ele. O que ele tira são as partes chatas: "
-              "abre o save da sala direto, escreve a sala e as suas vendas no "
+              "abre o save da galáxia direto, escreve a galáxia e as suas vendas no "
               "log do jogo, põe um botão SHOP no painel do depósito, e cala os "
               "chamados automáticos das vitrines dos vizinhos.",
         "en": "Everything works without it. What it removes are the fiddly "
-              "parts: it opens the room's save straight away, writes the room "
+              "parts: it opens the galaxy's save straight away, writes the galaxy "
               "and your sales into the game log, puts a SHOP toggle on a "
               "storage panel, and silences the automatic hails from your "
               "neighbours' storefronts.",
@@ -214,17 +214,17 @@ STRINGS: dict = {
         "pt": "Já existe uma conta criada desta conexão. Se a conta é sua, "
               "use o seu código de acesso em vez de criar outra. Se você "
               "divide a internet com quem já "
-              "entrou, fale com quem administra a sala.",
+              "entrou, fale com quem administra a galáxia.",
         "en": "An account has already been created from this connection. If it "
               "is yours, use your recovery code instead of making another. If "
               "you share the connection with somebody who already joined, ask "
-              "whoever runs the room.",
+              "whoever runs the galaxy.",
     },
     "nav_how": {"pt": "Como funciona", "en": "How it works"},
     "how_title": {"pt": "Como funciona", "en": "How it works"},
 
     # -- entrar numa sala
-    "join_this": {"pt": "Entrar nesta sala", "en": "Join this room"},
+    "join_this": {"pt": "Entrar nesta galáxia", "en": "Join this galaxy"},
     "join_title": {"pt": "Entrar em %s", "en": "Join %s"},
     "join_intro": {
         "pt": "O jogo continua sendo o seu, no seu computador. O que este "
@@ -251,9 +251,9 @@ STRINGS: dict = {
               "system stamped on the end.",
     },
     "mod_optional_here": {
-        "pt": "O mod é opcional e melhora a vida: ele abre o save da sala "
+        "pt": "O mod é opcional e melhora a vida: ele abre o save da galáxia "
               "direto e põe o botão da loja dentro do jogo.",
-        "en": "The mod is optional and makes life easier: it opens the room's "
+        "en": "The mod is optional and makes life easier: it opens the galaxy's "
               "save for you and puts the shop toggle inside the game.",
     },
     "step_account": {"pt": "2. Entre na sua conta",
@@ -266,23 +266,23 @@ STRINGS: dict = {
     },
     "step_mod": {"pt": "3. Instale o mod (opcional)",
                  "en": "3. Install the mod (optional)"},
-    "step_join": {"pt": "4. Entre na sala e jogue",
-                  "en": "4. Join the room and play"},
+    "step_join": {"pt": "4. Entre na galáxia e jogue",
+                  "en": "4. Join the galaxy and play"},
     "step_join_help": {
-        "pt": "Um comando faz tudo: a sala te entrega uma cópia da partida de "
+        "pt": "Um comando faz tudo: a galáxia te entrega uma cópia da partida de "
               "quem a fundou, com a sua nave batizada com o seu nome e "
               "estacionada num campo de asteroides livre, e o jogo abre nela. "
-              "Ao fechar o jogo, o save volta para a sala sozinho.",
-        "en": "One command does all of it: the room hands you a copy of the "
+              "Ao fechar o jogo, o save volta para a galáxia sozinho.",
+        "en": "One command does all of it: the galaxy hands you a copy of the "
               "game its founder started, with your ship named after you and "
               "parked on a free asteroid field, and the game opens on it. When "
               "you close the game the save goes back on its own.",
     },
     "step_join_empty": {
-        "pt": "Se você for a primeira pessoa da sala, não há partida para "
+        "pt": "Se você for a primeira pessoa da galáxia, não há partida para "
               "copiar: o jogo abre para você criar a sua em NEW GAME, e é ela "
               "que vira o ponto de partida de quem chegar depois.",
-        "en": "If you are the first person in the room there is nothing to "
+        "en": "If you are the first person in the galaxy there is nothing to "
               "copy: the game opens for you to create yours in NEW GAME, and "
               "that one becomes the starting point for everybody after you.",
     },
@@ -301,18 +301,18 @@ STRINGS: dict = {
               "save out, opens the game, and gives it back when you close it. "
               "<code>play</code> is the same command under another name.",
     },
-    "room_full": {"pt": "Esta sala está cheia.", "en": "This room is full."},
+    "room_full": {"pt": "Esta galáxia está cheia.", "en": "This galaxy is full."},
     "room_locked": {
-        "pt": "Esta sala pede senha. Peça a quem te convidou e informe com "
+        "pt": "Esta galáxia pede senha. Peça a quem te convidou e informe com "
               "<code>--password</code>.",
-        "en": "This room asks for a password. Ask whoever invited you and pass "
+        "en": "This galaxy asks for a password. Ask whoever invited you and pass "
               "it with <code>--password</code>.",
     },
     "join_age_rule": {
-        "pt": "Partidas com mais de %s dias de jogo não entram: a sala começa "
+        "pt": "Partidas com mais de %s dias de jogo não entram: a galáxia começa "
               "junta, e uma colônia madura chegaria pronta numa galáxia que "
               "ninguém desbravou ainda.",
-        "en": "Games older than %s in-game days cannot join: the room starts "
+        "en": "Games older than %s in-game days cannot join: the galaxy starts "
               "together, and a mature colony would arrive finished in a galaxy "
               "nobody has opened yet.",
     },
@@ -337,29 +337,29 @@ STRINGS: dict = {
 
     # -- room list
     "no_rooms": {
-        "pt": "Nenhuma sala aberta ainda. Quem criar a primeira define a "
+        "pt": "Nenhuma galáxia aberta ainda. Quem criar a primeira define a "
               "galáxia que todos vão dividir.",
-        "en": "No open rooms yet. Whoever creates the first one defines the "
+        "en": "No open galaxies yet. Whoever creates the first one defines the "
               "galaxy everyone will share.",
     },
     "players": {"pt": "jogadores", "en": "players"},
     "has_password": {"pt": "com senha", "en": "password"},
 
     # -- room
-    "room": {"pt": "sala", "en": "room"},
+    "room": {"pt": "galáxia", "en": "galaxy"},
     "lease_of": {"pt": "empréstimo de", "en": "lease of"},
     "who_is_where": {"pt": "Quem está onde", "en": "Who is where"},
     "nobody_yet": {
-        "pt": "Ninguém entrou ainda. O primeiro save a subir define a galáxia "
-              "desta sala.",
-        "en": "Nobody has joined yet. The first save uploaded defines this "
-              "room's galaxy.",
+        "pt": "Ninguém entrou ainda. O primeiro save a subir é o que esta "
+              "galáxia vai ser.",
+        "en": "Nobody has joined yet. The first save uploaded is what this "
+              "galaxy will be.",
     },
     "map_later": {
         "pt": "O mapa aparece quando o primeiro jogador entrar: é o save dele "
-              "que define a galáxia da sala.",
+              "que define a galáxia da galáxia.",
         "en": "The map appears once the first player joins, because their save is "
-              "what defines the room's galaxy.",
+              "what defines the galaxy's galaxy.",
     },
     "th_player": {"pt": "jogador", "en": "player"},
     "th_ship": {"pt": "nave", "en": "ship"},
@@ -374,10 +374,10 @@ STRINGS: dict = {
                       "en": "nobody has reached this yet"},
     "map_legend": {
         "pt": "Cada ponto é um sistema, na posição da estrela dele. Os claros "
-              "são por onde a sala já passou. Passe o mouse para ver o nome e "
+              "são por onde a galáxia já passou. Passe o mouse para ver o nome e "
               "quem está lá.",
         "en": "Each dot is a system, at its star's position. Bright ones are "
-              "where the room has been. Hover for the name and who is there.",
+              "where the galaxy has been. Hover for the name and who is there.",
     },
 
     # -- how to join
@@ -392,8 +392,8 @@ STRINGS: dict = {
     },
     "seed": {"pt": "seed", "en": "seed"},
     "no_options_yet": {
-        "pt": "o dono da sala ainda não publicou as opções",
-        "en": "the room owner hasn't published the options yet",
+        "pt": "o dono da galáxia ainda não publicou as opções",
+        "en": "the galaxy owner hasn't published the options yet",
     },
     "then_upload": {"pt": "Depois, suba o save:",
                     "en": "Then upload your save:"},
@@ -404,9 +404,8 @@ STRINGS: dict = {
               "server refuses the save and tells you why.",
     },
     "locked_room": {
-        "pt": "Esta sala tem senha. Peça ao dono a seed e as opções de criação.",
-        "en": "This room is password-protected. Ask the owner for the seed and "
-              "creation options.",
+        "pt": "Esta galáxia tem senha. Peça o código a quem administra.",
+        "en": "This galaxy is password-protected. Ask whoever runs it for the code.",
     },
 
     # -- onboarding pela web
@@ -435,8 +434,8 @@ STRINGS: dict = {
         "pt": "Para usar no cliente:",
         "en": "To use it in the client:",
     },
-    "new_room": {"pt": "Criar uma sala", "en": "Create a room"},
-    "room_name": {"pt": "Nome da sala", "en": "Room name"},
+    "new_room": {"pt": "Criar uma galáxia", "en": "Create a galaxy"},
+    "room_name": {"pt": "Nome da galáxia", "en": "Galaxy name"},
     "room_seed_help": {
         "pt": "A seed que você usou ao criar a sua partida. O servidor não "
               "consegue gerar uma galáxia. Quem cria é o jogo, na sua "
@@ -449,14 +448,14 @@ STRINGS: dict = {
     },
     "create": {"pt": "Criar", "en": "Create"},
     "owner_next": {
-        "pt": "Sala criada. Agora suba o save da sua partida: é ele que "
-              "define a galáxia que todos vão dividir.",
-        "en": "Room created. Now upload your game's save: it is what defines "
-              "the galaxy everyone will share.",
+        "pt": "Galáxia criada. Agora suba o save da sua partida: é ele que "
+              "todo mundo aqui vai dividir, e o começo de quem chegar depois.",
+        "en": "Galaxy created. Now upload your game's save: it is what "
+              "everybody here will share, and where newcomers will begin.",
     },
     "need_account": {
-        "pt": "Você precisa de uma conta para criar uma sala.",
-        "en": "You need an account to create a room.",
+        "pt": "Você precisa de uma conta para criar uma galáxia.",
+        "en": "You need an account to create a galaxy.",
     },
     "signed_as": {"pt": "conectado como", "en": "signed in as"},
 

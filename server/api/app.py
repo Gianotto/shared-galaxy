@@ -598,6 +598,23 @@ async def join_room(room_id: str, request: Request,
                 db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
         db.adopt_galaxy(conn, room_id, described["digest"],
                         described["saveVersion"], meta["sha256"])
+
+        # O MOLDE NASCE COM A GALAXIA. A primeira partida que chega e o unico
+        # momento em que existe um comeco de verdade: dali em diante todo save
+        # e uma colonia em andamento, e copiar uma dessas daria a quem chega
+        # depois uma partida que ja foi jogada.
+        #
+        # So entra se servir. Uma galaxia entregou um molde cuja nave o jogo
+        # desenhava de casco fechado, e quem recebia nao tinha como saber que
+        # o defeito estava no molde.
+        if not room.get("starter_sha256"):
+            with blobs.with_unpacked(data) as folder:
+                ruins = starter.problems(SaveFile(folder))
+            if ruins:
+                log.warning("not adopting %s as the starting save: %s",
+                            meta["sha256"][:12], "; ".join(ruins))
+            else:
+                db.set_starter(conn, room_id, meta["sha256"])
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
@@ -1389,7 +1406,7 @@ def index(request: Request, lang: str = ""):
     return pages.room_list([dict(r) for r in rooms], idioma)
 
 
-@app.get("/room/{room_id}", response_class=HTMLResponse)
+@app.get("/galaxy/{room_id}", response_class=HTMLResponse)
 def room_web(room_id: str, request: Request, lang: str = "",
              new: str = ""):
     """A sala como página. Sem conta, sem instalar nada — é o degrau 2 da 2.11."""
@@ -1405,7 +1422,7 @@ def room_web(room_id: str, request: Request, lang: str = "",
                            idioma, visits, just_made=bool(new))
 
 
-@app.get("/room/{room_id}/join", response_class=HTMLResponse)
+@app.get("/galaxy/{room_id}/join", response_class=HTMLResponse)
 def join_web(room_id: str, request: Request, lang: str = ""):
     """Como entrar nesta sala, para quem chegou por um convite.
 
@@ -1423,11 +1440,32 @@ def join_web(room_id: str, request: Request, lang: str = ""):
                            quantos >= room["max_players"])
 
 
-# O caminho antigo, para links já compartilhados não morrerem.
+# Os caminhos antigos. Uma galaxia se chamava sala, e antes disso o endereco
+# era em portugues. Links ja compartilhados num Discord nao morrem por causa de
+# uma troca de vocabulario nossa.
 @app.get("/sala/{room_id}", response_class=HTMLResponse)
-def room_web_pt(room_id: str, request: Request):
+def room_web_pt(room_id: str):
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(f"/room/{room_id}?lang=pt", status_code=308)
+    return RedirectResponse(f"/galaxy/{room_id}?lang=pt", status_code=308)
+
+
+@app.get("/room/{room_id}", response_class=HTMLResponse)
+def room_web_old(room_id: str, lang: str = ""):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(f"/galaxy/{room_id}?lang={lang}", status_code=308)
+
+
+@app.get("/room/{room_id}/join", response_class=HTMLResponse)
+def join_web_old(room_id: str, lang: str = ""):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(f"/galaxy/{room_id}/join?lang={lang}",
+                            status_code=308)
+
+
+@app.get("/new-room", response_class=HTMLResponse)
+def new_room_old(lang: str = ""):
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(f"/new-galaxy?lang={lang}", status_code=308)
 
 
 # ---------------------------------------------------------------------------
@@ -1498,14 +1536,14 @@ def register_submit(request: Request, name: str = Form(""),
     return resposta
 
 
-@app.get("/new-room", response_class=HTMLResponse)
+@app.get("/new-galaxy", response_class=HTMLResponse)
 def new_room_page(request: Request, lang: str = ""):
     idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
     player = _web_player(request)
     return pages.new_room_form(idioma, player["display_name"] if player else None)
 
 
-@app.post("/new-room")
+@app.post("/new-galaxy")
 def new_room_submit(request: Request, name: str = Form(""),
                     seed: str = Form(""), lang: str = ""):
     idioma = i18n.pick(request.headers.get("accept-language", ""), lang)
@@ -1541,7 +1579,7 @@ def new_room_submit(request: Request, name: str = Form(""),
     }
     with db.pool().connection() as conn:
         created = db.create_room(conn, room)
-    return RedirectResponse(f"/room/{created['id']}?lang={idioma}&new=1",
+    return RedirectResponse(f"/galaxy/{created['id']}?lang={idioma}&new=1",
                             status_code=303)
 
 

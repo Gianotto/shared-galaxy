@@ -448,7 +448,7 @@ def cmd_configure_room(args) -> int:
             # Mesclar e o padrao porque quase sempre se quer acrescentar uma
             # opcao, nao reescrever a receita. `--replace` existe para o outro
             # caso — inclusive apagar uma chave que nao deveria estar la.
-            current = json_request("GET", f"/api/v1/rooms/{args.room}")
+            current = json_request("GET", f"/api/v1/rooms/{args.galaxy}")
             payload["options"] = {**(current.get("options") or {}), **recipe}
     if args.name:
         payload["name"] = args.name
@@ -457,15 +457,15 @@ def cmd_configure_room(args) -> int:
     if not payload:
         raise ClientError("nothing to change. Use --ship, --difficulty, "
                           "--option KEY=VALUE, --name or --lease-hours")
-    json_request("PATCH", f"/api/v1/rooms/{args.room}", payload)
-    print(f"room {args.room} updated")
+    json_request("PATCH", f"/api/v1/rooms/{args.galaxy}", payload)
+    print(f"room {args.galaxy} updated")
     return cmd_how_to_join(args)
 
 
 def cmd_how_to_join(args) -> int:
     """The recipe, laid out the way the creation screen asks for it."""
     head = {"X-Room-Password": getattr(args, "senha", None) or ""}
-    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.room}", None, head)
+    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.galaxy}", None, head)
     room = json.loads(raw)
     if "seed" not in room:
         raise ClientError("this room has a password; pass --password to see the recipe")
@@ -523,7 +523,7 @@ def _cmd_join_only(args) -> int:
         # A SALA PRIMEIRO. Se ela tem um save de partida, entrar e um download:
         # a galaxia ja e a dela, a idade e do primeiro dia, e ninguem precisa
         # abrir o jogo para criar nave nenhuma.
-        pronto = _start_in_room(args.room, args.password or "")
+        pronto = _start_in_room(args.galaxy, args.password or "")
         if pronto is not None:
             return pronto
 
@@ -533,22 +533,22 @@ def _cmd_join_only(args) -> int:
                 "this room has no starting save, so your game has to be "
                 "created in Space Haven, and I could not find it. Pass "
                 "--game PATH, or point --save at a game you already have")
-        if not first_join(args.room, None, args.yes, args.password or "", exe):
+        if not first_join(args.galaxy, None, args.yes, args.password or "", exe):
             return 1
         print()
         print(f"  The server owns this save now. Play with: "
-              f"{prog()} play {args.room}")
+              f"{prog()} play {args.galaxy}")
         return 0
 
     folder = resolve_save(args.save)
     print(f"uploading {folder} …")
-    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/join",
+    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.galaxy}/join",
                           pack(folder),
                           {"Content-Type": "application/zip",
                            "X-Room-Password": args.password or ""})
     data = json.loads(raw)
     galaxia = data["galaxy"]
-    print(f"joined room {args.room}")
+    print(f"joined room {args.galaxy}")
     print(f"  galaxy:     {galaxia['digest']} "
           f"({galaxia['systems']} systems, {galaxia['bodies']} bodies)")
     print(f"  age:        {data['ageDays']} days")
@@ -600,15 +600,15 @@ def cmd_checkout(args) -> int:
         print("warning: could not check whether the game is open (no `pgrep`).")
         print("         Make sure Space Haven is closed.")
 
-    _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
-    target = args.into or os.path.join(os.getcwd(), f"Sala-{args.room}")
+    _s, data, headers = request("POST", f"/api/v1/rooms/{args.galaxy}/checkout")
+    target = args.into or os.path.join(os.getcwd(), f"Sala-{args.galaxy}")
     final_dir = unpack(data, target)
     print(f"save checked out to {final_dir}")
     print(f"  due:  {_deadline(headers.get('x-lease-expires'))}")
     print(f"  {_size(len(data))}")
     print()
     print("  Play, then return it with:")
-    print(f"    {prog()} return {args.room} --save {target}")
+    print(f"    {prog()} return {args.galaxy} --save {target}")
     print("  Past the deadline, the session reverts to the state it was checked out in.")
     return 0
 
@@ -667,7 +667,7 @@ def cmd_return_save(args) -> int:
         print(f"returning {which} (age {age:.2f}) from {args.save} …")
     else:
         print(f"returning {folder} …")
-    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
+    _s, raw, _h = request("POST", f"/api/v1/rooms/{args.galaxy}/checkin",
                           pack(folder), {"Content-Type": "application/zip"})
     data = json.loads(raw)
     print("returned")
@@ -1054,25 +1054,25 @@ def cmd_play(args) -> int:
             "could not find the Space Haven executable. Pass --game PATH or "
             "set SPACEHAVEN_BIN")
 
-    target = args.into or _room_folder(args.room)
+    target = args.into or _room_folder(args.galaxy)
 
     # -- 0. entrar, se ainda nao entrou
     #
     # Antes do enxerto isto nao daria: a galaxia tinha que bater, e um save
     # qualquer nao batia. Agora o servidor conserta, entao a primeira sessao de
     # alguem cabe no mesmo comando que todas as outras.
-    if not is_member(args.room):
+    if not is_member(args.galaxy):
         # A SALA PRIMEIRO. Se ela tem um save de partida, entrar e um download,
         # e ninguem abre o jogo para criar nave nenhuma. So a primeira pessoa
         # de uma sala precisa do caminho longo, porque nao ha o que copiar.
-        if _start_in_room(args.room, args.password or "") is None:
-            if not first_join(args.room, args.join_with, args.yes,
+        if _start_in_room(args.galaxy, args.password or "") is None:
+            if not first_join(args.galaxy, args.join_with, args.yes,
                               args.password or "", exe):
                 return 1
 
     # -- 1. retirar
-    print(f"[1/4] checking out the save from room {args.room} …")
-    _s, data, headers = request("POST", f"/api/v1/rooms/{args.room}/checkout")
+    print(f"[1/4] checking out the save from room {args.galaxy} …")
+    _s, data, headers = request("POST", f"/api/v1/rooms/{args.galaxy}/checkout")
     final_dir = unpack(data, target)
     deadline = headers.get("x-lease-expires")
     print(f"      {final_dir}  ({_size(len(data))})")
@@ -1096,7 +1096,7 @@ def cmd_play(args) -> int:
     # chegou a consumir apareceria no log da sessão nova, dizendo que um
     # autosave de ontem acabou de subir.
     note_in_game(game_dir, [
-        f"Shared Galaxy — room {args.room}, save v{versao or '?'}",
+        f"Shared Galaxy — room {args.galaxy}, save v{versao or '?'}",
         f"{servidor} — due {_deadline(deadline)}",
     ] + ([vendas] if vendas else []) + [
         "Close the game when you are done and it goes back to the room.",
@@ -1113,7 +1113,7 @@ def cmd_play(args) -> int:
 
     parar = threading.Event()
     vigia = threading.Thread(target=watch_autosaves,
-                             args=(target, args.room, game_dir, parar),
+                             args=(target, args.galaxy, game_dir, parar),
                              daemon=True)
     vigia.start()
     try:
@@ -1128,7 +1128,7 @@ def cmd_play(args) -> int:
         vigia.join(timeout=5)
 
     # -- 2b. a loja escolhida dentro do jogo
-    _apply_shop_choice(args.room, game_dir)
+    _apply_shop_choice(args.galaxy, game_dir)
 
     # -- 3. escolher o estado mais avancado
     print("[3/4] finding the most advanced state …")
@@ -1138,13 +1138,13 @@ def cmd_play(args) -> int:
     # -- 4. devolver
     print("[4/4] returning …")
     try:
-        _s, raw, _h = request("POST", f"/api/v1/rooms/{args.room}/checkin",
+        _s, raw, _h = request("POST", f"/api/v1/rooms/{args.galaxy}/checkin",
                               pack(folder), {"Content-Type": "application/zip"})
     except ClientError as exc:
         print(f"\nfailed to return: {exc}", file=sys.stderr)
         print(f"\nYour progress is NOT lost: it is in {folder}.")
         print("Once fixed, return it with:")
-        print(f"  {prog()} return {args.room} --save {folder}")
+        print(f"  {prog()} return {args.galaxy} --save {folder}")
         return 1
     data = json.loads(raw)
     print(f"      age {data['ageDays']} days, version {data['versionId']}")
@@ -1296,17 +1296,17 @@ def cmd_shop(args) -> int:
     fisicamente lá é a única promessa que dá para cumprir.
     """
     if args.close:
-        data = json_request("PUT", f"/api/v1/rooms/{args.room}/shop",
+        data = json_request("PUT", f"/api/v1/rooms/{args.galaxy}/shop",
                             {"storageId": None})
         print(data["message"])
         return 0
     if args.set:
-        data = json_request("PUT", f"/api/v1/rooms/{args.room}/shop",
+        data = json_request("PUT", f"/api/v1/rooms/{args.galaxy}/shop",
                             {"storageId": args.set})
         print(data["message"])
         return 0
 
-    data = json_request("GET", f"/api/v1/rooms/{args.room}/shop")
+    data = json_request("GET", f"/api/v1/rooms/{args.galaxy}/shop")
     if not data["storages"]:
         print("no storage found on your ship in the save the server has.")
         return 1
@@ -1326,24 +1326,24 @@ def cmd_shop(args) -> int:
     print()
     print(f"  {data['message']}")
     if not data["shopStorageId"]:
-        print(f"  {prog()} shop {args.room} --set STORAGE")
+        print(f"  {prog()} shop {args.galaxy} --set STORAGE")
     return 0
 
 
 def cmd_status(args) -> int:
     """What is open, before you launch the wrong save by accident."""
-    data = json_request("GET", f"/api/v1/rooms/{args.room}/state")
+    data = json_request("GET", f"/api/v1/rooms/{args.galaxy}/state")
     eu = load_credentials().get("playerId")
     mine = next((p for p in data["players"] if p["playerId"] == eu), None)
     if mine is None:
-        print(f"you are not in room {args.room}")
+        print(f"you are not in room {args.galaxy}")
         return 1
-    print(f"room {args.room}")
+    print(f"room {args.galaxy}")
     print(f"  your ship:   {mine['shipName'] or '—'}")
     print(f"  age on server: {mine['ageDays'] or '—'} days")
     print(f"  lease:       {'OPEN' if mine['playing'] else 'closed'}")
 
-    folder = _room_folder(args.room)
+    folder = _room_folder(args.galaxy)
     if not os.path.isdir(folder):
         print(f"  local folder: none ({folder})")
         return 0
@@ -1368,7 +1368,7 @@ def cmd_status(args) -> int:
 
 
 def cmd_state(args) -> int:
-    data = json_request("GET", f"/api/v1/rooms/{args.room}/state")
+    data = json_request("GET", f"/api/v1/rooms/{args.galaxy}/state")
     if not data["players"]:
         print("empty room")
         return 0
@@ -1422,10 +1422,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--invite", help="if the server requires one")
     p.set_defaults(func=cmd_register)
 
-    p = sub.add_parser("rooms", help="list open rooms")
+    p = sub.add_parser("galaxies", aliases=["rooms"],
+                       help="list open galaxies")
     p.set_defaults(func=cmd_rooms)
 
-    p = sub.add_parser("create-room", help="create a room")
+    p = sub.add_parser("create-galaxy", aliases=["create-room"],
+                       help="create a galaxy")
     p.add_argument("--seed", required=True, help="the galaxy seed")
     p.add_argument("--name", default="")
     p.add_argument("--password")
@@ -1437,9 +1439,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="scenario option; repeatable")
     p.set_defaults(func=cmd_create_room)
 
-    p = sub.add_parser("configure-room",
-                       help="publish or fix the room recipe")
-    p.add_argument("room")
+    p = sub.add_parser("configure-galaxy", aliases=["configure-room"],
+                       help="publish or fix the galaxy recipe")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--ship", help="starting ship everyone must pick")
     p.add_argument("--difficulty")
     p.add_argument("--option", action="append", metavar="KEY=VALUE",
@@ -1452,35 +1454,35 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_configure_room)
 
     p = sub.add_parser("how-to-join",
-                       help="the recipe for reproducing the room's galaxy")
-    p.add_argument("room")
+                       help="the recipe for reproducing this galaxy")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--password")
     p.set_defaults(func=cmd_how_to_join)
 
     # `join` e `play` sao o mesmo comando. Entrar sem jogar nao serve para
     # nada, e jogar exige ter entrado: eram duas metades de uma acao so, e a
     # ordem entre elas era uma coisa a mais para alguem descobrir sozinho.
-    for nome, ajuda in (("join", "join the room and play"),
+    for nome, ajuda in (("join", "join the galaxy and play"),
                         ("play", "same as join: check out, play, return")):
         p = sub.add_parser(nome, help=ajuda)
-        p.add_argument("room")
-        p.add_argument("--into", help="room folder (default: next to the game)")
+        p.add_argument("galaxy", metavar="GALAXY")
+        p.add_argument("--into", help="folder for the galaxy (default: next to the game)")
         p.add_argument("--game", help="path to the Space Haven executable")
         p.add_argument("--join-with", "--save", dest="join_with",
                        help="a game you already have to join with, the first "
                             "time (default: the room's starting save)")
-        p.add_argument("--password", help="room password, if it has one")
+        p.add_argument("--password", help="galaxy password, if it has one")
         p.add_argument("-y", "--yes", action="store_true",
                        help="do not ask before uploading the save to join")
         p.set_defaults(func=cmd_join)
 
     p = sub.add_parser("checkout", help="check the save out to play")
-    p.add_argument("room")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--into", help="destination folder")
     p.set_defaults(func=cmd_checkout)
 
     p = sub.add_parser("return", help="return the save after playing")
-    p.add_argument("room")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--save", required=True)
     p.set_defaults(func=cmd_return_save)
 
@@ -1496,18 +1498,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("shop",
                        help="pick which storage your neighbours can buy from")
-    p.add_argument("room")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--set", metavar="STORAGE", help="make this storage the shop")
     p.add_argument("--close", action="store_true", help="stop selling")
     p.set_defaults(func=cmd_shop)
 
     p = sub.add_parser("status",
                        help="what is open, before you launch the game")
-    p.add_argument("room")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.set_defaults(func=cmd_status)
 
-    p = sub.add_parser("state", help="who is where in the room")
-    p.add_argument("room")
+    p = sub.add_parser("state", help="who is where in the galaxy")
+    p.add_argument("galaxy", metavar="GALAXY")
     p.set_defaults(func=cmd_state)
 
     p = sub.add_parser("delete-account", help="delete account and saves, no undo")

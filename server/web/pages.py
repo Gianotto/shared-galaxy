@@ -11,7 +11,7 @@ whoever opens the page source understands what it does. In a community that —
 rightly — distrusts unknown applications, that is an argument, not a taste.
 
 The map places each system at its star's position and marks where each player
-is. Coordinates come from the room's galaxy, stored once when the first save
+is. Coordinates come from the galaxy's galaxy, stored once when the first save
 arrived.
 """
 
@@ -170,18 +170,18 @@ def room_list(rooms: list, lang: str) -> str:
     else:
         cards = "".join(f"""
   <div class="card">
-    <h3><a href="/room/{_esc(r['id'])}?lang={lang}">{_esc(r['name'])}</a></h3>
+    <h3><a href="/galaxy/{_esc(r['id'])}?lang={lang}">{_esc(r['name'])}</a></h3>
     <p class="sub" style="margin:0">
       {r['players']}/{r['max_players']} {t("players", lang)}
       {f'· <span class="tag">{t("has_password", lang)}</span>' if r['has_password'] else ''}
     </p>
-    <p style="margin:.6rem 0 0"><a href="/room/{_esc(r['id'])}/join?lang={lang}"
+    <p style="margin:.6rem 0 0"><a href="/galaxy/{_esc(r['id'])}/join?lang={lang}"
        >{t("join_this", lang)}</a></p>
   </div>""" for r in rooms)
         body = f'<div class="cards">{cards}</div>'
     body += (f'<p style="margin-top:2rem">'
              f'<a href="/register?lang={lang}">{t("create_account", lang)}</a>'
-             f' · <a href="/new-room?lang={lang}">{t("new_room", lang)}</a></p>')
+             f' · <a href="/new-galaxy?lang={lang}">{t("new_room", lang)}</a></p>')
     return layout(t("site", lang), body, lang, t("tagline", lang), "/")
 
 
@@ -376,10 +376,10 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
     # repositorio e nao de quem baixou um binario. O que fica e o botao — ver a
     # sala e o degrau 2, entrar e o 3, e a pagina de entrada e que sabe falar
     # de cada sistema operacional.
-    # Na mesma linha do nome da sala, encostado a direita: e a unica coisa que
+    # Na mesma linha do nome da galáxia, encostado a direita: e a unica coisa que
     # uma pessoa de fora pode FAZER nesta tela, e no corpo ela ficava separada
     # do que a identifica.
-    entrar = (f'<a class="cta" href="/room/{_esc(room["id"])}/join'
+    entrar = (f'<a class="cta" href="/galaxy/{_esc(room["id"])}/join'
               f'?lang={lang}">{t("join_this", lang)}</a>')
 
     body = f"""{banner}{map_svg}
@@ -420,12 +420,13 @@ no third party receiving a copy, and nothing is forwarded to another service.</p
 <h2>Who can see it</h2>
 <p>Whoever administers the server has technical access to the files. No
 encryption prevents that, and saying otherwise would be a lie. Other players in
-the same room see a <b>storefront</b>: a shop with the name you choose, holding
+the same galaxy see a <b>storefront</b>: a shop with the name you choose, holding
 the goods you consign. Your actual hold stays out of that copy.</p>
 
 <h2>For how long</h2>
-<p>The last 20 versions of each save, per room. Older ones are deleted
-automatically. If you leave, everything goes at once.</p>
+<p>The last three versions of each save, per galaxy. Older ones are deleted
+automatically. If you leave, everything goes at once. Nothing restores an old
+version: the history is there to protect you from faults in this server.</p>
 
 <h2>What personal data</h2>
 <p><b>Almost none, and not your address.</b> We do not ask for an email, a real
@@ -443,7 +444,7 @@ seconds. What is stored answers that one question and goes with the rest when
 you delete your account. It cannot place you anywhere.</p>
 <p>If you share a connection with somebody who already joined, say a house, a
 hall of residence, or any mobile carrier, you will be turned away for a reason
-that has nothing to do with you. Ask whoever runs the room. Lifting it takes one
+that has nothing to do with you. Ask whoever runs the galaxy. Lifting it takes one
 line.</p>
 
 <h2>What the client writes on your machine</h2>
@@ -459,9 +460,9 @@ the server. Nothing else is installed, and no service keeps running.</p>
 <h2>How to delete everything and leave</h2>
 <p>There is a page for it, and there is no second-guessing step:</p>
 <p><a class="cta" href="/account/delete">Delete your account and leave</a></p>
-<p>It deletes your account and all your saves. Rooms you created that still have
+<p>It deletes your account and all your saves. Galaxies you created that still have
 other players stay up, because erasing them would destroy the saves of people
-who asked for nothing. Those rooms leave the public listing, and your code stops
+who asked for nothing. Those galaxies leave the public listing, and your code stops
 working.</p>
 
 <h2>What cannot be promised</h2>
@@ -483,13 +484,14 @@ terceiro recebendo cópia, e nada é enviado para outro serviço.</p>
 <h2>Quem enxerga</h2>
 <p>Quem administra o servidor tem acesso técnico aos arquivos. Não há
 criptografia que impeça isso, e dizer o contrário seria mentira. Outros jogadores
-da mesma sala verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
+da mesma galáxia verão, quando a etapa seguinte existir, apenas um <b>retrato</b>:
 uma loja com o nome que você escolher e só a mercadoria que você consignar. O seu
 porão de verdade não entra nessa cópia.</p>
 
 <h2>Por quanto tempo</h2>
-<p>As últimas 20 versões de cada save, por sala. As mais antigas são apagadas
-sozinhas. Se você sair, apaga tudo na hora.</p>
+<p>As últimas três versões de cada save, por galáxia. As mais antigas são
+apagadas sozinhas, e tudo vai junto se você sair. Nada restaura uma versão
+antiga: o histórico existe para te proteger de defeitos deste servidor.</p>
 
 <h2>Que dado pessoal</h2>
 <p>Uma coisa é guardada, e omitir seria desonesto. Como o cadastro pede um nome
@@ -501,7 +503,7 @@ força bruta em segundos. O que fica responde só essa pergunta e vai junto com 
 resto quando você apaga a conta. Localizar alguém, ele não localiza.</p>
 <p>Se você divide a conexão com quem já entrou, seja uma casa, um alojamento ou
 qualquer operadora de celular, vai ser barrado por um motivo que nada tem a ver
-com você. Fale com quem administra a sala. Liberar é uma linha.</p>
+com você. Fale com quem administra a galáxia. Liberar é uma linha.</p>
 <p><b>Fora isso, nenhum.</b> Não pedimos e-mail, nome real, senha ou login de
 Steam. A sua
 identidade aqui é um código aleatório que o servidor gera e do qual guarda só o
@@ -521,9 +523,9 @@ servidor. Nada mais é instalado, e nenhum serviço fica rodando.</p>
 <h2>Como apagar tudo e sair</h2>
 <p>Existe uma página para isso, e não há etapa de arrependimento:</p>
 <p><a class="cta" href="/account/delete?lang=pt">Apagar a conta e sair</a></p>
-<p>Apaga a sua conta e todos os seus saves. Salas que você criou e que ainda têm
+<p>Apaga a sua conta e todos os seus saves. Galáxias que você criou e que ainda têm
 outras pessoas dentro continuam de pé, porque apagá-las destruiria o save de
-quem não pediu nada. Essas salas saem da listagem pública, e o seu código deixa
+quem não pediu nada. Essas galáxias saem da listagem pública, e o seu código deixa
 de valer.</p>
 
 <h2>O que não dá para prometer</h2>
@@ -545,24 +547,24 @@ systems, and the trace everyone leaves in it.</p>
 handed back with everyone else's marks written into it.</p>
 
 <h2>Check out, play, check in</h2>
-<p>A session is a loan, and the room hands the save to one person at a time.</p>
+<p>A session is a loan, and the galaxy hands the save to one person at a time.</p>
 <ol>
 <li><b>Check out.</b> The server builds your save: your run, plus the galaxy as
-the room left it, the neighbours parked in your system and anything you are owed
+the galaxy left it, the neighbours parked in your system and anything you are owed
 from sales. It marks the loan as open and starts a clock.</li>
 <li><b>Play.</b> Normally, offline, in your own copy of the game. While you
-play, each autosave is sent up as a checkpoint, so the room's map can show where
+play, each autosave is sent up as a checkpoint, so the galaxy's map can show where
 you are without waiting for you to finish.</li>
 <li><b>Check in.</b> When you close the game the save goes back, is checked, and
 becomes what the others receive next.</li>
 </ol>
 <p>One session at a time is what keeps the galaxy from forking. Two people
-playing the same room at once would produce two versions of the same universe,
+playing the same galaxy at once would produce two versions of the same universe,
 and merging them is not a problem with an honest solution.</p>
 
 <h2>What the server checks, and what it does not</h2>
-<p>Every arriving save is fingerprinted by its stars. If the galaxy is not the
-room's, the save is refused, because it belongs to another universe. Beyond
+<p>Every arriving save is fingerprinted by its stars. If it is not this
+galaxy, the save is refused, because it belongs to another universe. Beyond
 that the server leaves your run alone. It never audits your resources, your ship
 or your crew. The game runs on your machine, on files you can edit, and
 pretending otherwise would be theatre.</p>
@@ -570,7 +572,7 @@ pretending otherwise would be theatre.</p>
 <h2>What travels between players</h2>
 <p>Three things, and no more:</p>
 <ul>
-<li><b>Where you are.</b> Your position feeds the room's map.</li>
+<li><b>Where you are.</b> Your position feeds the galaxy's map.</li>
 <li><b>What you found.</b> Systems somebody explored become visible to
 everyone, including people who join later. Visited stays yours; visible is
 shared.</li>
@@ -605,12 +607,12 @@ comes back.</p>
     <td>Creates your account. The code is the whole account: the server keeps
     only a digest of it, so losing it loses the account.</td></tr>
 <tr><td><code>join</code></td><td>your save, when you close the game</td>
-    <td>the room's save</td>
+    <td>the galaxy's save</td>
     <td>The whole session in one command, first time and every time. On the
     first run the server copies the game its founder started, names the ship
     after you and parks it on a free asteroid field. Then it checks the save
     out, launches the game, waits, and returns the save when the game closes.
-    If you are the first person in a room this is reversed: the game opens for
+    If you are the first person in a galaxy this is reversed: the game opens for
     you to create yours, and it becomes the starting point for everybody
     else.</td></tr>
 <tr><td><code>play</code></td><td colspan="2">the same command</td>
@@ -638,15 +640,15 @@ play  ---------------------&gt;  is a session already open?
                                 systems anybody has explored
                                 neighbours in your system, as ships
                                 credits owed to you from sales
-game opens on the room's save
+game opens on the galaxy's save
   ...playing...
-autosave -----------------&gt;  checkpoint: your position on the room map
+autosave -----------------&gt;  checkpoint: your position on the galaxy map
   ...playing...
 you close the game
       ---------------------&gt;  the save comes back
                               storefront sales are settled
                               the storefronts are stripped out
-                              the galaxy is checked against the room's
+                              the galaxy is checked against the galaxy's
                               this becomes what the others receive</pre>
 <p>The order in the last block is not arbitrary. Sales are settled before the
 storefronts are removed, because removing them erases the evidence of what was
@@ -656,9 +658,9 @@ sold.</p>
 <p>The mod is optional. Everything above works without it; it removes the
 fiddly parts.</p>
 <ul>
-<li><b>It opens the room's save for you</b>, instead of leaving you to find it
+<li><b>It opens the galaxy's save for you</b>, instead of leaving you to find it
 in the load menu and hope you picked the right one.</li>
-<li><b>It writes the room, the version and your sales into the game's own log</b>,
+<li><b>It writes the galaxy, the version and your sales into the game's own log</b>,
 so you can tell at a glance that you are in the shared galaxy and not a local
 run.</li>
 <li><b>It adds a SHOP toggle</b> to a storage's panel, so choosing what you sell
@@ -672,10 +674,10 @@ game jar stays as it was, and uninstalling means undoing three lines in a config
 file.</p>
 
 <h2>What is stored, and for how long</h2>
-<p>The last three versions of each save, per room. Older ones are deleted
+<p>The last three versions of each save, per galaxy. Older ones are deleted
 automatically, and everything goes at once if you leave.</p>
 <p><b>There is no rollback.</b> Nothing restores an old version, for you, for
-the room owner, or for anybody. A session that went badly went badly, and a
+the galaxy owner, or for anybody. A session that went badly went badly, and a
 mistake that costs a crew costs it. The short history is there to protect you
 from <i>this server</i>: a bad graft or a storefront removed wrongly is our
 fault, and the previous version is what makes it recoverable.</p>
@@ -689,24 +691,24 @@ estelar, os mesmos sistemas, e o rastro que cada um deixa nele.</p>
 com as marcas de todo mundo escritas dentro dele.</p>
 
 <h2>Retirar, jogar, devolver</h2>
-<p>Uma sessão é um empréstimo, e a sala entrega o save a uma pessoa por vez.</p>
+<p>Uma sessão é um empréstimo, e a galáxia entrega o save a uma pessoa por vez.</p>
 <ol>
 <li><b>Retirar.</b> O servidor monta o seu save: a sua partida, mais a galáxia
-como a sala a deixou, os vizinhos parados no seu sistema e o que você tenha a
+como a galáxia a deixou, os vizinhos parados no seu sistema e o que você tenha a
 receber de vendas. Marca o empréstimo como aberto e começa a contar o tempo.</li>
 <li><b>Jogar.</b> Normalmente, offline, na sua própria cópia do jogo. Enquanto
-você joga, cada autosave sobe como checkpoint, para o mapa da sala mostrar onde
+você joga, cada autosave sobe como checkpoint, para o mapa da galáxia mostrar onde
 você está sem esperar você terminar.</li>
 <li><b>Devolver.</b> Quando você fecha o jogo, o save volta, é conferido, e vira
 o que as outras pessoas recebem em seguida.</li>
 </ol>
 <p>Uma sessão por vez é o que impede a galáxia de se dividir. Duas pessoas
-jogando a mesma sala ao mesmo tempo produziriam duas versões do mesmo universo,
+jogando a mesma galáxia ao mesmo tempo produziriam duas versões do mesmo universo,
 e juntá-las não é um problema com solução honesta.</p>
 
 <h2>O que o servidor confere, e o que não confere</h2>
 <p>Todo save que chega é identificado pelas suas estrelas. Se a galáxia não for
-a da sala, o save é recusado, porque pertence a outro universo. Fora isso o
+a da galáxia, o save é recusado, porque pertence a outro universo. Fora isso o
 servidor deixa a sua partida em paz: recursos, nave e tripulação ficam por sua
 conta. O jogo roda na sua máquina, sobre arquivos que você pode editar, e fingir
 o contrário seria teatro.</p>
@@ -714,7 +716,7 @@ o contrário seria teatro.</p>
 <h2>O que viaja entre jogadores</h2>
 <p>Três coisas, e nada além:</p>
 <ul>
-<li><b>Onde você está.</b> A sua posição alimenta o mapa da sala.</li>
+<li><b>Onde você está.</b> A sua posição alimenta o mapa da galáxia.</li>
 <li><b>O que você descobriu.</b> Sistemas que alguém explorou ficam visíveis
 para todos, inclusive para quem entrar depois. Visitado continua seu; visível é
 compartilhado.</li>
@@ -748,12 +750,12 @@ volta.</p>
     <td>Cria a sua conta. O código é a conta inteira: o servidor guarda só um
     resumo dele, então perder o código é perder a conta.</td></tr>
 <tr><td><code>join</code></td><td>o seu save, ao fechar o jogo</td>
-    <td>o save da sala</td>
+    <td>o save da galáxia</td>
     <td>A sessão inteira num comando, na primeira vez e em todas. Na primeira
-    o servidor copia a partida de quem fundou a sala, batiza a nave com o seu
+    o servidor copia a partida de quem fundou a galáxia, batiza a nave com o seu
     nome e a estaciona num campo de asteroides livre. Depois retira o save,
     abre o jogo, espera, e devolve quando você fecha. Se você for a primeira
-    pessoa de uma sala é o contrário: o jogo abre para você criar a sua, e ela
+    pessoa de uma galáxia é o contrário: o jogo abre para você criar a sua, e ela
     vira o ponto de partida de todo mundo.</td></tr>
 <tr><td><code>play</code></td><td colspan="2">o mesmo comando</td>
     <td>Outro nome para o <code>join</code>. Entrar sem jogar não ajuda
@@ -781,15 +783,15 @@ play  ---------------------&gt;  já há sessão aberta?
                                 sistemas que alguém explorou
                                 vizinhos do seu sistema, como naves
                                 créditos que você tem a receber
-o jogo abre no save da sala
+o jogo abre no save da galáxia
   ...jogando...
-autosave -----------------&gt;  checkpoint: sua posição no mapa da sala
+autosave -----------------&gt;  checkpoint: sua posição no mapa da galáxia
   ...jogando...
 você fecha o jogo
       ---------------------&gt;  o save volta
                               as vendas da vitrine são apuradas
                               as vitrines são removidas
-                              a galáxia é conferida contra a da sala
+                              a galáxia é conferida contra a da galáxia
                               isto vira o que os outros recebem</pre>
 <p>A ordem do último bloco não é arbitrária. As vendas são apuradas antes de as
 vitrines saírem, porque removê-las apaga a prova do que foi vendido.</p>
@@ -798,9 +800,9 @@ vitrines saírem, porque removê-las apaga a prova do que foi vendido.</p>
 <p>O mod é opcional. Tudo acima funciona sem ele; o que ele tira são as partes
 chatas.</p>
 <ul>
-<li><b>Abre o save da sala para você</b>, em vez de deixar você procurar no menu
+<li><b>Abre o save da galáxia para você</b>, em vez de deixar você procurar no menu
 de load e torcer para ter escolhido o certo.</li>
-<li><b>Escreve a sala, a versão e as suas vendas no log do próprio jogo</b>, para
+<li><b>Escreve a galáxia, a versão e as suas vendas no log do próprio jogo</b>, para
 você saber de relance que está na galáxia compartilhada e não numa partida
 local.</li>
 <li><b>Acrescenta um botão SHOP</b> ao painel de um depósito, para escolher o
@@ -814,10 +816,10 @@ do jogo continua como estava, e desinstalar é desfazer três linhas num arquivo
 de configuração.</p>
 
 <h2>O que fica guardado, e por quanto tempo</h2>
-<p>As últimas três versões de cada save, por sala. As mais antigas são apagadas
+<p>As últimas três versões de cada save, por galáxia. As mais antigas são apagadas
 sozinhas, e tudo vai junto se você sair.</p>
 <p><b>Não existe rollback.</b> Nada restaura uma versão antiga, para você, para
-quem administra a sala, ou para quem quer que seja. Uma sessão que deu errado
+quem administra a galáxia, ou para quem quer que seja. Uma sessão que deu errado
 deu errado, e um engano que custa uma tripulação custa. O histórico curto está
 lá para te proteger <i>deste servidor</i>: um enxerto malfeito ou uma vitrine
 removida errado é culpa nossa, e a versão anterior é o que torna isso
@@ -844,7 +846,7 @@ def privacy_page(lang: str) -> str:
 # Onboarding pela web
 # ---------------------------------------------------------------------------
 #
-# O degrau 2 da secao 2.11 diz que a pessoa deve poder ver a sala e decidir sem
+# O degrau 2 da secao 2.11 diz que a pessoa deve poder ver a galáxia e decidir sem
 # instalar nada. Registrar e criar sala pelo navegador estende isso: o cliente
 # de linha de comando deixa de ser a porta de entrada e vira a ferramenta de
 # quem ja decidiu.
@@ -898,7 +900,7 @@ JOIN_CSS = """
 def join_page(room: dict, lang: str, players: int, full: bool) -> str:
     """Como sair de \"vi a sala\" para \"estou jogando\".
 
-    Existe porque o resto do site mostra a sala viva e depois deixa a pessoa
+    Existe porque o resto do site mostra a galáxia viva e depois deixa a pessoa
     sozinha. Quem chega por um convite no Discord nao tem como adivinhar que ha
     um cliente, onde ele esta, nem que entrar e uma coisa que se faz uma vez.
 
@@ -965,11 +967,11 @@ chmod +x sgalaxy</pre>
     {commands(f"join {rid}", lang)}
   </li>
 </ol>
-<p><a href="/room/{rid}?lang={lang}">&larr; {nome}</a></p>
+<p><a href="/galaxy/{rid}?lang={lang}">&larr; {nome}</a></p>
 <style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
     return layout(t("join_title", lang) % nome, body, lang,
                   f"{players}/{room['max_players']} {t('players', lang)}",
-                  f"/room/{rid}/join")
+                  f"/galaxy/{rid}/join")
 
 
 # Os dois jeitos de chamar o programa. Nao ha um terceiro: no macOS e no Linux
@@ -1129,7 +1131,7 @@ def registered_page(name: str, code: str, lang: str) -> str:
     for k, arq, _c in BINARIES)}</div>
 {commands(f'register --recover "{_esc(code)}"', lang)}
 <p><a href="/?lang={lang}">{t("rooms", lang)}</a> ·
-   <a href="/new-room?lang={lang}">{t("new_room", lang)}</a></p>
+   <a href="/new-galaxy?lang={lang}">{t("new_room", lang)}</a></p>
 <style>{JOIN_CSS.format()}{FORM_CSS.format()}</style>"""
     return layout(t("account_made", lang), body, lang, "", "/register")
 
@@ -1139,13 +1141,13 @@ def new_room_form(lang: str, name: str | None, error: str = "") -> str:
         body = (f'<p>{t("need_account", lang)}</p>'
                 f'<p><a href="/register?lang={lang}">'
                 f'{t("create_account", lang)}</a></p>')
-        return layout(t("new_room", lang), body, lang, "", "/new-room")
+        return layout(t("new_room", lang), body, lang, "", "/new-galaxy")
 
     aviso = f'<p style="color:#f6a5a5">{_esc(error)}</p>' if error else ""
     body = f"""{aviso}
 <p>{t("signed_as", lang)} <b>{_esc(name)}</b>.</p>
 <p>{t("room_seed_help", lang)}</p>
-<form method="post" action="/new-room?lang={lang}">
+<form method="post" action="/new-galaxy?lang={lang}">
   <label for="name">{t("room_name", lang)}</label>
   <input type="text" id="name" name="name" maxlength="80" required>
   <label for="seed">{t("seed", lang)}</label>
@@ -1154,4 +1156,4 @@ def new_room_form(lang: str, name: str | None, error: str = "") -> str:
   <button type="submit">{t("create", lang)}</button>
 </form>
 <style>{FORM_CSS.format()}</style>"""
-    return layout(t("new_room", lang), body, lang, "", "/new-room")
+    return layout(t("new_room", lang), body, lang, "", "/new-galaxy")

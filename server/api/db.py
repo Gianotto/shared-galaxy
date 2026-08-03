@@ -238,9 +238,22 @@ def delete_versions(conn: psycopg.Connection, ids: list) -> int:
 
 
 def all_live_hashes(conn: psycopg.Connection) -> set:
-    """Todo sha256 que ainda tem versao apontando. Alimenta a poda de blobs."""
-    return {r["sha256"] for r in
-            conn.execute("SELECT DISTINCT sha256 FROM save_version").fetchall()}
+    """Todo sha256 que alguem ainda alcanca. Alimenta a poda de blobs.
+
+    AS SALAS CONTAM TAMBEM, e nao contavam. A galaxia doadora e o molde de
+    partida de uma sala sao apontados por `room`, nunca por `save_version`:
+    medido, o doador desta sala nao aparecia em nenhuma versao. Uma unica
+    exclusao de conta teria varrido a galaxia da sala inteira junto com os
+    saves de quem saiu, e o efeito so apareceria na proxima entrada de alguem.
+    """
+    linhas = conn.execute(
+        """SELECT sha256 FROM save_version
+           UNION
+           SELECT galaxy_sha256 FROM room WHERE galaxy_sha256 IS NOT NULL
+           UNION
+           SELECT starter_sha256 FROM room WHERE starter_sha256 IS NOT NULL"""
+    ).fetchall()
+    return {r["sha256"] for r in linhas if r["sha256"]}
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +307,13 @@ def set_injected_sids(conn: psycopg.Connection, lease_id: int,
     import json as _json
     conn.execute("UPDATE lease SET injected_sids = %s WHERE id = %s",
                  (_json.dumps([str(s) for s in sids]), lease_id))
+
+
+def set_starter(conn: psycopg.Connection, room_id: str, sha256: str) -> None:
+    """O molde de partida desta galaxia, guardado uma vez so."""
+    conn.execute(
+        "UPDATE room SET starter_sha256 = %s WHERE id = %s AND "
+        "starter_sha256 IS NULL", (sha256, room_id))
 
 
 def set_galaxy_stars(conn: psycopg.Connection, room_id: str,
