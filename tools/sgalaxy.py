@@ -502,6 +502,15 @@ def cmd_create_room(args) -> int:
         return 1
 
     print()
+    # Medido: o jogo so escreve os nomes dos sistemas quando o mapa estelar e
+    # desenhado pela primeira vez. Sem isso a pagina desta galaxia mostra 62
+    # pontos anonimos para quem receber o convite, e a primeira impressao de
+    # quem chega e de uma coisa quebrada.
+    print("  One thing worth doing before you invite anybody: open the star")
+    print("  map in game once and let it autosave. The game only writes the")
+    print("  system names then, and until it does this galaxy's page is a")
+    print("  field of unnamed dots.")
+    print()
     print(f"  Share this to invite people: {base_url()}/galaxy/{data['id']}")
     return 0
 

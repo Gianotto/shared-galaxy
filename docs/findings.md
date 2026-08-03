@@ -968,9 +968,21 @@ The room map briefly drew named systems brighter to show collective
 exploration. It was removed: on a real galaxy every dot lit up, and the legend
 claimed something false.
 
-**Still unknown:** what triggers the naming. Somewhere between creating the game
-and playing a day and a half of it, and it is not the checkout — the save the
-server handed back still had none.
+**What triggers it: opening the star map.** Measured on a galaxy founded that
+day. Its saves at 1.32 and 1.34 in-game days had zero `sn` attributes anywhere
+in the file, not hidden under another element and not hex-encoded elsewhere; a
+sweep for any attribute decoding to readable text found nothing. The player then
+loaded the same game, opened the star map, and saved. The next autosave carried
+**62 of 62** named.
+
+So the game holds the names in memory and writes them the first time the star
+map is drawn. Nothing about exploration is involved, which is consistent with
+all of them arriving at once.
+
+The consequence for this server: a galaxy founded and handed straight back has
+an anonymous map on its page, and stays that way until somebody opens the star
+map. Checkpoints refresh the stored map, so an autosave is enough once it
+happens; there is no need to wait for a check-in.
 
 ## Odds and ends
 
