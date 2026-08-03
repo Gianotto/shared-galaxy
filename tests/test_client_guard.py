@@ -671,10 +671,18 @@ class FoundingAGalaxyTestCase(unittest.TestCase):
              "--max-players", "8", "--empty"])
         self.assertTrue(args.empty)
 
-    def test_the_founder_is_told_which_seed_to_use(self):
-        """Quem apenas entra numa galáxia existente não precisa da seed: o
-        servidor enxerta a certa por cima. Quem funda, precisa."""
+    def test_the_seed_is_optional(self):
+        """O jogo grava `seed="0"` em todo save, medido em quatro partidas: a
+        seed digitada não fica no arquivo, então o servidor nunca pôde
+        conferi-la. Ela também deixou de ser necessária para entrar."""
+        args = client.build_parser().parse_args(
+            ["create-galaxy", "--name", "X", "--max-players", "8"])
+        self.assertEqual(args.seed, "")
+
+    def test_nobody_is_asked_to_type_a_particular_seed(self):
+        """Pedir uma seed específica seria pedir uma coisa que ninguém
+        consegue conferir depois: o jogo grava `seed="0"` em todo save."""
         import inspect
         fonte = inspect.getsource(client.create_ship)
-        self.assertIn("USE THIS SEED", fonte)
-        self.assertIn("seed", inspect.signature(client.create_ship).parameters)
+        self.assertIn("Any seed will do", fonte)
+        self.assertNotIn("seed", inspect.signature(client.create_ship).parameters)

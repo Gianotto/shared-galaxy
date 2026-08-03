@@ -308,10 +308,17 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
     if not ok:
         raise HTTPException(403, motivo)
 
+    # A SEED E OPCIONAL, e nao decide nada. O jogo grava `seed="0"` em todo
+    # save, medido em quatro partidas diferentes: a seed digitada nao fica em
+    # lugar nenhum do arquivo, entao o servidor nunca conseguiu conferi-la.
+    #
+    # Ela tambem deixou de ser necessaria para entrar. Quem chega recebe uma
+    # copia do molde, e quem traz a propria partida tem a galaxia enxertada por
+    # cima. O que identifica uma galaxia sao as estrelas dela.
+    #
+    # Fica como anotacao de quem fundou, para quem quiser recriar o mundo por
+    # fora. Sem ela a galaxia funciona igual.
     seed = str(payload.get("seed") or "").strip()
-    if not seed:
-        raise HTTPException(400, "give the galaxy seed. It is not stored in the save, "
-                                 "so the server is the one that has to keep it")
     name = str(payload.get("name") or "").strip() or f"Sala de {player['display_name']}"
 
     room = {

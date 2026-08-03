@@ -15,7 +15,7 @@ Usage:
 
     sgalaxy register "My Name"          # or: python3 tools/sgalaxy.py …
     sgalaxy galaxies
-    sgalaxy create-galaxy --seed 1654267488 --name "Frontier" --max-players 64
+    sgalaxy create-galaxy --name "Frontier" --max-players 64
     sgalaxy join GALAXY                 # the whole session, one command
     sgalaxy shop GALAXY --set 608
     sgalaxy status GALAXY
@@ -466,9 +466,11 @@ def cmd_create_room(args) -> int:
 
     Criar sem a partida deixava a galaxia existindo e vazia, e a pessoa
     descobria sozinha que faltava um passo. Pior: o passo seguinte era criar um
-    jogo no Space Haven, e nada dizia que a seed tinha que ser esta. Com outra
-    seed o servidor registra um mundo diferente do anunciado, e o defeito so
-    aparece quando um segundo jogador tenta entrar.
+    jogo no Space Haven, e a pessoa descobria isso sozinha.
+
+    A seed nao entra nessa conversa. O jogo grava `seed="0"` em todo save, entao
+    a que a pessoa digitar nunca chega ao servidor: a galaxia e o que o jogo
+    gerar, e e isso que todo mundo recebe depois.
     """
     data = json_request("POST", "/api/v1/rooms", {
         "seed": args.seed, "name": args.name, "password": args.password,
@@ -476,7 +478,8 @@ def cmd_create_room(args) -> int:
         "options": _recipe(args)})
     print(f"galaxy {data['id']} created")
     print(f"  name:          {data.get('name') or args.name}")
-    print(f"  seed:          {data['seed']}")
+    if data.get("seed"):
+        print(f"  seed:          {data['seed']}")
     print(f"  sessions last: {data['leaseHours']}h")
 
     if getattr(args, "empty", False):
@@ -491,12 +494,10 @@ def cmd_create_room(args) -> int:
         print("  I could not find Space Haven, so the first game has to be")
         print("  created by hand. Run this where the game is installed:")
         print(f"    {prog()} join {data['id']}")
-        print(f"  and use the seed above, exactly: {data['seed']}")
         return 0
 
     print()
-    if not first_join(data["id"], None, args.yes, args.password or "",
-                      exe, seed=str(data["seed"])):
+    if not first_join(data["id"], None, args.yes, args.password or "", exe):
         print()
         print("  The galaxy exists and is empty. When you are ready:")
         print(f"    {prog()} join {data['id']}")
@@ -901,8 +902,7 @@ def launch_and_wait(exe: str, marcador: str) -> None:
         raise ClientError(f"could not launch the game: {exc}") from exc
 
 
-def create_ship(room: str, exe: str, sim: bool,
-                seed: str | None = None) -> str | None:
+def create_ship(room: str, exe: str, sim: bool) -> str | None:
     """Faz a pessoa criar a nave dela, no proprio jogo, e devolve a pasta.
 
     POR QUE NAO APROVEITAR UM SAVE QUE JA EXISTE
@@ -913,8 +913,9 @@ def create_ship(room: str, exe: str, sim: bool,
     sala onde todo mundo comeca junto isso nao e um atalho, e uma injustica.
 
     Entao a nave nasce aqui: o jogo abre no criador de partida, a pessoa monta
-    a nave dela, salva e fecha. Qual seed ela usar nao importa — o servidor
-    troca a galaxia depois.
+    a nave dela, salva e fecha. Qual seed ela usar nao importa: para quem entra
+    o servidor troca a galaxia depois, e para quem funda a galaxia e justamente
+    o que o jogo gerar.
 
     A partida nova e achada por diferenca na pasta de savegames. Perguntar o
     nome erraria: quem escolhe e ela, dentro do jogo.
@@ -928,22 +929,13 @@ def create_ship(room: str, exe: str, sim: bool,
     print("  The game will open on NEW GAME. Build your starting ship, save,")
     print("  and close the game. I take it from there.")
     print()
-    if seed:
-        # QUEM FUNDA TEM QUE USAR ESTA SEED. A partida dela e que vira a
-        # galaxia, entao a seed que ela digitar e a galaxia de todo mundo. Com
-        # outra, o servidor registra um mundo diferente do que a pagina
-        # anuncia, e ninguem descobre ate um segundo jogador nao conseguir
-        # entrar. Para quem apenas ENTRA numa galaxia existente a seed nao
-        # importa, porque o servidor enxerta a galaxia certa por cima.
-        print(f"  USE THIS SEED, exactly: {seed}")
-        print()
-        print("  It is the galaxy everybody here will share. A different seed")
-        print("  makes a different universe, and this one would be wrong from")
-        print("  the first day.")
-    else:
-        print("  Any seed and any scenario option will do: the server replaces")
-        print("  the galaxy with this one's. Your ship, crew and bank stay")
-        print("  yours.")
+    # QUALQUER SEED SERVE, e isso vale tambem para quem funda. O jogo grava
+    # `seed="0"` em todo save, medido em quatro partidas: a seed digitada nao
+    # existe no arquivo, entao pedir uma especifica seria pedir uma coisa que
+    # ninguem consegue conferir depois. Quem funda define a galaxia pelo que o
+    # jogo gerar; quem entra recebe essa mesma galaxia por copia ou enxerto.
+    print("  Any seed will do. Whatever galaxy the game generates becomes this")
+    print("  one, and everybody who joins gets it.")
     print()
     print("  Everyone here starts on a new game, so an old colony is not")
     print("  accepted.")
@@ -990,7 +982,7 @@ def create_ship(room: str, exe: str, sim: bool,
 
 
 def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
-               exe: str, seed: str | None = None) -> bool:
+               exe: str) -> bool:
     """A primeira entrada de alguem numa sala, dentro do `play`.
 
     Sobe a partida recem-criada; o servidor enxerta a galaxia da sala nela e
@@ -1002,7 +994,7 @@ def first_join(room: str, escolhido: str | None, sim: bool, senha: str,
         # A sala ainda tem a ultima palavra pela idade, no servidor.
         pasta = resolve_save(escolhido)
     else:
-        pasta = create_ship(room, exe, sim, seed)
+        pasta = create_ship(room, exe, sim)
         if pasta is None:
             return False
 
@@ -1589,7 +1581,10 @@ def build_parser() -> argparse.ArgumentParser:
     # ninguem reconhece a sua na listagem; e o teto de gente decide se o
     # convite cabe, e descobrir que nao cabe quando a 33a pessoa chega e tarde
     # demais para mudar.
-    p.add_argument("--seed", required=True, help="the galaxy seed")
+    # A seed e anotacao, nao requisito: o jogo nao a grava no save, entao o
+    # servidor nunca pode conferi-la, e ninguem precisa dela para entrar.
+    p.add_argument("--seed", default="",
+                   help="the seed you used, if you want it on record")
     p.add_argument("--name", required=True,
                    help="how people will recognise it in the listing")
     p.add_argument("--max-players", type=int, required=True,
