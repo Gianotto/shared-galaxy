@@ -503,14 +503,22 @@ def cmd_how_to_join(args) -> int:
 
 
 def cmd_join(args) -> int:
-    """Entra numa sala. Sem `--save`, cria a partida abrindo o jogo.
+    """Entra na sala E joga. Um comando para a coisa toda.
 
-    A PRIMEIRA VERSAO EXIGIA `--save` SEMPRE, e a pagina do site manda rodar
-    `join` antes de `play`. Quem chegava sem save nenhum, que e todo mundo que
-    chega pela primeira vez, batia num pedido de arquivo que ainda nao existia.
-    A criacao pelo New Game ja estava escrita; so estava presa dentro do
-    `play`.
+    `join` e `play` faziam metades de uma acao so: entrar sem jogar nao serve
+    para nada, e jogar exigia ter entrado antes. Quem chegava tinha que
+    descobrir sozinho que eram dois passos, e errar a ordem dava um erro que
+    nao explicava o que fazer.
+
+    Sao o mesmo comando agora. `play` continua existindo porque e o nome que
+    descreve o que acontece da segunda vez em diante, e porque links e
+    mensagens antigas apontam para ele.
     """
+    return cmd_play(args)
+
+
+def _cmd_join_only(args) -> int:
+    """Entra na sala sem abrir o jogo. Fica para quem automatiza."""
     if not args.save:
         # A SALA PRIMEIRO. Se ela tem um save de partida, entrar e um download:
         # a galaxia ja e a dela, a idade e do primeiro dia, e ninguem precisa
@@ -1053,9 +1061,13 @@ def cmd_play(args) -> int:
     # qualquer nao batia. Agora o servidor conserta, entao a primeira sessao de
     # alguem cabe no mesmo comando que todas as outras.
     if not is_member(args.room):
-        if not first_join(args.room, args.join_with, args.yes,
-                          args.password or "", exe):
-            return 1
+        # A SALA PRIMEIRO. Se ela tem um save de partida, entrar e um download,
+        # e ninguem abre o jogo para criar nave nenhuma. So a primeira pessoa
+        # de uma sala precisa do caminho longo, porque nao ha o que copiar.
+        if _start_in_room(args.room, args.password or "") is None:
+            if not first_join(args.room, args.join_with, args.yes,
+                              args.password or "", exe):
+                return 1
 
     # -- 1. retirar
     print(f"[1/4] checking out the save from room {args.room} …")
@@ -1444,16 +1456,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--password")
     p.set_defaults(func=cmd_how_to_join)
 
-    p = sub.add_parser("join", help="join a room, creating your ship")
-    p.add_argument("room")
-    # Sem `--save` o jogo abre para a pessoa criar a nave. Era obrigatorio, e
-    # quem chega pela primeira vez nao tem save nenhum para apontar.
-    p.add_argument("--save", help="a game you already have; omit to create one")
-    p.add_argument("--game", help="path to the Space Haven executable")
-    p.add_argument("-y", "--yes", action="store_true",
-                   help="do not ask before uploading")
-    p.add_argument("--password")
-    p.set_defaults(func=cmd_join)
+    # `join` e `play` sao o mesmo comando. Entrar sem jogar nao serve para
+    # nada, e jogar exige ter entrado: eram duas metades de uma acao so, e a
+    # ordem entre elas era uma coisa a mais para alguem descobrir sozinho.
+    for nome, ajuda in (("join", "join the room and play"),
+                        ("play", "same as join: check out, play, return")):
+        p = sub.add_parser(nome, help=ajuda)
+        p.add_argument("room")
+        p.add_argument("--into", help="room folder (default: next to the game)")
+        p.add_argument("--game", help="path to the Space Haven executable")
+        p.add_argument("--join-with", "--save", dest="join_with",
+                       help="a game you already have to join with, the first "
+                            "time (default: the room's starting save)")
+        p.add_argument("--password", help="room password, if it has one")
+        p.add_argument("-y", "--yes", action="store_true",
+                       help="do not ask before uploading the save to join")
+        p.set_defaults(func=cmd_join)
 
     p = sub.add_parser("checkout", help="check the save out to play")
     p.add_argument("room")
@@ -1465,18 +1483,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--save", required=True)
     p.set_defaults(func=cmd_return_save)
 
-    p = sub.add_parser("play",
-                       help="checkout, launch the game, return when it closes")
-    p.add_argument("room")
-    p.add_argument("--into", help="room folder (default: next to the game)")
-    p.add_argument("--game", help="path to the Space Haven executable")
-    p.add_argument("--join-with",
-                   help="save to join with, the first time (default: your most "
-                        "advanced one, with confirmation)")
-    p.add_argument("--password", help="room password, if it has one")
-    p.add_argument("--yes", action="store_true",
-                   help="do not ask before uploading the save to join")
-    p.set_defaults(func=cmd_play)
 
     p = sub.add_parser("install-mod",
                        help="install the mod into your copy of the game")

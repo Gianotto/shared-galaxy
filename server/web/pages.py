@@ -604,15 +604,18 @@ comes back.</p>
 <tr><td><code>register</code></td><td>a name</td><td>a recovery code</td>
     <td>Creates your account. The code is the whole account: the server keeps
     only a digest of it, so losing it loses the account.</td></tr>
-<tr><td><code>join</code></td><td>nothing</td><td>a starting game</td>
-    <td>Puts you in the room. The server copies the game its founder started,
-    names the ship after you and parks it on a free asteroid field. If you are
-    the first person in the room, this is reversed: your game goes up and
-    becomes the starting point for everybody else.</td></tr>
-<tr><td><code>play</code></td><td>your save, when you close the game</td>
+<tr><td><code>join</code></td><td>your save, when you close the game</td>
     <td>the room's save</td>
-    <td>The whole session in one command. It checks the save out, launches the
-    game, waits, and returns the save when the game closes.</td></tr>
+    <td>The whole session in one command, first time and every time. On the
+    first run the server copies the game its founder started, names the ship
+    after you and parks it on a free asteroid field. Then it checks the save
+    out, launches the game, waits, and returns the save when the game closes.
+    If you are the first person in a room this is reversed: the game opens for
+    you to create yours, and it becomes the starting point for everybody
+    else.</td></tr>
+<tr><td><code>play</code></td><td colspan="2">the same command</td>
+    <td>Another name for <code>join</code>. Joining without playing helps
+    nobody, and playing needs joining first, so they are one thing.</td></tr>
 <tr><td><code>shop</code></td><td>one storage id</td><td>confirmation</td>
     <td>Marks one storage on your ship as your shop. What you move into it is
     what your neighbours can buy.</td></tr>
@@ -744,15 +747,17 @@ volta.</p>
 <tr><td><code>register</code></td><td>um nome</td><td>um código de acesso</td>
     <td>Cria a sua conta. O código é a conta inteira: o servidor guarda só um
     resumo dele, então perder o código é perder a conta.</td></tr>
-<tr><td><code>join</code></td><td>nada</td><td>uma partida pronta</td>
-    <td>Coloca você na sala. O servidor copia a partida de quem a fundou,
-    batiza a nave com o seu nome e a estaciona num campo de asteroides livre.
-    Se você for a primeira pessoa da sala, é o contrário: a sua partida sobe e
-    vira o ponto de partida de todo mundo.</td></tr>
-<tr><td><code>play</code></td><td>o seu save, ao fechar o jogo</td>
+<tr><td><code>join</code></td><td>o seu save, ao fechar o jogo</td>
     <td>o save da sala</td>
-    <td>A sessão inteira num comando. Retira o save, abre o jogo, espera, e
-    devolve quando você fecha.</td></tr>
+    <td>A sessão inteira num comando, na primeira vez e em todas. Na primeira
+    o servidor copia a partida de quem fundou a sala, batiza a nave com o seu
+    nome e a estaciona num campo de asteroides livre. Depois retira o save,
+    abre o jogo, espera, e devolve quando você fecha. Se você for a primeira
+    pessoa de uma sala é o contrário: o jogo abre para você criar a sua, e ela
+    vira o ponto de partida de todo mundo.</td></tr>
+<tr><td><code>play</code></td><td colspan="2">o mesmo comando</td>
+    <td>Outro nome para o <code>join</code>. Entrar sem jogar não ajuda
+    ninguém, e jogar exige ter entrado, então são uma coisa só.</td></tr>
 <tr><td><code>shop</code></td><td>o id de um depósito</td><td>confirmação</td>
     <td>Marca um depósito da sua nave como a sua loja. O que você põe dentro é
     o que os vizinhos podem comprar.</td></tr>
@@ -957,7 +962,7 @@ chmod +x sgalaxy</pre>
   <li>
     <h3>{t("step_play", lang)}</h3>
     <p class="note">{t("step_play_help", lang)}</p>
-    {commands(f"play {rid}", lang)}
+    {commands(f"join {rid}", lang)}
   </li>
 </ol>
 <p><a href="/room/{rid}?lang={lang}">&larr; {nome}</a></p>

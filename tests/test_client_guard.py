@@ -553,9 +553,25 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
     criação pelo New Game já estava escrita, presa dentro do `play`."""
 
     def test_save_is_optional(self):
+        args = client.build_parser().parse_args(["join", "6359GV"])
+        self.assertIsNone(args.join_with)
+
+    def test_join_and_play_are_the_same_command(self):
+        """Entrar sem jogar não serve para nada, e jogar exige ter entrado."""
         parser = client.build_parser()
-        args = parser.parse_args(["join", "6359GV"])
-        self.assertIsNone(args.save)
+        um = parser.parse_args(["join", "6359GV"])
+        outro = parser.parse_args(["play", "6359GV"])
+        self.assertEqual(um.func, outro.func)
+        # `cmd` guarda qual nome foi digitado, e é a única coisa que difere.
+        um, outro = vars(um).copy(), vars(outro).copy()
+        um.pop("cmd", None), outro.pop("cmd", None)
+        self.assertEqual(um, outro)
+
+    def test_save_still_works_as_a_name(self):
+        """Quem já usou `--save` não pode ficar sem caminho."""
+        args = client.build_parser().parse_args(
+            ["join", "6359GV", "--save", "/tmp/x"])
+        self.assertEqual(args.join_with, "/tmp/x")
 
     def test_join_takes_the_flags_the_first_access_needs(self):
         args = client.build_parser().parse_args(
@@ -572,7 +588,9 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
         sala ainda não existia. Quando ela passou a existir, o teste virou
         `409 you are already in this room` e o defeito era o teste."""
         original = client._start_in_room
+        real_jogo = client.game_is_running
         client._start_in_room = lambda room, senha: None
+        client.game_is_running = lambda: None
         try:
             args = client.build_parser().parse_args(
                 ["join", "6359GV", "--game", "/nao/existe"])
@@ -580,5 +598,5 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
                 client.cmd_join(args)
         finally:
             client._start_in_room = original
-        self.assertIn("--save", str(erro.exception))
-        self.assertIn("no starting save", str(erro.exception))
+            client.game_is_running = real_jogo
+        self.assertIn("Space Haven", str(erro.exception))

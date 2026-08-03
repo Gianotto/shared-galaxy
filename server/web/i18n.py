@@ -266,16 +266,17 @@ STRINGS: dict = {
     },
     "step_mod": {"pt": "3. Instale o mod (opcional)",
                  "en": "3. Install the mod (optional)"},
-    "step_join": {"pt": "4. Entre na sala", "en": "4. Join the room"},
+    "step_join": {"pt": "4. Entre na sala e jogue",
+                  "en": "4. Join the room and play"},
     "step_join_help": {
-        "pt": "Uma vez só, e é um download. A sala te entrega uma cópia da "
-              "partida de quem a fundou, com a sua nave batizada com o seu "
-              "nome e estacionada num campo de asteroides livre. A galáxia já "
-              "é a da sala, então não há nada a conferir.",
-        "en": "Once only, and it is a download. The room hands you a copy of "
-              "the game its founder started, with your ship named after you "
-              "and parked on a free asteroid field. The galaxy is already the "
-              "room's, so there is nothing to check.",
+        "pt": "Um comando faz tudo: a sala te entrega uma cópia da partida de "
+              "quem a fundou, com a sua nave batizada com o seu nome e "
+              "estacionada num campo de asteroides livre, e o jogo abre nela. "
+              "Ao fechar o jogo, o save volta para a sala sozinho.",
+        "en": "One command does all of it: the room hands you a copy of the "
+              "game its founder started, with your ship named after you and "
+              "parked on a free asteroid field, and the game opens on it. When "
+              "you close the game the save goes back on its own.",
     },
     "step_join_empty": {
         "pt": "Se você for a primeira pessoa da sala, não há partida para "
@@ -291,12 +292,14 @@ STRINGS: dict = {
         "en": "Install the mod before this step if you are going to: with it "
               "the game opens where it should on its own.",
     },
-    "step_play": {"pt": "5. Jogue", "en": "5. Play"},
+    "step_play": {"pt": "5. Depois disso", "en": "5. After that"},
     "step_play_help": {
-        "pt": "Retira o save, abre o jogo e devolve quando você fecha. É o "
-              "único comando de que você precisa depois disso.",
-        "en": "Checks the save out, opens the game, and gives it back when you "
-              "close it. It is the only command you need after this.",
+        "pt": "O mesmo comando serve para todas as próximas sessões: ele "
+              "retira o save, abre o jogo e devolve quando você fecha. "
+              "<code>play</code> é o mesmo comando com outro nome.",
+        "en": "The same command runs every session from here on: it checks the "
+              "save out, opens the game, and gives it back when you close it. "
+              "<code>play</code> is the same command under another name.",
     },
     "room_full": {"pt": "Esta sala está cheia.", "en": "This room is full."},
     "room_locked": {

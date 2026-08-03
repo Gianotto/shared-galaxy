@@ -485,7 +485,9 @@ class ColdStartTestCase(unittest.TestCase):
 
     def test_every_command_appears_in_both_forms(self):
         html = pages.join_page(self.SALA, "en", 2, False)
-        for sufixo in (f"join {self.SALA['id']}", f"play {self.SALA['id']}",
+        # `play` saiu da página: ele e o `join` são o mesmo comando, e mostrar
+        # os dois faria parecer que há dois passos.
+        for sufixo in (f"join {self.SALA['id']}",
                        "install-mod", "register --recover"):
             with self.subTest(cmd=sufixo):
                 self.assertIn(f"sgalaxy.exe {sufixo}", html)
