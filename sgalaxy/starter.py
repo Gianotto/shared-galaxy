@@ -55,16 +55,20 @@ def problems(sf: SaveFile) -> list:
 
     POR QUE ISTO EXISTE
 
-    A sala entregou um molde cujo `<roof>` da nave do jogador nao era um teto.
-    Medido: num save que funciona os filhos do `<roof>` sao chapas de casco,
-    `{m: -2, x, y, col}`, e o elemento carrega `hullPattern`, `shiftX` e
-    `shiftY`. Naquele molde os filhos eram modulos, `{id, m, rot, ext, fl}`, e
-    os tres atributos faltavam — inclusive na comparacao com a nave Merchant do
-    proprio save, que os tinha.
+    Uma galaxia entregou um molde cujo `<roof>` da nave nao tinha `hullPattern`,
+    e quem recebia a copia via o casco fechado: dava para clicar nas
+    instalacoes e nao dava para ver dentro da propria nave.
 
-    Quem recebia a copia via o casco fechado e nao conseguia entrar na propria
-    nave. O servidor entregava isso calado, e a pessoa nao tinha como saber que
-    o defeito estava no molde.
+    O SAVE NAO ESTAVA CORROMPIDO, ESTAVA CEDO DEMAIS. Medido na mesma partida,
+    em quatro versoes seguidas: com 1.29 dias de jogo o `<roof>` nao tinha
+    `hullPattern` e seus filhos eram modulos, `{id, m, rot, ext, fl}`; com 1.38
+    tinha, e os filhos eram chapas de casco, `{m: -2, x, y, col}`. O jogo monta
+    o teto depois que a partida anda um pouco, e um save gravado logo apos o
+    NEW GAME ainda nao o tem.
+
+    Entao isto nao rejeita um save quebrado. Rejeita um save prematuro, que e o
+    exato tipo de save que alguem produz ao criar uma partida so para virar
+    molde.
     """
     faltas = []
     nave = player_ship(sf)

@@ -466,7 +466,7 @@ def start_in_room(room_id: str, request: Request,
         if db.count_players(conn, room_id) >= room["max_players"]:
             raise HTTPException(409, "the room is full")
 
-        molde = room.get("starter_sha256") or room.get("galaxy_sha256")
+        molde = room.get("starter_sha256") or _adopt_starter(conn, room)
         if not molde:
             raise HTTPException(
                 409, "this room has no starting save yet: nobody has joined, "
@@ -784,6 +784,38 @@ MAX_NEIGHBOURS = 3
 # fase 3 e ele negociar, e ai o estoque vira consignacao.
 NEIGHBOUR_FACTION = "Civilian"
 NEIGHBOUR_CREDITS = "5000"
+
+
+def _adopt_starter(conn, room: dict) -> str | None:
+    """Escolhe o molde desta galaxia: a partida valida mais nova que existe.
+
+    O molde nasce com a galaxia, e a captura acontece no `join`. Uma galaxia
+    criada antes disso existir fica sem molde para sempre, e o mesmo acontece
+    quando a primeira partida a chegar e prematura demais para servir — o que
+    e comum, porque um save gravado logo apos o NEW GAME ainda nao tem o teto
+    da nave montado.
+
+    Entao procuramos: a versao de menor idade de jogo que passa na conferencia.
+    Menor idade porque um molde deve ser um comeco; passar na conferencia
+    porque entregar uma partida que o jogo desenha errado ja custou uma sessao.
+    """
+    candidatas = conn.execute(
+        """SELECT id, sha256, age_days FROM save_version
+            WHERE room_id = %s AND kind = 'canonical'
+            ORDER BY age_days, id LIMIT 12""", (room["id"],)).fetchall()
+    for linha in candidatas:
+        try:
+            with blobs.with_unpacked(store().get(linha["sha256"])) as folder:
+                if starter.problems(SaveFile(folder)):
+                    continue
+        except Exception as exc:      # noqa: BLE001
+            log.warning("could not read version %s: %s", linha["id"], exc)
+            continue
+        db.set_starter(conn, room["id"], linha["sha256"])
+        log.info("adopted version %s (age %s) as the starting save for %s",
+                 linha["id"], linha["age_days"], room["id"])
+        return linha["sha256"]
+    return None
 
 
 def _room_stars(conn, room: dict) -> dict:
