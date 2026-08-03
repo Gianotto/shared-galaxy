@@ -423,3 +423,73 @@ class SectorSlotTestCase(unittest.TestCase):
         from sgalaxy import storefront
         cheio = list(range(-7488, 7489, storefront.PASSO_SETOR))
         self.assertIsNone(storefront.sector_slot(self._save_com(cheio)))
+
+
+class StorefrontSectorTestCase(unittest.TestCase):
+    """O `<ships>` do `game` é a lista do setor onde a pessoa está, e não um
+    índice da galáxia. Uma nave posta ali é desenhada ali, mesmo com a frota
+    apontando para outro corpo: foi assim que a vitrine de um vizinho apareceu
+    no setor de outro jogador enquanto o vizinho estava a dois corpos dali."""
+
+    def _save(self):
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp,
+                                                            ignore_errors=True))
+        d = os.path.join(tmp, "save")
+        os.makedirs(d)
+        jogo = ET.Element("game", {"seed": "0"})
+        ET.SubElement(jogo, "masterData", {"idCounter": "5000"})
+        ET.SubElement(jogo, "ships")
+        starmap = ET.SubElement(jogo, "starmap",
+                                {"w": "1", "h": "1", "objectIdCounter": "500"})
+        sistemas = ET.SubElement(starmap, "systems")
+        sistema = ET.SubElement(sistemas, "l", {"systemId": "31"})
+        corpos = ET.SubElement(sistema, "bodies")
+        for ident, x, y in (("10", "100", "100"), ("11", "900", "900")):
+            corpo = ET.SubElement(corpos, "l", {"id": ident, "celeid": ident,
+                                                "type": "AsteroidField",
+                                                "x": x, "y": y})
+            ET.SubElement(corpo, "info")
+        aqui = corpos.find("l")
+        ET.SubElement(ET.SubElement(aqui, "fleets"), "f",
+                      {"id": "0", "isPlayer": "true", "x": "100", "y": "100"})
+        with open(os.path.join(d, "game"), "wb") as fh:
+            fh.write(ET.tostring(jogo))
+        with open(os.path.join(d, "info"), "wb") as fh:
+            fh.write(b'<info date="86400" version="21"/>')
+        from sgalaxy.savefile import SaveFile
+        return SaveFile(d)
+
+    def _molde(self):
+        nave = ET.Element("ship", {"sid": "77", "sname": "CS MOLDE",
+                                   "ox": "0", "oy": "5216"})
+        ET.SubElement(nave, "settings", {"of": "1694", "owner": "Civilian"})
+        ET.SubElement(ET.SubElement(nave, "characters"), "c",
+                      {"entId": "9", "name": "Alguem"})
+        ET.SubElement(nave, "roof", {"hullPattern": "1"})
+        return nave
+
+    def test_a_neighbour_at_another_body_is_not_in_this_sector(self):
+        from sgalaxy import storefront
+        sf = self._save()
+        rel = storefront.inject_ship(sf, self._molde(), faction="Civilian",
+                                     name="CS VIZINHA", at=("900", "900"),
+                                     system_id="31")
+        sid = rel["fleet"]["createdShipId"]
+        onde = [d for d, n in sf.ships() if n.get("sid") == sid]
+        self.assertEqual(onde, [f"ship{sid}"])
+        self.assertEqual(rel["stowed"], f"ship{sid}")
+
+    def test_a_neighbour_on_the_same_body_stays_in_the_sector(self):
+        """Estando no mesmo corpo, a nave TEM de ser desenhada aqui: é a
+        vizinha com quem dá para comerciar sem viajar."""
+        from sgalaxy import storefront
+        sf = self._save()
+        rel = storefront.inject_ship(sf, self._molde(), faction="Civilian",
+                                     name="CS VIZINHA", at=("100", "100"),
+                                     system_id="31")
+        sid = rel["fleet"]["createdShipId"]
+        onde = [d for d, n in sf.ships() if n.get("sid") == sid]
+        self.assertEqual(onde, ["game"])
+        self.assertIsNone(rel.get("stowed"))

@@ -1269,7 +1269,7 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
     else:
         report["fog"] = hide_interior(ship)
 
-    # -- a nave entra no setor carregado ------------------------------------
+    # -- a nave entra no save ------------------------------------------------
     attach(holder, ship)
     report["bytes"] = len(serialize(ship))
 
@@ -1293,6 +1293,20 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
             "o destino não tem nenhuma frota de NPC para servir de molde; o <f> foi "
             "montado com o conjunto mínimo documentado, que pode estar incompleto"
         )
+
+    # -- a nave sai do setor carregado se o destino for outro ---------------
+    #
+    # O `<ships>` do `game` e a lista do setor onde a pessoa esta. Uma nave
+    # posta ali e desenhada ali, mesmo com a frota apontando para outro corpo:
+    # relatado por quem jogou, a vitrine de um vizinho aparecia no setor dele
+    # enquanto o vizinho estava a dois corpos de distancia.
+    _hosp, frota_jogador = find_player_fleet(dest)
+    aqui = None
+    if frota_jogador is not None:
+        aqui = (frota_jogador.get("x"), frota_jogador.get("y"))
+    la = (body.get("x"), body.get("y"))
+    if aqui is not None and aqui != la:
+        report["stowed"] = dest.stow_ship(ship)
 
     # -- 8: as permissoes ---------------------------------------------------
     report["hostmap"] = apply_hostmap_permissions(dest, faction_id, side)

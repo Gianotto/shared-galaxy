@@ -359,6 +359,43 @@ class SaveFile:
 
     # -- gravacao ----------------------------------------------------------
 
+    def stow_ship(self, ship: ET.Element) -> str | None:
+        """Move uma `<ship>` do setor carregado para arquivo proprio.
+
+        O `<ships>` do `game` e a lista do SETOR EM QUE A PESSOA ESTA, e nao um
+        indice de todas as naves da galaxia. Uma nave posta ali e desenhada no
+        setor atual, mesmo que a frota dela no mapa estelar aponte para outro
+        corpo celeste — foi assim que a vitrine de um vizinho apareceu no setor
+        de outro jogador, com a frota corretamente noutro lugar.
+
+        Uma nave que esta em outro canto da galaxia vive em `ships/shipNNNN`,
+        que e como o proprio jogo as guarda, e so e carregada quando alguem
+        chega la.
+        """
+        sid = ship.get("sid")
+        if sid is None:
+            return None
+        portador = self.main.find("ships")
+        if portador is not None and ship in list(portador):
+            portador.remove(ship)
+            self.mark_dirty(self.main)
+
+        chave = f"ship{sid}"
+        caminho = os.path.join(self.dir, SHIPS_DIRNAME, chave)
+        os.makedirs(os.path.dirname(caminho), exist_ok=True)
+        doc = Document.__new__(Document)
+        doc.key = chave
+        doc.path = os.path.abspath(caminho)
+        doc.expect_tag = "ship"
+        doc.dirty = True
+        doc.by_path = {}
+        doc.parents = {}
+        doc.paths = {}
+        doc.root = ship
+        doc.reindex()
+        self.docs[chave] = doc
+        return chave
+
     def drop_document(self, key: str) -> bool:
         """Tira um documento do save, arquivo e tudo.
 
