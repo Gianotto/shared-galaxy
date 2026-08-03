@@ -632,3 +632,20 @@ class ErrorMessagesTestCase(unittest.TestCase):
         texto = client.explain(418, "I am a teapot")
         self.assertIn("418", texto)
         self.assertIn("teapot", texto)
+
+
+class VersionTestCase(unittest.TestCase):
+    """A primeira pergunta diante de qualquer defeito é qual versão, e a
+    resposta era um encolher de ombros. Duas sessões se perderam com binário
+    velho: uma no 1010, outra num join que pedia um save inexistente."""
+
+    def test_the_client_can_say_its_version(self):
+        with self.assertRaises(SystemExit) as saida:
+            client.build_parser().parse_args(["--version"])
+        self.assertEqual(saida.exception.code, 0)
+
+    def test_the_version_travels_in_the_user_agent(self):
+        """É o que permite a quem hospeda ver qual build está em uso sem
+        precisar perguntar."""
+        self.assertIn(client.VERSION, client.USER_AGENT)
+        self.assertIn("sgalaxy/", client.USER_AGENT)

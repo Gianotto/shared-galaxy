@@ -93,6 +93,13 @@ jobs:
           name: mod
           path: mod/build
 
+      - name: Carimbar a versão
+        shell: bash
+        run: |
+          printf '"""Reescrito pelo CI ao empacotar."""\n\nVERSION = "%s"\n' \
+            "${GITHUB_REF_NAME:-dev}" > tools/_version.py
+          cat tools/_version.py
+
       - run: pip install pyinstaller
 
       - name: Empacotar
@@ -103,6 +110,7 @@ jobs:
             --paths tools \
             --hidden-import install_mod \
             --hidden-import steamfind \
+            --hidden-import _version \
             --add-data "mod/build/SharedGalaxy.jar${{ matrix.os == 'windows-latest' && ';' || ':' }}." \
             tools/sgalaxy.py
 
@@ -119,12 +127,32 @@ jobs:
 
       - name: Nomear
         shell: bash
-        run: mv "dist/${{ matrix.arquivo }}" "dist/${{ matrix.nome }}"
+        # DOIS NOMES PARA O MESMO ARQUIVO, de proposito.
+        #
+        # O com versao existe para saber qual build alguem baixou: quando
+        # alguem relata um defeito, a primeira pergunta e sempre "qual
+        # versao", e ate agora a resposta era um encolher de ombros. Duas
+        # sessoes se perderam por causa de binario velho.
+        #
+        # O sem versao existe porque o site aponta para
+        # `releases/latest/download/<nome>`, que exige nome exato. Sem ele,
+        # cada publicacao quebraria os links da pagina de entrada.
+        run: |
+          VERSAO="${GITHUB_REF_NAME:-dev}"
+          COM="$(echo "${{ matrix.nome }}" | sed "s/^sgalaxy-/sgalaxy-$VERSAO-/")"
+          cp "dist/${{ matrix.arquivo }}" "dist/${{ matrix.nome }}"
+          cp "dist/${{ matrix.arquivo }}" "dist/$COM"
+          echo "publicando: ${{ matrix.nome }} e $COM"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.nome }}
-          path: dist/${{ matrix.nome }}
+          # Os dois nomes sobem: o com versao para saber o que alguem baixou,
+          # o sem para os links do site continuarem valendo.
+          path: |
+            dist/sgalaxy-*-x86_64
+            dist/sgalaxy-*-x86_64.exe
+            dist/sgalaxy-*-arm64
 
   publicar:
     needs: binario

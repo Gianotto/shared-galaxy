@@ -241,6 +241,21 @@ def delete_me(confirm: str = "", player: dict = Depends(current_player)):
         versions = conn.execute(
             "SELECT count(*) AS n FROM save_version WHERE player_id = %s",
             (player["id"],)).fetchone()["n"]
+        # O MOLDE DE UMA GALAXIA PODE SER O SAVE DESTA PESSOA, e ai ele nao
+        # pode sobreviver a ela. Medido: o molde da Frontier era a partida do
+        # Fernando. Como a galaxia aponta para o blob, a poda o protegia, e o
+        # jogo de alguem que pediu para apagar tudo continuaria sendo entregue
+        # a cada pessoa nova. A galaxia adota outro na proxima entrada, ou fica
+        # sem molde e quem chega cria a partida no jogo.
+        soltos = conn.execute(
+            """UPDATE room SET starter_sha256 = NULL
+                WHERE starter_sha256 IN (SELECT sha256 FROM save_version
+                                          WHERE player_id = %s)
+             RETURNING id""", (player["id"],)).fetchall()
+        if soltos:
+            log.info("dropped the starting save of %s galaxy(ies) with the "
+                     "account that made it", len(soltos))
+
         # As tabelas dependentes caem por ON DELETE CASCADE; a sala tem
         # RESTRICT, entao o dono e desligado dela antes.
         conn.execute("UPDATE room SET listed = false WHERE owner_id = %s",
@@ -262,7 +277,7 @@ def delete_me(confirm: str = "", player: dict = Depends(current_player)):
         live = db.all_live_hashes(conn)
     freed = store().delete_unreferenced(live)
     return {"deleted": True, "versions": versions, "blobs": freed,
-            "roomsKept": rooms,
+            "roomsKept": rooms, "startersDropped": len(soltos),
             "message": ("conta e saves apagados." if rooms == 0 else
                         f"seus saves foram apagados e o token foi invalidado. "
                         f"{rooms} sala(s) criada(s) por você continuam de pé "

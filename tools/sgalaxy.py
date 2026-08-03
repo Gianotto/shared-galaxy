@@ -55,6 +55,7 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import steamfind  # noqa: E402
+from _version import VERSION  # noqa: E402
 
 CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
@@ -64,7 +65,8 @@ CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")
 # levanta a dele.
 # Como o cliente se apresenta. `sgalaxy` e o nome do programa; a versao muda
 # junto com o protocolo, nao com cada correcao.
-USER_AGENT = "sgalaxy/1.0 (+https://github.com/Gianotto/shared-galaxy)"
+USER_AGENT = (f"sgalaxy/{VERSION} "
+              f"(+https://github.com/Gianotto/shared-galaxy)")
 
 DEFAULT_URL = os.environ.get("SGALAXY_DEFAULT_URL",
                              "https://galaxy.bygianotto.com.br")
@@ -1507,7 +1509,10 @@ def build_parser() -> argparse.ArgumentParser:
     """
     ap = argparse.ArgumentParser(
         description="Shared Galaxy client",
-        epilog=f"server: {base_url()} (change with SGALAXY_URL)")
+        epilog=f"sgalaxy {VERSION} · server: {base_url()} "
+               f"(change with SGALAXY_URL)")
+    ap.add_argument("--version", action="version",
+                    version=f"sgalaxy {VERSION}")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("register", help="create an account on this server")
