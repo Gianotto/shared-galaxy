@@ -45,6 +45,12 @@ if [ "${abertos:-0}" != "0" ] && [ "${1:-}" != "--force" ]; then
     exit 1
 fi
 
+# Qual versao do cliente os botoes do site entregam. A pagina nao consulta o
+# GitHub para desenhar um botao, entao o numero vem daqui, escrito no momento
+# em que o codigo sobe.
+git -C "$RAIZ" describe --tags --abbrev=0 2>/dev/null \
+    > "$RAIZ/server/web/CLIENT_VERSION" || true
+
 rsync -az --delete \
     --exclude '.git' --exclude '__pycache__' --exclude '*.pyc' \
     --exclude '.env' --exclude 'mod/build' --exclude 'client/dist' \

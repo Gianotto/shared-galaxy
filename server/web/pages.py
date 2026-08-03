@@ -18,6 +18,7 @@ arrived.
 from __future__ import annotations
 
 import html
+import os
 
 from server.web.i18n import t
 
@@ -912,6 +913,25 @@ FORM_CSS = """
 # Onde o binario mora. `releases/latest/download/<nome>` sempre aponta para a
 # publicacao mais recente, entao a pagina nao envelhece a cada versao.
 RELEASES = "https://github.com/Gianotto/shared-galaxy/releases"
+
+
+def client_version() -> str:
+    """Qual versao os botoes de download entregam.
+
+    Sai de um arquivo que o deploy escreve, e nao de uma consulta ao GitHub: a
+    pagina nao faz pedido a lugar nenhum, e uma chamada de rede para desenhar
+    um botao seria a primeira excecao a isso.
+
+    Sem o arquivo devolve vazio, e a pagina simplesmente nao mostra versao. Uma
+    versao errada e pior que nenhuma.
+    """
+    caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "CLIENT_VERSION")
+    try:
+        with open(caminho, encoding="utf-8") as fh:
+            return fh.read().strip()[:20]
+    except OSError:
+        return ""
 LOADER = ("https://steamcommunity.com/sharedfiles/filedetails/"
           "?id=3703674043")
 BINARIES = (
@@ -950,6 +970,10 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
     baixar = "".join(
         f'<a href="{RELEASES}/latest/download/{arquivo}">{t(chave, lang)}</a>'
         for chave, arquivo, _cmd in BINARIES)
+    versao = client_version()
+    selo = (f'<p class="note">{t("latest_is", lang)} <code>{_esc(versao)}</code> · '
+            f'<a href="{RELEASES}">{t("all_releases", lang)}</a></p>'
+            if versao else "")
 
     avisos = ""
     if full:
@@ -971,7 +995,7 @@ def join_page(room: dict, lang: str, players: int, full: bool) -> str:
   <li>
     <h3>{t("step_download", lang)}</h3>
     <p class="note">{t("step_download_help", lang)}</p>
-    <div class="dl">{baixar}</div>
+    <div class="dl">{baixar}</div>{selo}
     <p class="note">{t("rename_it", lang)}</p>
     <p class="note">{t("on_windows", lang)}</p>
     <pre>ren sgalaxy-windows-x86_64.exe sgalaxy.exe</pre>
@@ -1033,9 +1057,13 @@ def client_page(lang: str) -> str:
     baixar = "".join(
         f'<a href="{RELEASES}/latest/download/{arquivo}">{t(chave, lang)}</a>'
         for chave, arquivo, _cmd in BINARIES)
+    versao = client_version()
+    selo = (f'<p class="note">{t("latest_is", lang)} <code>{_esc(versao)}</code> · '
+            f'<a href="{RELEASES}">{t("all_releases", lang)}</a></p>'
+            if versao else "")
     body = f"""
 <p>{t("client_intro", lang)}</p>
-<div class="dl">{baixar}</div>
+<div class="dl">{baixar}</div>{selo}
 
 <h2>{t("on_windows", lang)}</h2>
 <p class="note">{t("windows_note", lang)}</p>

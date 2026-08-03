@@ -559,3 +559,28 @@ class GalaxyHeaderTestCase(unittest.TestCase):
         por cima da senha que alguém pôs ali de propósito."""
         html = pages.room_page(dict(self.SALA, password_hash="x"), [], {}, "en")
         self.assertNotIn("13371337", html)
+
+
+class DownloadVersionTestCase(unittest.TestCase):
+    """A página não dizia qual versão os botões entregam, então não havia como
+    saber sem baixar e rodar."""
+
+    SALA = {"id": "6359GV", "name": "Frontier", "max_players": 64,
+            "password_hash": None, "max_join_age_days": 5}
+
+    def test_both_download_pages_name_the_version(self):
+        for lang in ("en", "pt"):
+            for html in (pages.client_page(lang),
+                         pages.join_page(self.SALA, lang, 2, False)):
+                self.assertIn(pages.client_version(), html)
+
+    def test_no_version_means_no_claim(self):
+        """Uma versão errada é pior que nenhuma, então sem o arquivo a página
+        simplesmente não afirma nada."""
+        real = pages.client_version
+        pages.client_version = lambda: ""
+        try:
+            html = pages.client_page("en")
+            self.assertNotIn("The newest build is", html)
+        finally:
+            pages.client_version = real

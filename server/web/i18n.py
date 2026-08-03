@@ -61,6 +61,8 @@ STRINGS: dict = {
               "warn that the file came from the internet. It is an unsigned "
               "binary, and the source is open to inspection.",
     },
+    "latest_is": {"pt": "A versão mais recente é", "en": "The newest build is"},
+    "all_releases": {"pt": "todas as versões", "en": "all releases"},
     "what_it_writes": {"pt": "O que ele cria no seu computador",
                        "en": "What it writes on your machine"},
     "mod_h": {"pt": "O mod, que é opcional",
