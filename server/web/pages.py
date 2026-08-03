@@ -625,6 +625,8 @@ appears in your neighbours' sectors.</li>
 assembles that ship inside your own save, from their ship as it stood when they
 last returned it, carrying the goods they consigned. Their game never touches
 yours.</p>
+<p>It is their real ship, so its layout is visible to whoever it appears to.
+What it carries is only what they consigned, and their hold arrives empty.</p>
 <p>When somebody buys from it, the game charges them and pays the ship, which
 as far as the game knows belongs to a faction. So the server photographs the
 shelf when it hands the save out, compares it when the save comes back, and
@@ -769,6 +771,8 @@ setores dos seus vizinhos.</li>
 O servidor monta essa nave dentro do seu próprio save, a partir da nave dele
 como estava na última devolução, carregando o que ele consignou. O jogo dele
 nunca encosta no seu.</p>
+<p>É a nave dele de verdade, então a planta fica à vista de quem a recebe. O
+que ela carrega é só o que ele consignou, e o porão chega vazio.</p>
 <p>Quando alguém compra dela, o jogo cobra e paga a nave, que para ele pertence
 a uma facção. Então o servidor fotografa a prateleira quando entrega o save,
 compara quando ele volta, e registra o que foi vendido. Você recebe na sua

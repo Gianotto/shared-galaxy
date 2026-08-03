@@ -290,6 +290,65 @@ class StorefrontTemplateTestCase(unittest.TestCase):
         self.assertEqual(len(molde.findall("crafts/c")), 1,
                          "estragou o molde: a cópia é que devia perder a lancha")
 
+    def test_a_neighbours_ship_arrives_with_its_fog_untouched(self):
+        """Escrever névoa por cima de um casco explorado desenha uma nave pela
+        metade.
+
+        Medido no save entregue ao Gianotto: a nave do Fernando chegava com 989
+        células marcadas como não vistas, mais `unex`, `forceRoof` e `fog`, tudo
+        por cima de um casco que o dono tinha explorado inteiro. O jogo não
+        aceita nem recusa: casco preto, um cômodo aceso com tripulante dentro, e
+        uma chapa faltando. Foi relatado como "faltando um HULL".
+        """
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.npc_trader_ship()])
+        # O molde é a nave de OUTRO jogador: casco explorado, sem `unex`.
+        molde = storefront.live_npc_ships(sf)[0]
+        elementos = ET.SubElement(molde, "elements")
+        for eid in ("9101", "9102", "9103"):
+            ET.SubElement(elementos, "e", {"eid": eid, "fg": "1"})
+        molde.attrib.pop("unex", None)
+        molde.set("fog", "false")
+
+        rel = storefront.inject_ship(sf, molde, faction="Civilian",
+                                     name="HSS FERNANDO (Fernando)",
+                                     hull_mode=False, crew_side="Civilian",
+                                     at=("84119", "214759"), system_id="6")
+        nova = [s for _d, s in sf.ships()
+                if s.get("sid") == rel["fleet"]["createdShipId"]][0]
+
+        self.assertFalse(rel["fog"]["written"])
+        self.assertEqual(
+            [e.get("fg") for e in nova.iter("e") if e.get("fg") is not None],
+            ["1", "1", "1"], "apagou a névoa de um casco já explorado")
+        for atributo in ("unex", "forceRoof"):
+            self.assertIsNone(nova.get(atributo),
+                              f"marcou {atributo} numa nave que foi explorada")
+        self.assertNotEqual(nova.get("fog"), "true")
+
+    def test_an_npc_hull_still_arrives_hidden(self):
+        """O outro lado da mesma regra: um casco de NPC já nasce escondido, e
+        continua escondido porque ninguém escreve nele."""
+        from sgalaxy import storefront
+        sf = self._save([synthetic.default_player_ship(),
+                         synthetic.npc_trader_ship()])
+        molde = storefront.live_npc_ships(sf)[0]
+        elementos = ET.SubElement(molde, "elements")
+        ET.SubElement(elementos, "e", {"eid": "9201", "fg": "0"})
+        molde.set("unex", "1")
+        molde.set("fog", "true")
+
+        rel = storefront.inject_ship(sf, molde, faction="Civilian",
+                                     name="Meridian (Vizinha)", hull_mode=True,
+                                     crew_side="Civilian",
+                                     at=("84119", "214759"), system_id="6")
+        nova = [s for _d, s in sf.ships()
+                if s.get("sid") == rel["fleet"]["createdShipId"]][0]
+        self.assertEqual(nova.get("unex"), "1")
+        self.assertEqual([e.get("fg") for e in nova.iter("e")
+                          if e.get("fg") is not None], ["0"])
+
     def test_the_crew_comes_along_and_is_renumbered(self):
         """Tripulação é o que separa nave viva de sucata, e entId repetido
         é o tipo de erro que carrega e quebra depois."""

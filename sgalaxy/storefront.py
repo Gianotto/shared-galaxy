@@ -755,6 +755,11 @@ def hide_interior(ship: ET.Element) -> dict:
 
     E o estado de uma nave que o jogador nunca visitou. Nao esconde nada
     sozinho: quem fecha o interior de verdade e o `hostmap`.
+
+    `inject_ship` NAO chama mais isto, de proposito. Escrever este estado por
+    cima de um casco que o dono explorou produz uma nave meio desenhada, com
+    chapa faltando. Fica aqui porque descreve o formato, e nao porque a vitrine
+    precise dele.
     """
     cells = changed = 0
     for el in ship.iter():
@@ -1319,19 +1324,27 @@ def inject_ship(dest: SaveFile, source_ship: ET.Element, faction: str = DEFAULT_
 
     # -- 6: nevoa e teto ----------------------------------------------------
     #
-    # No modo vitrine nao se toca. O casco ja nasce escondido, e o E3b mostrou
-    # que escrever na nevoa e justamente o que nao funciona: o jogo reconstroi a
-    # partir de uma fonte que nao encontramos, e so respeita o resultado quando
-    # a nave de origem nunca foi explorada. Mexer aqui seria, na melhor das
-    # hipoteses, inofensivo — e na pior, revelar um casco que estava fechado.
-    if hull_mode:
-        cells = [e for e in ship.iter("e") if e.get("fg") is not None]
-        report["fog"] = {"mode": "casco", "cells": len(cells),
-                         "fogged": sum(1 for e in cells if e.get("fg") == "0"),
-                         "shipAttrs": {k: ship.get(k) for k in SHIP_HIDDEN_ATTRS
-                                       if ship.get(k) is not None}}
-    else:
-        report["fog"] = hide_interior(ship)
+    # NAO SE ESCREVE NA NEVOA, venha o molde de onde vier. O E3b mostrou que o
+    # jogo reconstroi a nevoa a partir de uma fonte que nao encontramos, e so
+    # respeita o que esta no arquivo quando a nave nunca foi explorada.
+    #
+    # Num casco de NPC isso e inofensivo: ele ja nasce escondido. Numa nave de
+    # jogador era o contrario, e custou uma sessao. Medido no save entregue ao
+    # Gianotto: a nave do Fernando chegava com 989 celulas marcadas como nao
+    # vistas mais `unex`, `forceRoof` e `fog` na raiz, tudo por cima de um casco
+    # que o dono tinha explorado inteiro. O jogo nao aceita nem recusa: desenha
+    # o casco preto, deixa um comodo aceso com um tripulante dentro, e abre um
+    # buraco onde faltou uma chapa. Relatado como "faltando um HULL".
+    #
+    # Entao o interior da nave do vizinho fica a vista, e isso e o preco de ela
+    # ser reconhecivel. Quem fecha o acesso de verdade e o `hostmap`, logo
+    # abaixo, e nao a nevoa.
+    cells = [e for e in ship.iter("e") if e.get("fg") is not None]
+    report["fog"] = {"mode": "casco" if hull_mode else "nave do vizinho",
+                     "written": False, "cells": len(cells),
+                     "fogged": sum(1 for e in cells if e.get("fg") == "0"),
+                     "shipAttrs": {k: ship.get(k) for k in SHIP_HIDDEN_ATTRS
+                                   if ship.get(k) is not None}}
 
     # -- a nave entra no save ------------------------------------------------
     attach(holder, ship)
