@@ -600,3 +600,35 @@ class JoinWithoutASaveTestCase(unittest.TestCase):
             client._start_in_room = original
             client.game_is_running = real_jogo
         self.assertIn("Space Haven", str(erro.exception))
+
+
+class ErrorMessagesTestCase(unittest.TestCase):
+    """Um número sozinho é útil para quem escreveu o servidor e para mais
+    ninguém. "error code: 1010" não diz que a Cloudflare barrou o cliente, nem
+    o que fazer a respeito."""
+
+    def test_cloudflare_is_named_and_says_what_to_do(self):
+        texto = client.explain(403, "<html>error code: 1010</html>")
+        self.assertIn("Cloudflare", texto)
+        self.assertIn("1010", texto)
+        self.assertIn("releases", texto)
+
+    def test_an_unknown_cloudflare_code_still_says_who_refused(self):
+        """Dizer "o servidor recusou" quando quem recusou foi o intermediário
+        manda a pessoa procurar defeito no lugar errado."""
+        texto = client.explain(403, "error code: 1099")
+        self.assertIn("1099", texto)
+        self.assertIn("never reached the server", texto)
+
+    def test_our_own_codes_keep_the_sentence_the_server_wrote(self):
+        texto = client.explain(409, "you are already in this galaxy")
+        self.assertIn("you are already in this galaxy", texto)
+        self.assertIn("409", texto)
+
+    def test_a_code_with_no_body_still_reads(self):
+        self.assertEqual(client.explain(502, ""), "the server is not answering (502)")
+
+    def test_an_unknown_code_falls_back_without_losing_the_detail(self):
+        texto = client.explain(418, "I am a teapot")
+        self.assertIn("418", texto)
+        self.assertIn("teapot", texto)

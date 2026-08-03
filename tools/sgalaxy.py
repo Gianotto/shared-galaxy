@@ -38,6 +38,7 @@ import http.client
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -143,6 +144,60 @@ def token() -> str:
 # HTTP
 # ---------------------------------------------------------------------------
 
+# O que cada resposta quer dizer, em portugues de gente. O numero sozinho e
+# util para quem escreveu o servidor e para mais ninguem: "error code: 1010"
+# nao diz que a Cloudflare barrou o cliente, nem o que fazer a respeito.
+#
+# Os 1xxx sao da Cloudflare e nao do nosso servidor, o que importa: dizer "o
+# servidor recusou" quando quem recusou foi o intermediario manda a pessoa
+# procurar defeito no lugar errado.
+CLOUDFLARE = {
+    "1010": ("blocked by Cloudflare",
+             "Cloudflare turned this request away because it did not "
+             "recognise the client. This usually means an old build: "
+             "download the latest from "
+             "github.com/Gianotto/shared-galaxy/releases"),
+    "1015": ("rate limited by Cloudflare",
+             "too many requests from this address in a short time. Wait a "
+             "minute and try again"),
+    "1020": ("refused by a Cloudflare rule",
+             "a firewall rule turned this request away. Whoever hosts the "
+             "server can see which one in their Cloudflare dashboard"),
+}
+
+HTTP_NAMES = {
+    400: "the server could not read what was sent",
+    401: "not signed in",
+    403: "not allowed",
+    404: "not found",
+    409: "conflicts with the current state",
+    413: "too large",
+    429: "too many requests",
+    500: "the server broke",
+    502: "the server is not answering",
+    503: "the server is down for a moment",
+    504: "the server took too long",
+}
+
+
+def explain(code: int, detail: str) -> str:
+    """A resposta do servidor numa frase que se le sem consultar tabela."""
+    achado = re.search(r"error code:\s*(\d{4})", detail or "")
+    if achado:
+        nome, o_que = CLOUDFLARE.get(
+            achado.group(1),
+            (f"Cloudflare error {achado.group(1)}",
+             "the request never reached the server"))
+        return f"{nome} ({achado.group(1)}). {o_que}"
+    nome = HTTP_NAMES.get(code)
+    limpo = " ".join((detail or "").split())
+    if nome and limpo:
+        return f"{nome} ({code}): {limpo}"
+    if nome:
+        return f"{nome} ({code})"
+    return f"the server refused ({code}): {limpo}"
+
+
 def request(method: str, path: str, body: bytes | None = None,
             headers: dict | None = None, auth: bool = True) -> tuple:
     """Devolve (status, corpo, headers). Erro do servidor vira ClientError."""
@@ -171,7 +226,7 @@ def request(method: str, path: str, body: bytes | None = None,
             detail = json.loads(raw).get("detail", raw.decode("utf-8", "replace"))
         except (json.JSONDecodeError, UnicodeDecodeError):
             detail = raw.decode("utf-8", "replace")
-        raise ClientError(f"the server refused ({exc.code}): {detail}") from exc
+        raise ClientError(explain(exc.code, detail)) from exc
     except urllib.error.URLError as exc:
         raise ClientError(f"could not reach {base_url()}: {exc.reason}") from exc
     except (OSError, http.client.HTTPException) as exc:
