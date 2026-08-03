@@ -471,15 +471,15 @@ def cmd_create_room(args) -> int:
     print(f"    {prog()} how-to-join {data['id']}")
     if not _recipe(args):
         print()
-        print("  The recipe is empty. After creating the game, record the")
-        print("  and the options you picked:")
-        print(f"    {prog()} configurar-room {data['id']} \\")
+        print("  The recipe is empty. Once you have created the game,")
+        print("  record the ship and the options you picked:")
+        print(f"    {prog()} configure-galaxy {data['id']} \\")
         print('        --ship "Starting ship name" --difficulty Normal')
     return 0
 
 
 def _recipe(args) -> dict:
-    """O que alguem precisa reproduzir para o save ser aceito na room."""
+    """O que alguem precisa reproduzir para o save ser aceito na galaxia."""
     recipe = {}
     if getattr(args, "ship", None):
         recipe["ship"] = args.ship
@@ -1316,7 +1316,7 @@ def arm_autoload(game_dir: str, folder_name: str) -> bool:
 
 
 def _room_folder(room: str) -> str:
-    """Onde a folder da room mora, ao lado das outras partidas do jogo."""
+    """Onde a pasta da galaxia mora, ao lado das outras partidas do jogo."""
     exe = find_game()
     if exe:
         saves = os.path.join(os.path.dirname(exe), "savegames")

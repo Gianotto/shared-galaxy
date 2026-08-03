@@ -99,3 +99,32 @@ def argparse_subparsers():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CommandsNamedInMessagesTestCase(unittest.TestCase):
+    """Uma mensagem que sugere um comando inexistente é pior que nenhuma: a
+    pessoa digita o que leu e recebe outro erro. `configurar-room` chegou a ser
+    sugerido depois de criar uma galáxia, e nunca existiu."""
+
+    def _cli(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "sgalaxy_cli", os.path.join(RAIZ, "tools", "sgalaxy.py"))
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+        return modulo
+
+    def test_every_command_a_message_suggests_exists(self):
+        cli = self._cli()
+        validos = set(cli.build_parser()._subparsers._group_actions[0].choices)
+        with open(os.path.join(RAIZ, "tools", "sgalaxy.py"),
+                  encoding="utf-8") as fh:
+            arvore = ast.parse(fh.read())
+        citados = set()
+        for no in ast.walk(arvore):
+            if isinstance(no, ast.Constant) and isinstance(no.value, str):
+                for padrao in (r"\{prog\(\)\}\s+([a-z][a-z-]+)",
+                               r"sgalaxy(?:\.py)?\s+([a-z][a-z-]+)"):
+                    citados.update(re.findall(padrao, no.value))
+        self.assertTrue(citados, "nenhum comando citado: o teste não mede nada")
+        self.assertEqual(citados - validos, set())
