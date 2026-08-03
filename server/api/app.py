@@ -287,8 +287,9 @@ def list_rooms():
 
 @app.post("/api/v1/rooms", status_code=201)
 def create_room(payload: dict, player: dict = Depends(current_player)):
-    ok, motivo = rules.can_create_room(db.rooms_owned(conn, player["id"]),
-                                          player["blocked"])
+    with db.pool().connection() as conn:
+        ok, motivo = rules.can_create_room(db.rooms_owned(conn, player["id"]),
+                                           player["blocked"])
     if not ok:
         raise HTTPException(403, motivo)
 
