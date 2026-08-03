@@ -1109,7 +1109,21 @@ def sector_slot(dest: SaveFile) -> tuple:
     alturas = sorted(int(n.get("oy")) for n in naves if n.get("oy") is not None)
     altura = alturas[len(alturas) // 2] if alturas else None
 
-    centro = (min(ocupados) + max(ocupados)) // 2
+    # A ANCORA E A NAVE DE QUEM JOGA, e nao o centro do aglomerado. Medido num
+    # setor com naves em -4992, -2336 e 1248: nao cabia folga entre elas, entao
+    # a vaga tinha que ficar fora, e havia duas igualmente distantes do centro.
+    # O desempate pegou a da esquerda, -8736, a quase dez mil da nave da pessoa
+    # e fora do que ela enxerga. Uma vitrine existe para ser alcancada; ficar
+    # perto de quem vai negociar com ela e o criterio.
+    minha = next((int(n.get("ox")) for n in naves
+                  if (n.find("settings") is not None
+                      and n.find("settings").get("owner") == "Player")), None)
+    centro = minha if minha is not None else (min(ocupados) + max(ocupados)) // 2
+    if minha is not None:
+        altura = next((int(n.get("oy")) for n in naves
+                       if (n.find("settings") is not None
+                           and n.find("settings").get("owner") == "Player"
+                           and n.get("oy") is not None)), altura)
     inicio = min(ocupados) - FOLGA_SETOR * 2
     fim = max(ocupados) + FOLGA_SETOR * 2
     candidatos = [x for x in range(

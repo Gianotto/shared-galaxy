@@ -594,3 +594,35 @@ class ShelfIsOnlyWhatWasConsignedTestCase(unittest.TestCase):
         nave = self._nave_com_caixas()
         storefront.set_stock(nave, [], clear=False)
         self.assertEqual(len(nave.findall("items/i")), 4)
+
+    def test_it_sits_near_the_player_not_the_middle(self):
+        """Medido num setor com naves em -4992, -2336 e 1248: não cabia folga
+        entre elas, havia duas vagas igualmente distantes do centro, e o
+        desempate pegou -8736, a quase dez mil da nave da pessoa. Uma vitrine
+        existe para ser alcançada."""
+        from sgalaxy import storefront
+        from sgalaxy.savefile import SaveFile
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: __import__("shutil").rmtree(tmp,
+                                                            ignore_errors=True))
+        d = os.path.join(tmp, "save")
+        os.makedirs(d)
+        jogo = ET.Element("game", {"seed": "0"})
+        naves = ET.SubElement(jogo, "ships")
+        for ox, dono in ((1248, "Player"), (-2336, "Civilian"),
+                         (-4992, "Civilian")):
+            nave = ET.SubElement(naves, "ship",
+                                 {"sid": str(abs(ox)), "ox": str(ox),
+                                  "oy": "2096"})
+            ET.SubElement(nave, "settings", {"owner": dono})
+        ET.SubElement(jogo, "starmap", {"w": "1", "h": "1"})
+        with open(os.path.join(d, "game"), "wb") as fh:
+            fh.write(ET.tostring(jogo))
+        with open(os.path.join(d, "info"), "wb") as fh:
+            fh.write(b'<info date="86400" version="21"/>')
+        vaga, altura = storefront.sector_slot(SaveFile(d))
+        self.assertLess(abs(vaga - 1248), abs(vaga - (-4992)),
+                        f"ficou do lado errado: {vaga}")
+        self.assertLessEqual(abs(vaga - 1248), storefront.FOLGA_SETOR + 1248)
+        self.assertEqual(altura, 2096)
