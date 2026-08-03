@@ -1079,7 +1079,13 @@ def watch_autosaves(target: str, room: str, game_dir: str, parar) -> None:
             # Mudou desde a última olhada: espera parar de mudar antes de ler.
             parar.wait(SETTLE_SECONDS)
             if _folder_state(pasta) != estado:
-                continue        # ainda estava gravando; pega na próxima volta
+                # Ainda gravando; pega na próxima volta. Isto é dito em voz
+                # alta porque um save manual chegou uma vez só ao fechar o
+                # jogo, e sem saber quantas voltas foram adiadas não dá para
+                # separar "o vigia não viu" de "o vigia viu e desistiu".
+                print(f"      {nome}: still being written, will retry",
+                      flush=True)
+                continue
             vistos[nome] = estado
             rotulo = "manual save" if nome == "save" else nome
             _send_checkpoint(pasta, rotulo, room, game_dir)
@@ -1255,7 +1261,11 @@ SHIPS_FILE = "sharedgalaxy.ships"
 
 # De quanto em quanto tempo olhar se apareceu autosave novo, e quanto esperar
 # para ter certeza de que o jogo terminou de gravar.
-WATCH_EVERY = 20
+# De quanto em quanto tempo o vigia olha. Vinte segundos era o intervalo
+# original, herdado de quando só autosaves contavam e um minuto de atraso não
+# incomodava ninguém. Um save manual é um gesto deliberado, e quem o faz espera
+# ver algo acontecer.
+WATCH_EVERY = 6
 SETTLE_SECONDS = 3
 
 
