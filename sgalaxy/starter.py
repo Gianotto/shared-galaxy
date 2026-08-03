@@ -50,6 +50,40 @@ MAX_TENTATIVAS = 40
 DESTINOS = ("AsteroidField", "Moon", "Planet")
 
 
+def problems(sf: SaveFile) -> list:
+    """O que impede este save de servir de molde. Lista vazia quer dizer que serve.
+
+    POR QUE ISTO EXISTE
+
+    A sala entregou um molde cujo `<roof>` da nave do jogador nao era um teto.
+    Medido: num save que funciona os filhos do `<roof>` sao chapas de casco,
+    `{m: -2, x, y, col}`, e o elemento carrega `hullPattern`, `shiftX` e
+    `shiftY`. Naquele molde os filhos eram modulos, `{id, m, rot, ext, fl}`, e
+    os tres atributos faltavam — inclusive na comparacao com a nave Merchant do
+    proprio save, que os tinha.
+
+    Quem recebia a copia via o casco fechado e nao conseguia entrar na propria
+    nave. O servidor entregava isso calado, e a pessoa nao tinha como saber que
+    o defeito estava no molde.
+    """
+    faltas = []
+    nave = player_ship(sf)
+    if nave is None:
+        return ["this save has no Player ship, so there is nothing to copy"]
+
+    teto = nave.find("roof")
+    if teto is None:
+        faltas.append("the ship has no <roof>")
+    elif teto.get("hullPattern") is None:
+        faltas.append(
+            "the ship's <roof> has no hullPattern, so the game draws a closed "
+            "hull and nobody can see inside their own ship")
+
+    if not nave.findall(".//characters/c"):
+        faltas.append("the ship has no crew")
+    return faltas
+
+
 def player_ship(sf: SaveFile) -> ET.Element | None:
     """A nave de quem joga: a de mais tripulação, entre as da facção Player."""
     candidatas = [nave for _doc, nave in sf.ships()

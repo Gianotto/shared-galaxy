@@ -481,11 +481,22 @@ def start_in_room(room_id: str, request: Request,
         try:
             with blobs.with_unpacked(store().get(molde)) as folder:
                 sf = SaveFile(folder)
+                # O MOLDE E CONFERIDO ANTES DE SER COPIADO. Uma sala entregou
+                # um molde cujo `<roof>` nao era um teto, e quem recebia a
+                # copia via o casco fechado sem ter como saber por que.
+                ruim = starter.problems(sf)
+                if ruim:
+                    raise HTTPException(
+                        409, "this room has no usable starting save: "
+                             + "; ".join(ruim)
+                             + ". Whoever runs the room can set a better one")
                 rel = starter.personalise(sf, nome, ocupados)
                 sf.save(backup=False)
                 described = fingerprint.describe(folder)
                 here = presence.read(folder)
                 data = blobs.pack_save(folder)
+        except HTTPException:
+            raise
         except Exception as exc:      # noqa: BLE001
             log.warning("could not build a starting save: %s", exc)
             raise HTTPException(

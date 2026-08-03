@@ -572,7 +572,8 @@ def _start_in_room(room: str, senha: str):
         # Sala sem partida guardada, ou servidor antigo que nao tem a rota. Nos
         # dois casos o caminho pelo jogo ainda existe. Um 404 com "no room" e
         # outra coisa: a sala nao existe, e abrir o jogo so adiaria o erro.
-        if "no starting save" in texto or "(404): Not Found" in texto:
+        if ("no starting save" in texto or "no usable starting save" in texto
+                or "(404): Not Found" in texto):
             return None
         raise
     data = json.loads(raw)

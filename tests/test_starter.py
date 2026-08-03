@@ -132,3 +132,48 @@ class PlacementTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TemplateHealthTestCase(unittest.TestCase):
+    """Um molde ruim entregue calado custou uma sessão: quem recebia a cópia
+    via o casco fechado e não conseguia entrar na própria nave."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.sf = _save(os.path.join(self.tmp, "save"))
+        nave = starter.player_ship(self.sf)
+        teto = ET.SubElement(nave, "roof", {"hullPattern": "1", "sx": "56"})
+        ET.SubElement(teto, "e", {"m": "-2", "x": "0", "y": "0",
+                                  "col": "56b8fc"})
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_healthy_save_has_no_problems(self):
+        self.assertEqual(starter.problems(self.sf), [])
+
+    def test_a_roof_without_hullpattern_is_refused(self):
+        """Medido num molde real: os filhos do `<roof>` eram módulos e não
+        chapas de casco, e os três atributos de teto faltavam."""
+        starter.player_ship(self.sf).find("roof").attrib.pop("hullPattern")
+        problemas = starter.problems(self.sf)
+        self.assertTrue(problemas)
+        self.assertIn("hullPattern", problemas[0])
+
+    def test_a_ship_with_no_roof_is_refused(self):
+        nave = starter.player_ship(self.sf)
+        nave.remove(nave.find("roof"))
+        self.assertTrue(starter.problems(self.sf))
+
+    def test_a_save_without_a_player_ship_is_refused(self):
+        naves = self.sf.main.find("ships")
+        for nave in list(naves):
+            naves.remove(nave)
+        self.assertIn("no Player ship", starter.problems(self.sf)[0])
+
+    def test_a_ship_without_crew_is_refused(self):
+        nave = starter.player_ship(self.sf)
+        nave.remove(nave.find("characters"))
+        self.assertTrue(any("crew" in p for p in starter.problems(self.sf)))
