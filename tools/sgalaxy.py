@@ -55,7 +55,13 @@ import zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import steamfind  # noqa: E402
-from _version import VERSION  # noqa: E402
+# A versao vem de um arquivo que o build escreve a partir da tag. Rodando do
+# repositorio ele nao existe, e `dev` e a resposta certa: nao ha build, entao
+# nao ha versao publicada.
+try:
+    from _version import VERSION  # noqa: E402
+except ImportError:
+    VERSION = "dev"
 
 CONFIG_DIR = os.path.expanduser("~/.config/sgalaxy")
 CREDENTIALS = os.path.join(CONFIG_DIR, "credentials.json")

@@ -65,3 +65,7 @@ deploy/local.env
 # Qual versão o site anuncia nos botões de download. O deploy escreve a partir
 # da tag; versionar isso deixaria o arquivo mentir entre uma tag e a próxima.
 server/web/CLIENT_VERSION
+
+# Carimbo de versão do cliente. Os dois builds o escrevem a partir da tag;
+# versionado, ele mentiria entre uma tag e a próxima.
+tools/_version.py

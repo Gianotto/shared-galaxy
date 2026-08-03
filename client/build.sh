@@ -35,6 +35,14 @@ OUT="$HERE/dist"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 
+# A VERSAO ENTRA AQUI TAMBEM, e nao so no CI. Um build local saia como `dev`, e
+# quem o usava para testar nao tinha como dizer o que estava rodando — que e a
+# primeira pergunta diante de qualquer defeito.
+VERSAO="$(git -C "$RAIZ" describe --tags --always --dirty 2>/dev/null || echo dev)"
+printf '"""Escrito pelo build."""\n\nVERSION = "%s"\n' "$VERSAO" \
+    > "$RAIZ/tools/_version.py"
+echo "versao: $VERSAO"
+
 docker run --rm \
     -v "$RAIZ:/src" -w /tmp \
     -e HOME=/tmp -e DONO="$(id -u):$(id -g)" \
@@ -55,6 +63,8 @@ docker run --rm \
             --name sgalaxy \
             --paths /src/tools \
             --hidden-import install_mod \
+            --hidden-import steamfind \
+            --hidden-import _version \
             $EXTRA \
             --distpath /src/client/dist \
             --workpath /tmp/build \
@@ -65,4 +75,5 @@ docker run --rm \
 
 echo
 "$OUT/sgalaxy" --help > /dev/null && echo "roda: $OUT/sgalaxy"
+echo "  $("$OUT/sgalaxy" --version)"
 ls -la "$OUT/sgalaxy" | awk '{print "  " $5 " bytes"}'
