@@ -23,8 +23,13 @@ sys.path.insert(0, os.path.join(RAIZ, "tools"))
 # e `mod` são inglês aqui.
 PORTUGUES = re.compile(
     r"[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]"
-    r"|\b(nao|sala|nave|jogo|pasta|senha|voce|subindo|devolvendo|"
-    r"achei|instalado|desinstalado|chave|valor|erro|aberto|fechado)\b",
+    # Substantivos e verbos que só existem em português. A lista cresceu
+    # depois de `room X criada` passar batido: sem acento e com o resto da
+    # frase em inglês, só a palavra denuncia.
+    r"|\b(nao|sala|salas|nave|naves|jogo|jogos|pasta|senha|voce|"
+    r"subindo|devolvendo|criada|criado|apagada|apagado|enviada|enviado|"
+    r"achei|instalado|desinstalado|chave|valor|erro|aberto|fechado|"
+    r"galaxia|partida|arquivo|prazo|conta|entrada|saida)\b",
     re.IGNORECASE)
 
 ARQUIVOS = ("tools/sgalaxy.py", "tools/install_mod.py", "tools/steamfind.py")

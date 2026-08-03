@@ -48,6 +48,9 @@ services:
       # Quantas contas por endereço. Existe para uma LAN ou um alojamento não
       # precisarem de deploy para caber.
       SGALAXY_MAX_PER_IP: ${SGALAXY_MAX_PER_IP:-1}
+      # Quantas galáxias uma conta pode ter ao mesmo tempo. Uma por padrão:
+      # criar conta é grátis, e sem teto a listagem enche de galáxia vazia.
+      SGALAXY_MAX_GALAXIES: ${SGALAXY_MAX_GALAXIES:-1}
     volumes:
       - save-data:/data/blobs
     ports:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import os
 import re
 import secrets
 
@@ -77,7 +78,12 @@ def parse_recovery_code(code: str) -> str:
 ROOM_ALPHABET = "BCDFGHJKMNPQRSTVWXZ23456789"
 ROOM_ID_LEN = 6
 
-MAX_ROOMS_PER_PLAYER = 1
+# Quantas galaxias uma conta pode ter ao mesmo tempo. Uma por padrao: criar
+# conta e gratis, e sem teto a listagem publica enche de galaxia vazia. Vira
+# variavel de ambiente porque quem hospeda precisa de mais de uma para testar,
+# e mudar isso nao deveria exigir um deploy.
+MAX_ROOMS_PER_PLAYER = max(1, int(
+    os.environ.get("SGALAXY_MAX_GALAXIES", "1") or "1"))
 
 
 def new_room_id() -> str:

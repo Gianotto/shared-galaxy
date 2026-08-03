@@ -464,9 +464,9 @@ def cmd_create_room(args) -> int:
         "seed": args.seed, "name": args.name, "password": args.password,
         "leaseHours": args.lease_hours, "maxPlayers": args.max_players,
         "options": _recipe(args)})
-    print(f"room {data['id']} criada")
+    print(f"galaxy {data['id']} created")
     print(f"  seed:  {data['seed']}")
-    print(f"  deadline: {data['leaseHours']}h")
+    print(f"  sessions last: {data['leaseHours']}h")
     print()
     print("  Publish the recipe for whoever joins:")
     print(f"    {prog()} how-to-join {data['id']}")
