@@ -659,7 +659,7 @@ class FoundingAGalaxyTestCase(unittest.TestCase):
 
     def test_create_galaxy_takes_what_founding_needs(self):
         args = client.build_parser().parse_args(
-            ["create-galaxy", "--seed", "1", "--name", "X",
+            ["create-galaxy", "--name", "X",
              "--max-players", "8", "--game", "/tmp/x", "-y"])
         self.assertEqual(args.game, "/tmp/x")
         self.assertTrue(args.yes)
@@ -667,17 +667,23 @@ class FoundingAGalaxyTestCase(unittest.TestCase):
 
     def test_it_can_be_told_to_stop_at_the_galaxy(self):
         args = client.build_parser().parse_args(
-            ["create-galaxy", "--seed", "1", "--name", "X",
-             "--max-players", "8", "--empty"])
+            ["create-galaxy", "--name", "X", "--max-players", "8", "--empty"])
         self.assertTrue(args.empty)
 
-    def test_the_seed_is_optional(self):
+    def test_there_is_no_seed_to_pass(self):
         """O jogo grava `seed="0"` em todo save, medido em quatro partidas: a
-        seed digitada não fica no arquivo, então o servidor nunca pôde
-        conferi-la. Ela também deixou de ser necessária para entrar."""
-        args = client.build_parser().parse_args(
-            ["create-galaxy", "--name", "X", "--max-players", "8"])
-        self.assertEqual(args.seed, "")
+        seed digitada nunca chegou ao servidor. Guardar um número que ninguém
+        confere só levantava a dúvida "preciso dela?"."""
+        parser = client.build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["create-galaxy", "--name", "X",
+                               "--max-players", "8", "--seed", "1"])
+
+    def test_creating_once_is_the_whole_lifecycle(self):
+        """Sem configure-galaxy: cria uma vez e pronto."""
+        comandos = set(client.build_parser()._subparsers._group_actions[0].choices)
+        self.assertNotIn("configure-galaxy", comandos)
+        self.assertNotIn("how-to-join", comandos)
 
     def test_nobody_is_asked_to_type_a_particular_seed(self):
         """Pedir uma seed específica seria pedir uma coisa que ninguém

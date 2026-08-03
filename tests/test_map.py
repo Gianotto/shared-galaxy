@@ -546,18 +546,18 @@ class GalaxyHeaderTestCase(unittest.TestCase):
             "password_hash": None, "seed": "13371337", "lease_hours": 12,
             "retention_n": 3}
 
-    def test_it_shows_the_code_the_players_and_the_seed(self):
+    def test_it_shows_the_code_and_the_players(self):
         for lang in ("en", "pt"):
             html = pages.room_page(self.SALA, [], {}, lang)
             cabecalho = html.split('<p class="sub">')[1].split("</p>")[0]
             self.assertIn("6359GV", cabecalho)
             self.assertIn("0/64", cabecalho)
-            self.assertIn("13371337", cabecalho)
 
-    def test_a_password_protected_galaxy_keeps_its_seed_private(self):
-        """A seed é a receita para reproduzir o mundo, e mostrá-la passaria
-        por cima da senha que alguém pôs ali de propósito."""
-        html = pages.room_page(dict(self.SALA, password_hash="x"), [], {}, "en")
+    def test_the_seed_is_not_shown_at_all(self):
+        """Nenhum comando define uma, então só galáxias antigas teriam, e um
+        campo que aparece numa e some na outra é a dúvida que ele deveria
+        evitar."""
+        html = pages.room_page(self.SALA, [], {}, "en")
         self.assertNotIn("13371337", html)
 
 

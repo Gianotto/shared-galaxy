@@ -473,13 +473,11 @@ def cmd_create_room(args) -> int:
     gerar, e e isso que todo mundo recebe depois.
     """
     data = json_request("POST", "/api/v1/rooms", {
-        "seed": args.seed, "name": args.name, "password": args.password,
-        "leaseHours": args.lease_hours, "maxPlayers": args.max_players,
-        "options": _recipe(args)})
+        "name": args.name, "password": args.password,
+        "leaseHours": args.lease_hours,
+        "maxPlayers": args.max_players})
     print(f"galaxy {data['id']} created")
     print(f"  name:          {data.get('name') or args.name}")
-    if data.get("seed"):
-        print(f"  seed:          {data['seed']}")
     print(f"  sessions last: {data['leaseHours']}h")
 
     if getattr(args, "empty", False):
@@ -505,91 +503,6 @@ def cmd_create_room(args) -> int:
 
     print()
     print(f"  Share this to invite people: {base_url()}/galaxy/{data['id']}")
-    if not _recipe(args):
-        print(f"  Record what you picked: {prog()} configure-galaxy "
-              f"{data['id']} --ship \"...\" --difficulty Normal")
-    return 0
-
-
-def _recipe(args) -> dict:
-    """O que alguem precisa reproduzir para o save ser aceito na galaxia."""
-    recipe = {}
-    if getattr(args, "ship", None):
-        recipe["ship"] = args.ship
-    if getattr(args, "difficulty", None):
-        recipe["difficulty"] = args.difficulty
-    for item in getattr(args, "option", None) or []:
-        if "=" not in item:
-            raise ClientError(f"--option expects key=value, got {item!r}")
-        chave, valor = item.split("=", 1)
-        recipe[chave.strip()] = valor.strip()
-    return recipe
-
-
-def cmd_configure_room(args) -> int:
-    payload = {}
-    recipe = _recipe(args)
-    if recipe:
-        if args.replace:
-            payload["options"] = recipe
-        else:
-            # Mesclar e o padrao porque quase sempre se quer acrescentar uma
-            # opcao, nao reescrever a receita. `--replace` existe para o outro
-            # caso — inclusive apagar uma chave que nao deveria estar la.
-            current = json_request("GET", f"/api/v1/rooms/{args.galaxy}")
-            payload["options"] = {**(current.get("options") or {}), **recipe}
-    if args.name:
-        payload["name"] = args.name
-    if args.lease_hours:
-        payload["leaseHours"] = args.lease_hours
-    if getattr(args, "seed", None):
-        payload["seed"] = args.seed
-    if not payload:
-        raise ClientError("nothing to change. Use --ship, --difficulty, "
-                          "--option KEY=VALUE, --name, --seed or "
-                          "--lease-hours")
-    json_request("PATCH", f"/api/v1/rooms/{args.galaxy}", payload)
-    print(f"room {args.galaxy} updated")
-    return cmd_how_to_join(args)
-
-
-def cmd_how_to_join(args) -> int:
-    """The recipe, laid out the way the creation screen asks for it."""
-    head = {"X-Room-Password": getattr(args, "senha", None) or ""}
-    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.galaxy}", None, head)
-    room = json.loads(raw)
-    if "seed" not in room:
-        raise ClientError("this room has a password; pass --password to see the recipe")
-
-    print(f"To join room {room['id']} ({room['name']}):")
-    print()
-    print("  1. In Space Haven, create a new game with:")
-    print(f"       seed: {room['seed']}")
-    recipe = room.get("options") or {}
-    if recipe.get("ship"):
-        print(f"       starting ship: {recipe['ship']}")
-    if recipe.get("difficulty"):
-        print(f"       difficulty: {recipe['difficulty']}")
-    others = {k: v for k, v in recipe.items()
-              if k not in ("ship", "difficulty")}
-    for key, value in sorted(others.items()):
-        print(f"       {key}: {value}")
-    if not recipe:
-        print("       (the room owner has not published the scenario options yet)")
-    print()
-    print("  2. Save the game and close it.")
-    print()
-    print("  3. Upload the save:")
-    print(f"       {prog()} join {room['id']} \\")
-    print("           --save PATH/TO/YOUR/GAME")
-    print()
-    if room.get("galaxyDigest"):
-        print(f"  This room's galaxy is {room['galaxyDigest']}. If your save does")
-        print("  not match, a creation option differed — the seed alone is not")
-        print("  enough.")
-    else:
-        print("  Nobody has joined yet: the first save uploaded defines the")
-        print("  room's galaxy, and later ones must match it.")
     return 0
 
 
@@ -1584,10 +1497,6 @@ def build_parser() -> argparse.ArgumentParser:
     # ninguem reconhece a sua na listagem; e o teto de gente decide se o
     # convite cabe, e descobrir que nao cabe quando a 33a pessoa chega e tarde
     # demais para mudar.
-    # A seed e anotacao, nao requisito: o jogo nao a grava no save, entao o
-    # servidor nunca pode conferi-la, e ninguem precisa dela para entrar.
-    p.add_argument("--seed", default="",
-                   help="the seed you used, if you want it on record")
     p.add_argument("--name", required=True,
                    help="how people will recognise it in the listing")
     p.add_argument("--max-players", type=int, required=True,
@@ -1600,35 +1509,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--password")
     p.add_argument("--lease-hours", type=int, default=12,
                    help="how long a session may stay checked out")
-    p.add_argument("--ship", help="starting ship everyone must pick")
-    p.add_argument("--difficulty")
-    p.add_argument("--option", action="append", metavar="KEY=VALUE",
-                   help="scenario option; repeatable")
     p.set_defaults(func=cmd_create_room)
 
-    p = sub.add_parser("configure-galaxy",
-                       help="publish or fix the galaxy recipe")
-    p.add_argument("galaxy", metavar="GALAXY")
-    p.add_argument("--ship", help="starting ship everyone must pick")
-    p.add_argument("--difficulty")
-    p.add_argument("--option", action="append", metavar="KEY=VALUE",
-                   help="scenario option; repeatable")
-    p.add_argument("--name")
-    p.add_argument("--seed",
-                   help="record the seed you used, for whoever wants it")
-    p.add_argument("--lease-hours", type=int)
-    p.add_argument("--password", help="if the room has one")
-    p.add_argument("--replace", action="store_true",
-                   help="replace the whole recipe instead of merging into it")
-    p.set_defaults(func=cmd_configure_room)
-
-    p = sub.add_parser("how-to-join",
-                       help="the recipe for reproducing this galaxy")
-    p.add_argument("galaxy", metavar="GALAXY")
-    p.add_argument("--password")
-    p.set_defaults(func=cmd_how_to_join)
-
-    # `join` e `play` sao o mesmo comando. Entrar sem jogar nao serve para
+            # `join` e `play` sao o mesmo comando. Entrar sem jogar nao serve para
     # nada, e jogar exige ter entrado: eram duas metades de uma acao so, e a
     # ordem entre elas era uma coisa a mais para alguem descobrir sozinho.
     for nome, ajuda in (("join", "join the galaxy and play"),

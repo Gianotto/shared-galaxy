@@ -422,11 +422,11 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
         room["name"], body, lang,
         f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '
         f'{len(roster)}/{room["max_players"]} {t("players", lang)} · '
-        # A seed fica escondida numa galaxia com senha. Ela e a receita para
-        # reproduzir o mundo, e entrega-la na pagina publica passaria por cima
-        # da senha que alguem pos ali de proposito.
-        + (f'{t("seed", lang)} <code>{_esc(room.get("seed"))}</code> · '
-           if room.get("seed") and not room.get("password_hash") else '')
+        # A SEED SAIU DAQUI. Nenhum comando a define mais, entao so galaxias
+        # antigas teriam uma, e um campo que aparece numa e some na outra e
+        # exatamente a duvida que ele deveria evitar. Ninguem precisa da seed
+        # para entrar: quem chega recebe uma copia, ou a galaxia e enxertada
+        # por cima da partida que trouxe.
         + f'{t("lease_of", lang)} {room["lease_hours"]}h',
         f'/room/{room["id"]}', entrar)
 

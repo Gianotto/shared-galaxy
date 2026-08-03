@@ -308,17 +308,16 @@ def create_room(payload: dict, player: dict = Depends(current_player)):
     if not ok:
         raise HTTPException(403, motivo)
 
-    # A SEED E OPCIONAL, e nao decide nada. O jogo grava `seed="0"` em todo
-    # save, medido em quatro partidas diferentes: a seed digitada nao fica em
-    # lugar nenhum do arquivo, entao o servidor nunca conseguiu conferi-la.
+    # A SEED SAIU. O jogo grava `seed="0"` em todo save, medido em quatro
+    # partidas diferentes, entao a seed digitada nunca chegou ao servidor e
+    # nunca pode ser conferida. Guardar um numero que ninguem verifica so
+    # levantava a duvida "preciso dela?" em quem lia a pagina.
     #
-    # Ela tambem deixou de ser necessaria para entrar. Quem chega recebe uma
-    # copia do molde, e quem traz a propria partida tem a galaxia enxertada por
-    # cima. O que identifica uma galaxia sao as estrelas dela.
-    #
-    # Fica como anotacao de quem fundou, para quem quiser recriar o mundo por
-    # fora. Sem ela a galaxia funciona igual.
-    seed = str(payload.get("seed") or "").strip()
+    # Ninguem precisa. Quem chega recebe uma copia do molde, e quem traz a
+    # propria partida tem a galaxia enxertada por cima. O que identifica uma
+    # galaxia sao as estrelas dela. A coluna continua no banco pelas galaxias
+    # que ja tinham uma anotada.
+    seed = ""
     name = str(payload.get("name") or "").strip() or f"Sala de {player['display_name']}"
 
     room = {
@@ -468,7 +467,6 @@ def update_room(room_id: str, payload: dict,
             campos.append("options = %(options)s")
             valores["options"] = json.dumps(payload["options"])
         for chave, coluna in (("leaseHours", "lease_hours"),
-                              ("seed", "seed"),
                               ("maxPlayers", "max_players"),
                               ("retentionN", "retention_n")):
             if chave in payload:

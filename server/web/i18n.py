@@ -400,44 +400,6 @@ STRINGS: dict = {
     },
 
     # -- how to join
-    "how_to_join": {"pt": "Como entrar", "en": "How to join"},
-    "how_intro": {
-        "pt": "Crie uma partida no Space Haven com esta seed e estas opções. A "
-              "seed reproduz a galáxia inteira, mas não a sua tripulação nem a "
-              "sua nave. Mesmo universo, gente diferente.",
-        "en": "Create a game in Space Haven with this seed and these options. "
-              "The seed reproduces the whole galaxy, but not your crew or your "
-              "ship. Same universe, different people.",
-    },
-    "seed": {"pt": "seed", "en": "seed"},
-    "no_options_yet": {
-        "pt": "o dono da galáxia ainda não publicou as opções",
-        "en": "the galaxy owner hasn't published the options yet",
-    },
-    "then_upload": {"pt": "Depois, suba o save:",
-                    "en": "Then upload your save:"},
-    "wrong_options": {
-        "pt": "Opção de criação diferente dá outra galáxia, e o servidor "
-              "recusa o save, dizendo o motivo.",
-        "en": "A different creation option yields a different galaxy, and the "
-              "server refuses the save and tells you why.",
-    },
-    "locked_room": {
-        "pt": "Esta galáxia tem senha. Peça o código a quem administra.",
-        "en": "This galaxy is password-protected. Ask whoever runs it for the code.",
-    },
-
-    # -- onboarding pela web
-    "join_us": {"pt": "Entrar", "en": "Join"},
-    "create_account": {"pt": "Criar uma conta", "en": "Create an account"},
-    "your_name": {"pt": "Como você quer ser chamado",
-                  "en": "What you want to be called"},
-    "no_email": {
-        "pt": "Sem e-mail, sem senha, sem login de Steam. O servidor gera um "
-              "código aleatório e guarda só o resumo dele.",
-        "en": "No email, no password, no Steam login. The server generates a "
-              "random code and keeps only a digest of it.",
-    },
     "account_made": {"pt": "Conta criada", "en": "Account created"},
     "your_code": {"pt": "O seu código de recuperação",
                   "en": "Your recovery code"},
