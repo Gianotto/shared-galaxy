@@ -422,12 +422,23 @@ class SiteNavigationTestCase(unittest.TestCase):
         self.assertNotIn("tools/sgalaxy.py", html)
         self.assertNotIn("seed", html.lower())
 
+    def test_the_button_opens_a_box_with_the_command_ready(self):
+        """Quem já tem o cliente copia e joga; quem não tem segue para o passo
+        a passo. Sem JavaScript: a caixa é `:target` em CSS."""
+        for lang in ("en", "pt"):
+            html = pages.room_page(self.SALA, [], {}, lang)
+            self.assertIn('href="#join"', html)
+            self.assertIn('id="join"', html)
+            self.assertIn("sgalaxy.exe join 6359GV", html)
+            self.assertIn("./sgalaxy join 6359GV", html)
+            self.assertIn(f"/galaxy/6359GV/join?lang={lang}", html)
+            self.assertNotIn("<script", html)
+
     def test_the_room_page_offers_the_button_once_beside_the_name(self):
         """Ver a sala é o degrau 2; entrar é o 3. O botão fica na linha do
         nome porque é a única coisa que uma pessoa de fora pode FAZER ali —
         e uma vez só: dois iguais na mesma página é ruído."""
         html = pages.room_page(self.SALA, [], {}, "en")
-        self.assertIn("/galaxy/6359GV/join", html)
         self.assertEqual(html.count('class="cta"'), 1)
         barra = html.split('<div class="titlebar">')[1].split("</div>")[0]
         self.assertIn("<h1>", barra)

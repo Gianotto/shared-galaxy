@@ -225,6 +225,23 @@ STRINGS: dict = {
 
     # -- entrar numa sala
     "join_this": {"pt": "Entrar nesta galáxia", "en": "Join this galaxy"},
+    "modal_lead": {
+        "pt": "Cole isto no terminal, na pasta onde você baixou o cliente:",
+        "en": "Paste this into a terminal, in the folder you downloaded the "
+              "client to:",
+    },
+    "modal_first_time": {
+        "pt": "Na primeira vez ele te dá uma partida pronta e abre o jogo. "
+              "Depois disso, o mesmo comando é a sessão inteira.",
+        "en": "The first time it hands you a ready game and opens it. After "
+              "that, the same command is the whole session.",
+    },
+    "modal_need_client": {
+        "pt": "Ainda não tem o cliente, ou quer o passo a passo completo?",
+        "en": "Do not have the client yet, or want the full walkthrough?",
+    },
+    "modal_full": {"pt": "Instruções completas", "en": "Full instructions"},
+    "modal_close": {"pt": "Fechar", "en": "Close"},
     "join_title": {"pt": "Entrar em %s", "en": "Join %s"},
     "join_intro": {
         "pt": "O jogo continua sendo o seu, no seu computador. O que este "

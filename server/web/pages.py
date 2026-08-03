@@ -111,6 +111,14 @@ def layout(title: str, body: str, lang: str, subtitle: str = "",
     display:inline-flex; align-items:center; gap:.4rem; }}
   header.nav a:hover {{ color:var(--fg); }}
   header.nav a.here {{ color:var(--fg); font-weight:600; }}
+  /* A caixa do comando. Fechada por padrao, aberta quando a URL a aponta. */
+  .modal {{ display:none; }}
+  .modal:target {{ display:block; position:fixed; inset:0; z-index:10; }}
+  .modal .backdrop {{ position:absolute; inset:0; background:#04070fcc; }}
+  .modal .sheet {{ position:relative; max-width:34rem; margin:8vh auto;
+    background:#111931; border:1px solid var(--line); border-radius:.6rem;
+    padding:1.4rem 1.6rem; max-height:80vh; overflow-y:auto; }}
+  .modal .note {{ color:var(--dim); font-size:.92rem; }}
   * {{ box-sizing: border-box; }}
   body {{ margin:0; background:var(--bg); color:var(--fg);
          font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }}
@@ -379,10 +387,34 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
     # Na mesma linha do nome da galáxia, encostado a direita: e a unica coisa que
     # uma pessoa de fora pode FAZER nesta tela, e no corpo ela ficava separada
     # do que a identifica.
-    entrar = (f'<a class="cta" href="/galaxy/{_esc(room["id"])}/join'
-              f'?lang={lang}">{t("join_this", lang)}</a>')
+    # O botao abre uma caixa com o comando pronto, e a pagina de instrucoes
+    # fica a um link dali. Quem ja tem o cliente copia e joga; quem nao tem
+    # segue para o passo a passo.
+    #
+    # A caixa e `:target`, sem JavaScript: o botao aponta para uma ancora e o
+    # CSS mostra a caixa quando ela e o alvo. E a mesma razao de sempre — a
+    # pagina inteira se sustenta em ser legivel no codigo-fonte, e um modal
+    # nao vale uma dependencia.
+    rid = _esc(room["id"])
+    entrar = f'<a class="cta" href="#join">{t("join_this", lang)}</a>'
+    caixa = f"""
+<div class="modal" id="join">
+  <a class="backdrop" href="#" aria-label="{t("modal_close", lang)}"></a>
+  <div class="sheet">
+    <h2 style="margin-top:0">{t("join_this", lang)}</h2>
+    <p class="note">{t("modal_lead", lang)}</p>
+    <p class="note">{t("on_windows", lang)}</p>
+    <pre>sgalaxy.exe join {rid}</pre>
+    <p class="note">{t("on_unix", lang)}</p>
+    <pre>./sgalaxy join {rid}</pre>
+    <p class="note">{t("modal_first_time", lang)}</p>
+    <p>{t("modal_need_client", lang)}<br>
+       <a href="/galaxy/{rid}/join?lang={lang}">{t("modal_full", lang)}</a></p>
+    <p><a href="#">{t("modal_close", lang)}</a></p>
+  </div>
+</div>"""
 
-    body = f"""{banner}{map_svg}
+    body = f"""{banner}{caixa}{map_svg}
 <h2>{t("who_is_where", lang)}</h2>
 {table}"""
     return layout(
@@ -425,7 +457,7 @@ the goods you consign. Your actual hold stays out of that copy.</p>
 
 <h2>For how long</h2>
 <p>The last three versions of each save, per galaxy. Older ones are deleted
-automatically. If you leave, everything goes at once. Nothing restores an old
+automatically. If you ask to delete your account, everything goes at once. Nothing restores an old
 version: the history is there to protect you from faults in this server.</p>
 
 <h2>What personal data</h2>
@@ -490,7 +522,7 @@ porão de verdade não entra nessa cópia.</p>
 
 <h2>Por quanto tempo</h2>
 <p>As últimas três versões de cada save, por galáxia. As mais antigas são
-apagadas sozinhas, e tudo vai junto se você sair. Nada restaura uma versão
+apagadas sozinhas. Se você pedir para apagar a conta, tudo vai junto. Nada restaura uma versão
 antiga: o histórico existe para te proteger de defeitos deste servidor.</p>
 
 <h2>Que dado pessoal</h2>
@@ -675,7 +707,7 @@ file.</p>
 
 <h2>What is stored, and for how long</h2>
 <p>The last three versions of each save, per galaxy. Older ones are deleted
-automatically, and everything goes at once if you leave.</p>
+automatically. If you ask to delete your account, everything goes at once.</p>
 <p><b>There is no rollback.</b> Nothing restores an old version, for you, for
 the galaxy owner, or for anybody. A session that went badly went badly, and a
 mistake that costs a crew costs it. The short history is there to protect you
@@ -817,7 +849,7 @@ de configuração.</p>
 
 <h2>O que fica guardado, e por quanto tempo</h2>
 <p>As últimas três versões de cada save, por galáxia. As mais antigas são apagadas
-sozinhas, e tudo vai junto se você sair.</p>
+sozinhas. Se você pedir para apagar a conta, tudo vai junto.</p>
 <p><b>Não existe rollback.</b> Nada restaura uma versão antiga, para você, para
 quem administra a galáxia, ou para quem quer que seja. Uma sessão que deu errado
 deu errado, e um engano que custa uma tripulação custa. O histórico curto está
