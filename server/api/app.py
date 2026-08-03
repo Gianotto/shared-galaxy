@@ -468,6 +468,7 @@ def update_room(room_id: str, payload: dict,
             campos.append("options = %(options)s")
             valores["options"] = json.dumps(payload["options"])
         for chave, coluna in (("leaseHours", "lease_hours"),
+                              ("seed", "seed"),
                               ("maxPlayers", "max_players"),
                               ("retentionN", "retention_n")):
             if chave in payload:
@@ -1429,6 +1430,13 @@ async def checkpoint(room_id: str, request: Request,
         db.record_visit(conn, room_id, player["id"], here["system"],
                         here["x"], here["y"])
         novos = _harvest_discovery(conn, room_id, player["id"], data)
+        # OS NOMES DE SISTEMA CHEGAM AQUI TAMBEM. O jogo so batiza um sistema
+        # quando alguem chega perto, e uma galaxia recem-fundada nao tem nome
+        # nenhum: o mapa da pagina ficava anonimo ate a primeira devolucao. O
+        # banco preenche nome vazio e nunca sobrescreve um que ja existe, entao
+        # atualizar a cada autosave so acrescenta.
+        with blobs.with_unpacked(data) as folder:
+            db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
         pruned = _prune(conn, room_id, player["id"], room["retention_n"])
 
     return {"roomId": room_id, "versionId": version["id"], "ageDays": day,

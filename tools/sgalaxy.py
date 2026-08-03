@@ -542,9 +542,12 @@ def cmd_configure_room(args) -> int:
         payload["name"] = args.name
     if args.lease_hours:
         payload["leaseHours"] = args.lease_hours
+    if getattr(args, "seed", None):
+        payload["seed"] = args.seed
     if not payload:
         raise ClientError("nothing to change. Use --ship, --difficulty, "
-                          "--option KEY=VALUE, --name or --lease-hours")
+                          "--option KEY=VALUE, --name, --seed or "
+                          "--lease-hours")
     json_request("PATCH", f"/api/v1/rooms/{args.galaxy}", payload)
     print(f"room {args.galaxy} updated")
     return cmd_how_to_join(args)
@@ -1611,6 +1614,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--option", action="append", metavar="KEY=VALUE",
                    help="scenario option; repeatable")
     p.add_argument("--name")
+    p.add_argument("--seed",
+                   help="record the seed you used, for whoever wants it")
     p.add_argument("--lease-hours", type=int)
     p.add_argument("--password", help="if the room has one")
     p.add_argument("--replace", action="store_true",
