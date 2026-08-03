@@ -177,3 +177,46 @@ class TemplateHealthTestCase(unittest.TestCase):
         nave = starter.player_ship(self.sf)
         nave.remove(nave.find("characters"))
         self.assertTrue(any("crew" in p for p in starter.problems(self.sf)))
+
+
+class WhenTheTemplateIsBornTestCase(unittest.TestCase):
+    """O molde nasce com a galáxia, e a primeira partida a chegar costuma ser
+    nova demais para servir: o jogo só monta o teto da nave depois de a partida
+    andar um pouco. Medido em quatro versões seguidas da mesma partida, 1.29
+    sem e 1.38 com."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.sf = _save(os.path.join(self.tmp, "save"))
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _com_teto(self, com: bool):
+        nave = starter.player_ship(self.sf)
+        antigo = nave.find("roof")
+        if antigo is not None:
+            nave.remove(antigo)
+        attrs = {"hullPattern": "1", "sx": "56"} if com else {"sx": "56"}
+        teto = ET.SubElement(nave, "roof", attrs)
+        # Antes do jogo montar o teto, os filhos são módulos e não chapas.
+        filho = ({"m": "-2", "x": "0", "y": "0", "col": "56b8fc"} if com
+                 else {"id": "1", "m": "2089", "rot": "R0"})
+        ET.SubElement(teto, "e", filho)
+
+    def test_a_game_saved_right_after_new_game_is_not_adopted(self):
+        self._com_teto(False)
+        self.assertTrue(starter.problems(self.sf))
+
+    def test_the_same_game_after_playing_is_adopted(self):
+        self._com_teto(True)
+        self.assertEqual(starter.problems(self.sf), [])
+
+    def test_the_refusal_names_the_reason(self):
+        """Quem funda tem que saber o que fazer, e o que fazer é jogar um
+        pouco e devolver."""
+        self._com_teto(False)
+        self.assertIn("hullPattern", starter.problems(self.sf)[0])
+        self.assertIn("closed hull", starter.problems(self.sf)[0])

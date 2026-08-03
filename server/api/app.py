@@ -607,14 +607,27 @@ async def join_room(room_id: str, request: Request,
         # So entra se servir. Uma galaxia entregou um molde cuja nave o jogo
         # desenhava de casco fechado, e quem recebia nao tinha como saber que
         # o defeito estava no molde.
+        molde_nota = None
         if not room.get("starter_sha256"):
             with blobs.with_unpacked(data) as folder:
                 ruins = starter.problems(SaveFile(folder))
             if ruins:
+                # NAO GUARDAR CALADO. Quem funda uma galaxia cria a partida e
+                # sobe na hora, e e justamente esse save que o jogo ainda nao
+                # terminou: o teto da nave so aparece depois de a partida andar
+                # um pouco. Guardar assim mesmo entrega casco fechado a todo
+                # mundo que chegar, e ninguem descobre a tempo.
+                molde_nota = (
+                    "this game is too new to be the starting point for other "
+                    "people: " + "; ".join(ruins)
+                    + ". Play a few minutes and check the save back in, and "
+                      "that becomes what newcomers begin from")
                 log.warning("not adopting %s as the starting save: %s",
                             meta["sha256"][:12], "; ".join(ruins))
             else:
                 db.set_starter(conn, room_id, meta["sha256"])
+                molde_nota = ("this game is now the starting point for "
+                              "everybody who joins after you")
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])
         db.set_position(conn, room_id, player["id"], here["system"],
@@ -626,6 +639,7 @@ async def join_room(room_id: str, request: Request,
     return {"roomId": room_id, "versionId": version["id"],
             "galaxy": described, "ageDays": day, "presence": here,
             "grafted": grafted,
+            "starter": molde_nota,
             "message": ("the room's galaxy was grafted into your save, and the "
                         "result is now canonical — check out to get it back. "
                         "Your ship, crew, bank and research are untouched."
@@ -1385,6 +1399,18 @@ async def checkin(room_id: str, request: Request,
         # da sala. A posicao ja estava la desde a primeira entrada.
         with blobs.with_unpacked(data) as folder:
             db.save_galaxy_map(conn, room_id, presence.galaxy_map(folder))
+        # A SEGUNDA CHANCE DE QUEM FUNDOU. O save do `join` costuma ser novo
+        # demais para servir de molde, e este e o proximo que chega da mesma
+        # pessoa, ja com a partida andada. Sem isto a galaxia so ganharia molde
+        # quando alguem passasse por `/start`, que e tarde: a essa altura ja ha
+        # gente esperando.
+        if not room.get("starter_sha256"):
+            with blobs.with_unpacked(data) as folder:
+                if not starter.problems(SaveFile(folder)):
+                    db.set_starter(conn, room_id, meta["sha256"])
+                    log.info("version %s became the starting save for %s",
+                             version["id"], room_id)
+
         db.close_lease(conn, lease["id"], version["id"])
         db.upsert_membership(conn, room_id, player["id"], here["shipName"],
                              version["id"])

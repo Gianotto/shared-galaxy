@@ -554,7 +554,12 @@ def _cmd_join_only(args) -> int:
     print(f"  age:        {data['ageDays']} days")
     print(f"  your ship:  {data['presence']['shipName']}")
     print()
-    print("  The server owns this save now. Use `play` to start a session.")
+    nota = data.get("starter")
+    if nota:
+        print()
+        print(f"  {nota}")
+    print()
+    print(f"  Play with: {prog()} join {args.galaxy}")
     return 0
 
 
