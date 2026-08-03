@@ -421,7 +421,12 @@ def room_page(room: dict, roster: list, galaxy: dict, lang: str,
         room["name"], body, lang,
         f'{t("room", lang)} <code>{_esc(room["id"])}</code> · '
         f'{len(roster)}/{room["max_players"]} {t("players", lang)} · '
-        f'{t("lease_of", lang)} {room["lease_hours"]}h',
+        # A seed fica escondida numa galaxia com senha. Ela e a receita para
+        # reproduzir o mundo, e entrega-la na pagina publica passaria por cima
+        # da senha que alguem pos ali de proposito.
+        + (f'{t("seed", lang)} <code>{_esc(room.get("seed"))}</code> · '
+           if room.get("seed") and not room.get("password_hash") else '')
+        + f'{t("lease_of", lang)} {room["lease_hours"]}h',
         f'/room/{room["id"]}', entrar)
 
 

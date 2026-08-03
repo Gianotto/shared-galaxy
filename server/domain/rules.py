@@ -77,20 +77,26 @@ def parse_recovery_code(code: str) -> str:
 ROOM_ALPHABET = "BCDFGHJKMNPQRSTVWXZ23456789"
 ROOM_ID_LEN = 6
 
-MAX_ROOMS_PER_PLAYER = 5
+MAX_ROOMS_PER_PLAYER = 1
 
 
 def new_room_id() -> str:
     return "".join(secrets.choice(ROOM_ALPHABET) for _ in range(ROOM_ID_LEN))
 
 
-def can_create_room(rooms_created: int, blocked: bool) -> tuple[bool, str]:
-    """Cota de sala aberta. Criar token e gratis; criar sala nao e ilimitado."""
+def can_create_room(rooms_owned: int, blocked: bool) -> tuple[bool, str]:
+    """Cota de galaxia. Criar conta e gratis; criar galaxia nao e ilimitado.
+
+    CONTA GALAXIAS VIVAS, e nao quantas a pessoa ja criou algum dia. Com um
+    contador que so sobe, apagar a propria galaxia trancava a conta para
+    sempre: o limite e um teto de quantas existem ao mesmo tempo, e nao uma
+    cota vitalicia.
+    """
     if blocked:
         return False, "this account is blocked"
-    if rooms_created >= MAX_ROOMS_PER_PLAYER:
-        return False, (f"limit of {MAX_ROOMS_PER_PLAYER} rooms per account. "
-                       f"Delete a room before creating another")
+    if rooms_owned >= MAX_ROOMS_PER_PLAYER:
+        return False, (f"limit of {MAX_ROOMS_PER_PLAYER} galaxy per account. "
+                       f"Delete yours before creating another")
     return True, ""
 
 

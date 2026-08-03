@@ -237,6 +237,25 @@ def delete_versions(conn: psycopg.Connection, ids: list) -> int:
                         (list(ids),)).rowcount
 
 
+def rooms_owned(conn: psycopg.Connection, player_id: int) -> int:
+    """Quantas galaxias desta pessoa existem AGORA."""
+    return int(conn.execute(
+        "SELECT count(*) AS n FROM room WHERE owner_id = %s",
+        (player_id,)).fetchone()["n"])
+
+
+def delete_room(conn: psycopg.Connection, room_id: str) -> dict:
+    """Apaga a galaxia e tudo que pendura nela. Nao ha desfazer."""
+    contas = conn.execute(
+        """SELECT (SELECT count(*) FROM membership WHERE room_id = %s) AS membros,
+                  (SELECT count(*) FROM save_version WHERE room_id = %s) AS versoes""",
+        (room_id, room_id)).fetchone()
+    conn.execute("DELETE FROM save_version WHERE room_id = %s", (room_id,))
+    conn.execute("DELETE FROM membership WHERE room_id = %s", (room_id,))
+    conn.execute("DELETE FROM room WHERE id = %s", (room_id,))
+    return {"members": int(contas["membros"]), "versions": int(contas["versoes"])}
+
+
 def all_live_hashes(conn: psycopg.Connection) -> set:
     """Todo sha256 que alguem ainda alcanca. Alimenta a poda de blobs.
 

@@ -420,7 +420,10 @@ class SiteNavigationTestCase(unittest.TestCase):
         de quem baixou um binário."""
         html = pages.room_page(self.SALA, [], {}, "en")
         self.assertNotIn("tools/sgalaxy.py", html)
-        self.assertNotIn("seed", html.lower())
+        # A receita ensinava a recriar a partida. A seed em si ficou, no
+        # cabeçalho, porque é o que identifica a galáxia junto com o código.
+        self.assertNotIn("How to join", html)
+        self.assertNotIn("<pre>", html.split('<p class="sub">')[-1])
 
     def test_the_button_opens_a_box_with_the_command_ready(self):
         """Quem já tem o cliente copia e joga; quem não tem segue para o passo
@@ -534,3 +537,25 @@ class HowItWorksTestCase(unittest.TestCase):
         """É a ordem que uma pessoa não adivinha e que já custou uma sessão."""
         self.assertIn("erases the evidence", pages.how_page("en"))
         self.assertIn("apaga a prova", pages.how_page("pt"))
+
+
+class GalaxyHeaderTestCase(unittest.TestCase):
+    """O cabeçalho diz o que identifica a galáxia: código, gente e seed."""
+
+    SALA = {"id": "6359GV", "name": "Frontier", "max_players": 64,
+            "password_hash": None, "seed": "13371337", "lease_hours": 12,
+            "retention_n": 3}
+
+    def test_it_shows_the_code_the_players_and_the_seed(self):
+        for lang in ("en", "pt"):
+            html = pages.room_page(self.SALA, [], {}, lang)
+            cabecalho = html.split('<p class="sub">')[1].split("</p>")[0]
+            self.assertIn("6359GV", cabecalho)
+            self.assertIn("0/64", cabecalho)
+            self.assertIn("13371337", cabecalho)
+
+    def test_a_password_protected_galaxy_keeps_its_seed_private(self):
+        """A seed é a receita para reproduzir o mundo, e mostrá-la passaria
+        por cima da senha que alguém pôs ali de propósito."""
+        html = pages.room_page(dict(self.SALA, password_hash="x"), [], {}, "en")
+        self.assertNotIn("13371337", html)

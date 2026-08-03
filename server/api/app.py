@@ -287,7 +287,8 @@ def list_rooms():
 
 @app.post("/api/v1/rooms", status_code=201)
 def create_room(payload: dict, player: dict = Depends(current_player)):
-    ok, motivo = rules.can_create_room(player["rooms_created"], player["blocked"])
+    ok, motivo = rules.can_create_room(db.rooms_owned(conn, player["id"]),
+                                          player["blocked"])
     if not ok:
         raise HTTPException(403, motivo)
 
@@ -355,6 +356,53 @@ def _require_room(conn, room_id: str) -> dict:
     if room is None:
         raise HTTPException(404, f"there is no room {room_id}")
     return room
+
+
+@app.delete("/api/v1/rooms/{room_id}")
+def delete_room(room_id: str, confirm: str = "",
+                player: dict = Depends(current_player)):
+    """Apaga a galaxia. So quem a criou, e sem desfazer.
+
+    Isto destroi o save de todo mundo que estava dentro, nao so o de quem pede.
+    Por isso a confirmacao repete o nome da galaxia: um `--force` qualquer se
+    digita por reflexo, e o nome exige ler o que esta prestes a sumir.
+
+    Com sessao aberta ela nao sai. Alguem esta jogando, e apagar por baixo
+    transforma a devolucao dessa pessoa num erro sem explicacao.
+    """
+    with db.pool().connection() as conn:
+        room = _require_room(conn, room_id)
+        if room["owner_id"] != player["id"]:
+            raise HTTPException(
+                403, "only whoever created this galaxy can delete it")
+
+        db.expire_leases(conn)
+        abertas = conn.execute(
+            "SELECT count(*) AS n FROM lease WHERE room_id = %s AND "
+            "state = 'open'", (room_id,)).fetchone()["n"]
+        if abertas:
+            raise HTTPException(
+                409, "somebody is playing this galaxy right now. Deleting it "
+                     "would turn their check-in into an error they cannot act "
+                     "on. Wait for the session to come back")
+
+        if confirm.strip() != room["name"]:
+            membros = conn.execute(
+                "SELECT count(*) AS n FROM membership WHERE room_id = %s",
+                (room_id,)).fetchone()["n"]
+            raise HTTPException(
+                400, f"to confirm, repeat the galaxy's name back: "
+                     f"?confirm={room['name']}. This deletes the saves of "
+                     f"{membros} player(s), including people who are not you, "
+                     f"and there is no undo")
+
+        relatorio = db.delete_room(conn, room_id)
+        vivos = db.all_live_hashes(conn)
+    liberados = store().delete_unreferenced(vivos)
+    return {"deleted": room_id, "name": room["name"], "blobs": liberados,
+            **relatorio,
+            "message": f"galaxy {room['name']} is gone, with "
+                       f"{relatorio['versions']} stored save(s)"}
 
 
 @app.get("/api/v1/rooms/{room_id}")
@@ -1438,7 +1486,17 @@ def _prune(conn, room_id: str, player_id: int, retention_n: int) -> int:
             WHERE room_id = %s AND player_id = %s AND state = 'open'""",
         (room_id, player_id, room_id, player_id)).fetchall()}
     podar = rules.versions_to_prune(versions, retention_n, protegidas)
-    return db.delete_versions(conn, [v["id"] for v in podar])
+    quantas = db.delete_versions(conn, [v["id"] for v in podar])
+    # E VARRE OS ARQUIVOS. A poda tirava a linha e deixava o blob: medido, 69
+    # arquivos orfaos ocupando 19,6 MB de um total de 21,9. So a exclusao de
+    # conta varria, entao o lixo se acumulava indefinidamente num servidor onde
+    # ninguem sai.
+    if quantas:
+        try:
+            store().delete_unreferenced(db.all_live_hashes(conn))
+        except Exception as exc:      # noqa: BLE001
+            log.warning("could not sweep unreferenced saves: %s", exc)
+    return quantas
 
 
 # ---------------------------------------------------------------------------
@@ -1609,8 +1667,9 @@ def new_room_submit(request: Request, name: str = Form(""),
     if player is None:
         return HTMLResponse(pages.new_room_form(idioma, None), status_code=403)
 
-    ok, motivo = rules.can_create_room(player["rooms_created"],
-                                       player["blocked"])
+    with db.pool().connection() as conn:
+        ok, motivo = rules.can_create_room(db.rooms_owned(conn, player["id"]),
+                                           player["blocked"])
     if not ok:
         return HTMLResponse(
             pages.new_room_form(idioma, player["display_name"], motivo),

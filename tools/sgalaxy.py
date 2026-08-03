@@ -14,12 +14,12 @@ Usage:
     export SGALAXY_URL=https://galaxy.bygianotto.com.br
 
     sgalaxy register "My Name"          # or: python3 tools/sgalaxy.py …
-    sgalaxy rooms
-    sgalaxy create-room --seed 1654267488 --name "Frontier"
-    sgalaxy how-to-join ROOM
-    sgalaxy join ROOM --save ~/.../savegames/MyGame
-    sgalaxy play ROOM                   # the whole session, one command
-    sgalaxy status ROOM
+    sgalaxy galaxies
+    sgalaxy create-galaxy --seed 1654267488 --name "Frontier" --max-players 64
+    sgalaxy join GALAXY                 # the whole session, one command
+    sgalaxy shop GALAXY --set 608
+    sgalaxy status GALAXY
+    sgalaxy delete-galaxy GALAXY
     sgalaxy delete-account
 
 The token lives in `~/.config/sgalaxy/credentials.json`, mode 600. It is the
@@ -44,6 +44,7 @@ import subprocess
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -449,7 +450,7 @@ def cmd_register(args) -> int:
 def cmd_rooms(args) -> int:
     data = json_request("GET", "/api/v1/rooms", auth=False)
     if not data["rooms"]:
-        print("no open rooms")
+        print("no open galaxies")
         return 0
     print(f"{'id':<8}{'players':<12}{'lock':<8}name")
     for room in data["rooms"]:
@@ -647,6 +648,41 @@ def _start_in_room(room: str, senha: str):
         print(f"  note: {aviso}")
     print()
     print(f"  Play with: {prog()} play {room}")
+    return 0
+
+
+def cmd_delete_galaxy(args) -> int:
+    """Apaga uma galaxia que voce criou. Nao ha desfazer.
+
+    A confirmacao repete o nome, e nao um `sim`. Isto destroi o save de todo
+    mundo que estava dentro, e um `sim` se digita por reflexo enquanto um nome
+    exige ler o que esta prestes a sumir.
+    """
+    _s, raw, _h = request("GET", f"/api/v1/rooms/{args.galaxy}")
+    galaxia = json.loads(raw)
+    nome = galaxia.get("name") or args.galaxy
+    pessoas = galaxia.get("players", "?")
+
+    print(f"about to delete {nome} ({args.galaxy})")
+    print(f"  {pessoas} player(s) are in it, and their saves go too")
+    print("  there is no undo")
+    if not args.yes:
+        print()
+        resposta = input(f'type the name to confirm ({nome}): ').strip()
+        if resposta != nome:
+            print("that is not the name. Nothing was deleted.")
+            return 1
+
+    _s, raw, _h = request(
+        "DELETE",
+        f"/api/v1/rooms/{args.galaxy}?confirm={urllib.parse.quote(nome)}")
+    data = json.loads(raw)
+    print()
+    print(data["message"])
+    livres = data.get("blobs") or {}
+    if isinstance(livres, dict) and livres.get("removed"):
+        print(f"  {livres['removed']} stored file(s) freed, "
+              f"{_size(livres.get('freedBytes', 0))}")
     return 0
 
 
@@ -1482,24 +1518,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--invite", help="if the server requires one")
     p.set_defaults(func=cmd_register)
 
-    p = sub.add_parser("galaxies", aliases=["rooms"],
-                       help="list open galaxies")
+    p = sub.add_parser("galaxies", help="list open galaxies")
     p.set_defaults(func=cmd_rooms)
 
-    p = sub.add_parser("create-galaxy", aliases=["create-room"],
-                       help="create a galaxy")
+    p = sub.add_parser("create-galaxy", help="create a galaxy")
+    # Os tres sao obrigatorios de proposito. A seed e a galaxia; sem nome
+    # ninguem reconhece a sua na listagem; e o teto de gente decide se o
+    # convite cabe, e descobrir que nao cabe quando a 33a pessoa chega e tarde
+    # demais para mudar.
     p.add_argument("--seed", required=True, help="the galaxy seed")
-    p.add_argument("--name", default="")
+    p.add_argument("--name", required=True,
+                   help="how people will recognise it in the listing")
+    p.add_argument("--max-players", type=int, required=True,
+                   help="how many people it opens to")
     p.add_argument("--password")
-    p.add_argument("--lease-hours", type=int, default=12, help="lease hours")
-    p.add_argument("--max-players", type=int, default=8)
+    p.add_argument("--lease-hours", type=int, default=12,
+                   help="how long a session may stay checked out")
     p.add_argument("--ship", help="starting ship everyone must pick")
     p.add_argument("--difficulty")
     p.add_argument("--option", action="append", metavar="KEY=VALUE",
                    help="scenario option; repeatable")
     p.set_defaults(func=cmd_create_room)
 
-    p = sub.add_parser("configure-galaxy", aliases=["configure-room"],
+    p = sub.add_parser("configure-galaxy",
                        help="publish or fix the galaxy recipe")
     p.add_argument("galaxy", metavar="GALAXY")
     p.add_argument("--ship", help="starting ship everyone must pick")
@@ -1571,6 +1612,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("state", help="who is where in the galaxy")
     p.add_argument("galaxy", metavar="GALAXY")
     p.set_defaults(func=cmd_state)
+
+    p = sub.add_parser("delete-galaxy",
+                       help="delete a galaxy you created, no undo")
+    p.add_argument("galaxy", metavar="GALAXY")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="do not ask before deleting")
+    p.set_defaults(func=cmd_delete_galaxy)
 
     p = sub.add_parser("delete-account", help="delete account and saves, no undo")
     p.set_defaults(func=cmd_delete_account)
